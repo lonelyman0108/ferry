@@ -131,7 +131,7 @@ function run(fn: () => void) {
           v-for="s in subs"
           :key="s.id"
           :value="`订阅 ${s.name} ${clientName(s.client)}`"
-          @select="go('/subscriptions')"
+          @select="go(`/subscriptions/${s.id}`)"
         >
           <SmartphoneIcon /> {{ s.name }}
           <span class="text-muted-foreground ml-auto text-xs">{{ clientName(s.client) }}</span>
@@ -142,7 +142,7 @@ function run(fn: () => void) {
           v-for="d in dests"
           :key="d.id"
           :value="`目的地 ${d.name}`"
-          @select="go('/destinations')"
+          @select="go(`/destinations/${d.id}`)"
         >
           <SendIcon /> {{ d.name }}
         </CommandItem>

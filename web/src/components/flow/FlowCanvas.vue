@@ -3,12 +3,22 @@ import { BoxesIcon, SendIcon, SmartphoneIcon, WebhookIcon } from '@lucide/vue'
 import { useResizeObserver } from '@vueuse/core'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
-import { fmtAgo, fmtUntil } from '@/format'
-import type { Tone } from '@/lib/tone'
-import type { Flow, FlowBinding, FlowDestination, FlowDevice, OverviewSource } from '@/types'
+import type { Flow } from '@/types'
 
 import { clientName } from './inbox'
 import FlowNode from './FlowNode.vue'
+import {
+  bindingState,
+  coverState,
+  deviceBadges,
+  destBadges,
+  destLine,
+  type EdgeState,
+  edgeClass,
+  sourceBadges,
+  sourceLine,
+  sourceMeta,
+} from './nodes'
 
 // 三列流向图：设备（订阅）→ 来源 → 目的地。连线画在一层 SVG 上，端点位置按节点卡实际渲染的位置量出来。
 // 线型表示通不通：实线正常，红虚线失败，琥珀虚线等待重试，灰虚线没连通或没推过。
@@ -16,7 +26,6 @@ import FlowNode from './FlowNode.vue'
 const props = defineProps<{ flow: Flow; selected?: string | null }>()
 const emit = defineEmits<{ select: [kind: 'device' | 'source' | 'destination', id: number] }>()
 
-type EdgeState = 'ok' | 'fail' | 'warn' | 'idle'
 interface Edge {
   id: string
   from: string
@@ -33,31 +42,21 @@ const dests = computed(() =>
   [...props.flow.destinations].sort((a, b) => Number(b.enabled) - Number(a.enabled)),
 )
 const sourceOn = computed(() => new Map(props.flow.sources.map((s) => [s.id, s.enabled])))
-const destName = computed(() => new Map(props.flow.destinations.map((d) => [d.id, d.name])))
-
-function bindingState(b: FlowBinding): EdgeState {
-  if (!b.enabled || !sourceOn.value.get(b.source_id)) return 'idle'
-  if (b.state === 'success') return 'ok'
-  if (b.state === 'failed') return 'fail'
-  if (b.state === 'retrying') return 'warn'
-  return 'idle'
-}
 
 const edges = computed<Edge[]>(() => {
   const out: Edge[] = []
   for (const d of devices.value)
     for (const sid of d.source_ids) {
       if (!sourceOn.value.has(sid)) continue
-      const ok = d.status === 'connected' && sourceOn.value.get(sid)
       out.push({
         id: `c${d.id}-${sid}`,
         from: `dev-${d.id}`,
         to: `src-${sid}`,
-        state: ok ? 'ok' : 'idle',
+        state: coverState(props.flow, d, sid),
       })
     }
   for (const b of props.flow.bindings) {
-    const state = bindingState(b)
+    const state = bindingState(props.flow, b)
     out.push({
       id: `b${b.id}`,
       from: `src-${b.source_id}`,
@@ -122,91 +121,6 @@ const paths = computed(() =>
     ]
   }),
 )
-
-// ---- 节点卡内容 ----
-const deviceStatus: Record<FlowDevice['status'], { label: string; tone: Tone }> = {
-  connected: { label: '已连通', tone: 'success' },
-  installed: { label: '已安装', tone: 'info' },
-  not_installed: { label: '未安装', tone: 'neutral' },
-}
-
-function deviceBadges(d: FlowDevice) {
-  const out = [deviceStatus[d.status]]
-  if (d.outdated) out.push({ label: '规则过时', tone: 'warning' })
-  return out
-}
-
-function sourceBadges(s: OverviewSource) {
-  const out: { label: string; tone: Tone }[] = []
-  if (!s.enabled) out.push({ label: '已停用', tone: 'neutral' })
-  if (s.push_failed) out.push({ label: '推送失败', tone: 'danger' })
-  if (s.pending_review) out.push({ label: `${s.pending_review} 个待审核`, tone: 'warning' })
-  if (s.expired) out.push({ label: '已过期', tone: 'danger' })
-  return out
-}
-
-function sourceMeta(s: OverviewSource) {
-  if (!s.enabled) return []
-  const soon = s.expires_at && new Date(s.expires_at).getTime() - Date.now() < 3 * 86400_000
-  return [
-    { label: '身份', value: `${s.identities} 个` },
-    {
-      label: '最早过期',
-      value: s.expires_at ? fmtUntil(s.expires_at) : '—',
-      tone: soon ? ('warning' as const) : undefined,
-    },
-    { label: '最近回传', value: fmtAgo(s.last_seen_at) },
-  ]
-}
-
-function sourceLine(s: OverviewSource) {
-  const bs = props.flow.bindings.filter((b) => b.source_id === s.id)
-  if (!bs.length) return '还没有推送规则'
-  return (
-    '推到 ' +
-    bs
-      .map((b) => {
-        const st = bindingState(b)
-        const tail = st === 'fail' ? '（失败）' : st === 'warn' ? '（等待重试）' : ''
-        return destName.value.get(b.destination_id) + tail
-      })
-      .join('、')
-  )
-}
-
-const destState: Record<string, { label: string; tone: Tone }> = {
-  success: { label: '正常', tone: 'success' },
-  failed: { label: '失败中', tone: 'danger' },
-  retrying: { label: '等待重试', tone: 'warning' },
-  queued: { label: '排队中', tone: 'info' },
-  none: { label: '还没推过', tone: 'neutral' },
-  skipped: { label: '跳过', tone: 'neutral' },
-}
-
-// 目的地的徽章看推到它的各条连线：有失败算失败，其次等待重试；有一条推成功过就算正常，不因为另一条还没推过就显示“还没推过”。
-function destBadges(d: FlowDestination) {
-  if (!d.enabled) return [{ label: '已停用', tone: 'neutral' as Tone }]
-  const states = props.flow.bindings
-    .filter((b) => b.destination_id === d.id && bindingState(b) !== 'idle')
-    .map(bindingState)
-  if (states.includes('fail')) return [destState.failed!]
-  if (states.includes('warn')) return [destState.retrying!]
-  if (states.includes('ok')) return [destState.success!]
-  return d.bindings ? [destState.none!] : []
-}
-
-function destLine(d: FlowDestination) {
-  if (!d.bindings) return '暂无推送规则指向这里'
-  if (d.state === 'failed' || d.state === 'retrying') return d.last_error || '推送失败'
-  return d.last_at ? `最近推送 ${fmtAgo(d.last_at)}` : '还没推过'
-}
-
-const edgeClass: Record<EdgeState, string> = {
-  ok: 'stroke-(--edge)',
-  fail: 'stroke-(--edge-failed) [stroke-dasharray:7_5]',
-  warn: 'stroke-warning [stroke-dasharray:7_5]',
-  idle: 'stroke-(--edge-idle) [stroke-dasharray:3_5]',
-}
 </script>
 
 <template>
@@ -287,7 +201,7 @@ const edgeClass: Record<EdgeState, string> = {
             mono
             :badges="sourceBadges(s)"
             :meta="sourceMeta(s)"
-            :line="s.enabled ? sourceLine(s) : undefined"
+            :line="s.enabled ? sourceLine(flow, s) : undefined"
             :muted="!s.enabled"
             :data-node="`src-${s.id}`"
             :selected="selected === `src-${s.id}`"
@@ -312,7 +226,7 @@ const edgeClass: Record<EdgeState, string> = {
             :icon="d.kind === 'webhook' ? WebhookIcon : SendIcon"
             :title="d.name"
             :subtitle="d.kind === 'webhook' ? 'Webhook' : '青龙'"
-            :badges="destBadges(d)"
+            :badges="destBadges(flow, d)"
             :line="destLine(d)"
             :muted="!d.enabled"
             :data-node="`dst-${d.id}`"

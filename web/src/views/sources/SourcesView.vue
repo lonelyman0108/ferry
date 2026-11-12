@@ -73,9 +73,9 @@ onMounted(load)
 // 新建的来源保存后换成它的地址，编辑器随之按新 id 重新加载。
 async function onSaved(id: number) {
   await load()
-  // 新建的来源保存后直接打开接入清单。
+  // 新建的来源保存后进入它的详情，并打开接入清单。
   if (props.editing === 'new' && id)
-    await router.replace({ path: `/sources/${id}`, query: { section: 'setup' } })
+    await router.replace({ path: `/sources/${id}`, query: { edit: 'setup' } })
 }
 
 // 卡片上的启用开关：来源按整份文档读写，先取完整定义再改 enabled 保存。
@@ -108,7 +108,7 @@ async function importExample(key: string) {
   try {
     const s = (await api.post<SourceView>(`/examples/${key}/import`, {})).data
     toast.success(`已导入「${s.name}」`)
-    await router.push(`/sources/${s.id}`)
+    await router.push({ path: `/sources/${s.id}`, query: { edit: 'basic' } })
   } catch (e) {
     toast.error(errorText(e))
   } finally {
@@ -128,7 +128,7 @@ async function importYAML() {
     const s = (await api.post<SourceView>('/sources/import', { yaml: yaml.value })).data
     toast.success(`已导入「${s.name}」`)
     showImport.value = false
-    await router.push(`/sources/${s.id}`)
+    await router.push({ path: `/sources/${s.id}`, query: { edit: 'basic' } })
   } catch (e) {
     toast.error(errorText(e))
   } finally {
@@ -208,7 +208,7 @@ async function importYAML() {
         <button
           type="button"
           class="text-primary ml-auto flex items-center gap-0.5 hover:underline"
-          @click.stop="router.push({ path: `/sources/${s.id}`, query: { section: 'setup' } })"
+          @click.stop="router.push({ path: `/sources/${s.id}`, query: { edit: 'setup' } })"
         >
           接入清单<ChevronRightIcon class="size-3.5" />
         </button>
