@@ -65,19 +65,16 @@ Ferry is built for exactly one situation: **your accounts, your devices, your au
 
 ## Quick start
 
-> [!NOTE]
-> Prebuilt images and binaries are on the way. For now, build from source (Go, see `go.mod`, plus Node).
-
 ```bash
-git clone https://github.com/lonelyman0108/ferry.git && cd ferry
-(cd web && npm ci && npm run build)
-go build -tags embed_ui -o ferry ./cmd/ferry
-./ferry serve
+docker run -d --name ferry -p 8080:8080 -v ferry-data:/data ghcr.io/lonelyman0108/ferry:latest
+docker logs ferry        # note the setup_token=… line
 ```
+
+Images are published for amd64 and arm64; on Docker Hub it is `lonelyman0108/ferry`. Compose files, PostgreSQL and prebuilt binaries are covered in [Deployment](docs/deployment.md) (Chinese).
 
 Then four steps to your first working chain:
 
-1. **Initialise** — a one-time setup token is printed to the log; open `http://localhost:8080` and let the wizard pick a database, generate the master key and create the admin.
+1. **Initialise** — open `http://localhost:8080`, enter the setup token from the log, and let the wizard pick a database, generate the master key and create the admin.
 2. **Add a source** — import the built-in example or configure your own; paste a sample request and see matching and extraction results instantly.
 3. **Install a subscription** — generate one for the proxy client on your phone and install it in one tap; from then on, simply opening the app sends the login state back.
 4. **Set up delivery** — add a Qinglong or webhook destination and a push rule; new values arrive automatically once they take effect.

@@ -6,7 +6,14 @@
 
 ## 0. 启动
 
-按 [部署与配置](deployment.md) 构建并运行 `ferry serve`。日志里会打印一行 `setup_token=…`，这是初始化令牌，每次启动都会变。
+最快的方式是 Docker：
+
+```bash
+docker run -d --name ferry -p 8080:8080 -v ferry-data:/data ghcr.io/lonelyman0108/ferry:latest
+docker logs ferry
+```
+
+日志里有一行 `setup_token=…`，这是初始化令牌，每次启动都会变。compose、PostgreSQL 与二进制的用法见 [部署与配置](deployment.md)。
 
 ## 1. 初始化
 
@@ -15,7 +22,7 @@
 | 步骤 | 要做的事 |
 |---|---|
 | 初始化令牌 | 粘贴日志里的那一串 |
-| 数据库 | SQLite 填一个文件路径即可；PostgreSQL、MySQL 填连接串，可以先测试连接 |
+| 数据库 | SQLite 保持默认的 `ferry.db` 即可（用镜像时落在 `/data` 里）；PostgreSQL、MySQL 填连接串，可以先测试连接。环境变量已经给出时会自动回填 |
 | 管理员 | 用户名和密码 |
 | 访问地址 | 手机访问 Ferry 用的地址，比如 `http://192.168.1.10:8080`；也可以以后在 **设置 → 访问地址** 里加 |
 | 确认 | 核对一遍再提交 |
