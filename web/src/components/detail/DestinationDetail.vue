@@ -142,12 +142,12 @@ const jobState = (j: PushJob) =>
 </script>
 
 <template>
-  <div v-if="!dest || !node" class="grid gap-4">
+  <div v-if="!dest || !node" class="grid grid-cols-1 gap-4">
     <Skeleton class="h-16" />
     <Skeleton class="h-20" />
     <Skeleton class="h-48" />
   </div>
-  <div v-else class="grid gap-6">
+  <div v-else class="grid grid-cols-1 gap-6">
     <header class="flex flex-wrap items-start gap-x-4 gap-y-3">
       <span
         class="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg border"
@@ -180,7 +180,7 @@ const jobState = (j: PushJob) =>
 
     <section
       v-if="items.length"
-      class="bg-card grid gap-3 rounded-lg border p-4"
+      class="bg-card grid grid-cols-1 gap-3 rounded-lg border p-4"
       aria-label="和它有关的待处理"
     >
       <h2 class="text-muted-foreground text-xs">和它有关的待处理</h2>
@@ -193,7 +193,7 @@ const jobState = (j: PushJob) =>
       </div>
     </section>
 
-    <div class="grid gap-8 lg:grid-cols-2">
+    <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
       <DetailSection title="推到这里的来源" :aside="`${bindings.length} 条推送规则`">
         <p v-if="!bindings.length" class="text-muted-foreground text-sm">
           还没有推送规则指向这里。
@@ -231,7 +231,7 @@ const jobState = (j: PushJob) =>
       <DetailSection title="最近推送" :aside="pushes.length ? `最近 ${pushes.length} 次` : ''">
         <p v-if="!pushes.length" class="text-muted-foreground text-sm">还没推过。</p>
         <ul v-else class="bg-card divide-y rounded-lg border text-sm">
-          <li v-for="j in pushes" :key="j.id" class="grid gap-0.5 p-3">
+          <li v-for="j in pushes" :key="j.id" class="grid grid-cols-1 gap-0.5 p-3">
             <div class="flex flex-wrap items-center gap-2">
               <StatusBadge :tone="jobState(j).tone" dot>{{ jobState(j).label }}</StatusBadge>
               <span>{{ bindingSource(j.binding_id) }}</span>

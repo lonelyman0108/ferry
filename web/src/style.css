@@ -153,3 +153,33 @@
     @apply font-sans;
   }
 }
+
+/* 手机上可点的控件至少 44px 高（按钮、标签页、下拉框、输入框、菜单项），图标按钮同时至少 44px 宽；
+   行内文字链接不在此列。只在窄屏生效，桌面保持紧凑。shadcn-vue 的组件源码不改，按 data-slot 统一放大。 */
+@media (max-width: 767px) {
+  [data-slot='button'],
+  [data-slot='tabs-trigger'],
+  [data-slot='native-select'],
+  [data-slot='select-trigger'],
+  [data-slot='input'],
+  [data-slot='dropdown-menu-item'],
+  [data-slot='dropdown-menu-trigger'][data-size],
+  [data-slot='alert-dialog-trigger'][data-size] {
+    min-height: 2.75rem;
+  }
+  [data-size^='icon'] {
+    min-width: 2.75rem;
+  }
+  [data-slot='tabs-list'] {
+    height: auto;
+  }
+  /* 开关本身很小，把点击范围向外扩到 44px */
+  [data-slot='switch'] {
+    position: relative;
+  }
+  [data-slot='switch']::after {
+    content: '';
+    position: absolute;
+    inset: -13px -6px;
+  }
+}
