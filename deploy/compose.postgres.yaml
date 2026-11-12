@@ -1,0 +1,37 @@
+# Ferry + PostgreSQL。数据库连接由 FERRY_DATABASE_URL 给出，向导里会回填，只需再建管理员。
+# 主密钥由向导生成并写进 /data/ferry.yaml；也可以用 FERRY_MASTER_KEY 给出（那样它不会写进文件）。
+services:
+  ferry:
+    image: ghcr.io/lonelyman0108/ferry:0.1.0
+    container_name: ferry
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      # 命名卷会沿用镜像里 /data 的属主（非 root 用户 65532）。改用目录挂载时先建好目录并交给它：
+      # mkdir -p data && sudo chown 65532:65532 data，再写成 ./data:/data
+      - ferry-data:/data
+    environment:
+      TZ: Asia/Shanghai
+      FERRY_DATABASE_URL: postgres://ferry:change-me@db:5432/ferry?sslmode=disable
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ferry
+      POSTGRES_PASSWORD: change-me
+      POSTGRES_DB: ferry
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ferry"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  ferry-data:
+  pg-data:

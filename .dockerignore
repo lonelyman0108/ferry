@@ -1,0 +1,13 @@
+# 构建上下文只要源码；发布流程写入的 .build-commit、.build-date 要保留
+.git
+.github
+.githooks
+docs
+deploy
+**/node_modules
+web/dist
+dist
+*.db
+*.db-*
+ferry.yaml
+ferry

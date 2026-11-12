@@ -1,6 +1,6 @@
-# Docker 服务的发布：推送 vX.Y.Z tag 后跑完整门禁，构建并推送镜像到 GHCR，再建或更新 GitHub Release（正文附镜像地址）。
-# bootstrap --stack docker 把它放到 .github/workflows/release.yml。tag 在维护者发起发版后推送（agent 或维护者）；不写 concurrency。
-# 部署由维护者手动改 compose 里的镜像版本，这里不做。
+# 发布：推送 vX.Y.Z tag 后跑完整门禁，构建 amd64、arm64 两种架构的镜像，推到 GHCR 与 Docker Hub，
+# 再建或更新 GitHub Release：正文取 CHANGELOG 对应一节并附镜像地址，附件是四个二进制与 SHA256SUMS。
+# tag 在维护者发起发版后推送（agent 或维护者）；不写 concurrency。部署由维护者手动改 compose 里的镜像版本。
 name: Release
 on:
   push:
@@ -17,6 +17,9 @@ jobs:
   release:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      PLATFORMS: linux/amd64,linux/arm64
+      PUSH_LATEST: 'yes'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,13 +32,40 @@ jobs:
         run: scripts/ci/setup-tools.sh >> "$GITHUB_PATH"
       - name: 门禁
         run: scripts/check.sh --full
-      - name: 构建并推送镜像
+      # 镜像里的版本信息：提交号与构建时间写进文件，Dockerfile 读取
+      - name: 记下提交号与构建时间
+        run: |
+          git rev-parse --short=12 HEAD > .build-commit
+          date -u +%Y-%m-%dT%H:%M:%SZ > .build-date
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: 镜像：GHCR
         env:
-          # 默认推 ghcr.io/<owner>/<repo>，用 workflow 自带的令牌登录；推 Docker Hub 时设 IMAGE 并改用仓库 secret
           REGISTRY_USER: ${{ github.actor }}
           REGISTRY_TOKEN: ${{ github.token }}
-        run: scripts/ci/docker-release.sh --notes .release-notes.md "$GITHUB_REF_NAME"
+        run: scripts/ci/docker-release.sh --notes .notes-ghcr.md "$GITHUB_REF_NAME"
+      # 没有配 Docker Hub 的 secret 时跳过这一步，只推 GHCR
+      - name: 镜像：Docker Hub
+        env:
+          IMAGE: docker.io/lonelyman0108/ferry
+          REGISTRY_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          REGISTRY_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$REGISTRY_TOKEN" ]; then
+            echo "没有配置 DOCKERHUB_TOKEN，跳过 Docker Hub" >&2
+            exit 0
+          fi
+          scripts/ci/docker-release.sh --notes .notes-hub.md "$GITHUB_REF_NAME"
+      - name: 二进制
+        run: scripts/build-binaries.sh "${GITHUB_REF_NAME#v}" dist
       - name: Release 页
         env:
           GH_TOKEN: ${{ github.token }}
-        run: scripts/ci/release-page.sh --notes .release-notes.md "$GITHUB_REF_NAME"
+        run: |
+          cat .notes-ghcr.md > .release-notes.md
+          if [ -f .notes-hub.md ]; then
+            echo >> .release-notes.md
+            sed 's/^### 镜像$/### 镜像（Docker Hub）/' .notes-hub.md >> .release-notes.md
+          fi
+          scripts/ci/release-page.sh --notes .release-notes.md "$GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" dist/*.tar.gz dist/SHA256SUMS --clobber

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,6 +22,7 @@ import (
 
 const usage = `用法：
   ferry serve [-config ferry.yaml] [-addr 地址]   启动服务
+  ferry healthcheck [-config ferry.yaml]          检查本机服务是否在线（容器健康检查用）
   ferry version               输出构建信息`
 
 func main() {
@@ -36,6 +38,11 @@ func main() {
 		}
 	case "version":
 		fmt.Println(buildinfo.String())
+	case "healthcheck":
+		if err := healthcheck(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
@@ -100,6 +107,37 @@ func serve(args []string) error {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
+	}
+	return nil
+}
+
+// healthcheck 请求本机的 /healthz。监听地址按和 serve 相同的规则读配置；没写主机或写的是 0.0.0.0、[::]
+// 时改问 127.0.0.1。精简镜像里没有 curl，容器健康检查靠它。
+func healthcheck(args []string) error {
+	fs := flag.NewFlagSet("healthcheck", flag.ExitOnError)
+	cfgPath := fs.String("config", envOr("FERRY_CONFIG", "ferry.yaml"), "配置文件路径")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := config.Load(*cfgPath)
+	if err != nil && !errors.Is(err, config.ErrNotInitialized) {
+		return err
+	}
+	host, port, err := net.SplitHostPort(cfg.Listen)
+	if err != nil {
+		return fmt.Errorf("监听地址 %q：%w", cfg.Listen, err)
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://" + net.JoinHostPort(host, port) + "/healthz")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("/healthz 返回 %s", resp.Status)
 	}
 	return nil
 }
