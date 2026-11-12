@@ -167,9 +167,11 @@
   }
 }
 
-/* 弹窗打开时 reka-ui 给 body 加了 pointer-events: none，提示条渲染在弹窗之外，随之点不到；
-   提示条上有「撤销」这类操作按钮，这里单独恢复。 */
-[data-sonner-toast] {
+/* 弹窗打开时 reka-ui 给 body 加了 pointer-events: none，提示条渲染在弹窗之外，随之点不到。
+   只给带操作按钮（撤销、接入清单等）的提示条恢复点击；普通提示条保持穿透，
+   手机上提示条在顶部居中，盖在弹窗头部的关闭按钮和开关上，穿透后不挡点击。
+   :where 不增加优先级，未显示的提示条（data-visible=false）仍按 vue-sonner 的样式不接收点击。 */
+[data-sonner-toast]:where(:has([data-button])) {
   pointer-events: auto;
 }
 
@@ -202,5 +204,14 @@
     content: '';
     position: absolute;
     inset: -13px -6px;
+  }
+  /* 提示条上的操作按钮（撤销、接入清单等）高 24px，外观不变，点击范围向外扩到至少 44px */
+  [data-sonner-toast] [data-button] {
+    position: relative;
+  }
+  [data-sonner-toast] [data-button]::after {
+    content: '';
+    position: absolute;
+    inset: -10px -6px;
   }
 }

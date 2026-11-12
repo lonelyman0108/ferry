@@ -17,10 +17,21 @@ import {
   RouteIcon,
   Trash2Icon,
   TriangleAlertIcon,
+  Undo2Icon,
   VariableIcon,
 } from '@lucide/vue'
 import { createReusableTemplate, useEventListener, useMediaQuery, useScroll } from '@vueuse/core'
-import { computed, nextTick, onMounted, reactive, ref, useTemplateRef, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  shallowRef,
+  useTemplateRef,
+  watch,
+} from 'vue'
 import {
   onBeforeRouteLeave,
   onBeforeRouteUpdate,
@@ -566,20 +577,75 @@ function addOutput() {
   void focusNew(`o-name-${doc.outputs.length - 1}`)
 }
 
-// 删除一项后给出可撤销的提示，撤销时放回原来的位置。list 每次重新取，保存后列表被替换也能放回。
-function removeAt<T>(list: () => T[], i: number, what: string, restored?: () => void) {
-  const [item] = list().splice(i, 1)
-  toast(`已删除${what}`, {
-    action: {
-      label: '撤销',
-      onClick: () => {
-        const cur = list()
-        cur.splice(Math.min(i, cur.length), 0, item)
-        restored?.()
-      },
-    },
-  })
+// ---- 删除与撤销 ----
+// 删除匹配规则、字段、输出变量后，原位置留一行「已删除…」和「撤销」按钮，焦点移到这个按钮上：
+// 编辑器把焦点限制在弹窗内，键盘够不到提示条上的撤销。提示条上同样可以撤销，两处共用这一份状态，
+// 任一处撤销后两处一起消失；再做其他编辑、切换分区或关闭编辑器时，占位行和提示条一起撤掉。
+// 只保留最近一次删除。撤销时按列表名重新取列表，保存后列表被替换也能放回原位置，焦点回到恢复项的删除按钮。
+type ListName = 'matchers' | 'fields' | 'outputs'
+const idPrefix: Record<ListName, string> = { matchers: 'm', fields: 'f', outputs: 'o' }
+const listOf = (name: ListName): unknown[] =>
+  name === 'outputs' ? (doc.outputs ??= []) : doc[name]
+const removed = shallowRef<{
+  list: ListName
+  index: number
+  label: string
+  item: unknown
+  restored?: () => void
+  toast: string | number
+  // 删除后的定义，与它不同说明又做了其他编辑
+  snapshot: string
+} | null>(null)
+const removedAt = (list: ListName, i: number) =>
+  removed.value?.list === list && removed.value.index === i
+const [DefineRemoved, ReuseRemoved] = createReusableTemplate()
+
+function dropRemoved() {
+  if (!removed.value) return
+  toast.dismiss(removed.value.toast)
+  removed.value = null
 }
+
+async function removeAt(list: ListName, i: number, label: string, restored?: () => void) {
+  dropRemoved()
+  const [item] = listOf(list).splice(i, 1)
+  const id = toast(`已删除${label}`, {
+    action: { label: '撤销', onClick: () => void undoRemove() },
+  })
+  removed.value = {
+    list,
+    index: i,
+    label,
+    item,
+    restored,
+    toast: id,
+    snapshot: JSON.stringify(payload()),
+  }
+  await nextTick()
+  document.getElementById('undo-remove')?.focus()
+}
+
+async function undoRemove() {
+  const r = removed.value
+  if (!r) return
+  dropRemoved()
+  const cur = listOf(r.list)
+  const at = Math.min(r.index, cur.length)
+  cur.splice(at, 0, r.item)
+  r.restored?.()
+  await nextTick()
+  document.getElementById(`${idPrefix[r.list]}-del-${at}`)?.focus()
+}
+
+watch(
+  () => JSON.stringify(payload()),
+  (s) => {
+    if (s !== removed.value?.snapshot) dropRemoved()
+  },
+)
+watch(section, dropRemoved)
+onBeforeUnmount(dropRemoved)
+
 const named = (noun: string, name?: string) => (name?.trim() ? `${noun}「${name.trim()}」` : noun)
 
 function removeMatcher(i: number) {
@@ -587,25 +653,22 @@ function removeMatcher(i: number) {
     toast.info('至少保留一条匹配规则')
     return
   }
-  removeAt(() => doc.matchers, i, named('匹配规则', doc.matchers[i].name))
+  void removeAt('matchers', i, named('匹配规则', doc.matchers[i].name))
 }
 
 function removeField(i: number) {
   const f = doc.fields[i]
-  // 删掉身份字段时身份字段会被清空，撤销时一并恢复
+  // 删掉身份字段时身份字段随之清空，撤销时一并恢复。在这里先清空，不等下方的监听，
+  // 否则清空发生在记下删除后的定义之后，会被当成又一次编辑，占位行随即消失
   const identity = f.key && f.key === doc.identity_field ? f.key : ''
-  removeAt(
-    () => doc.fields,
-    i,
-    named('字段', f.key),
-    () => {
-      if (identity && !doc.identity_field) doc.identity_field = identity
-    },
-  )
+  if (identity) doc.identity_field = ''
+  void removeAt('fields', i, named('字段', f.key), () => {
+    if (identity && !doc.identity_field) doc.identity_field = identity
+  })
 }
 
 function removeOutput(i: number) {
-  removeAt(() => (doc.outputs ??= []), i, named('输出变量', doc.outputs?.[i].name))
+  void removeAt('outputs', i, named('输出变量', doc.outputs?.[i].name))
 }
 
 function addField() {
@@ -838,6 +901,27 @@ const fieldsHit = computed(() =>
     </div>
   </DefineSample>
 
+  <!-- 删除后留在原位置的占位行；手机上按钮按全站规则高 44px -->
+  <DefineRemoved>
+    <div
+      v-if="removed"
+      class="flex items-center gap-3 rounded-xl border border-dashed px-4 py-2 text-sm"
+    >
+      <span id="removed-label" class="text-muted-foreground mr-auto min-w-0 wrap-anywhere"
+        >已删除{{ removed.label }}</span
+      >
+      <Button
+        id="undo-remove"
+        variant="outline"
+        size="sm"
+        class="shrink-0"
+        aria-describedby="removed-label"
+        @click="undoRemove"
+        ><Undo2Icon /> 撤销</Button
+      >
+    </div>
+  </DefineRemoved>
+
   <DialogShell
     :open="true"
     :title="isNew ? '新建来源' : doc.name || doc.key"
@@ -873,7 +957,8 @@ const fieldsHit = computed(() =>
       class="grid h-full min-h-0 grid-rows-[auto_1fr] lg:grid-cols-[12rem_1fr] lg:grid-rows-1"
       :class="sampleAside && 'xl:grid-cols-[12rem_1fr_24rem]'"
     >
-      <!-- 分区导航 -->
+      <!-- 分区导航。按钮设为 relative：里面 sr-only 的绝对定位文字以按钮为参照，
+           否则会以弹窗为参照撑宽弹窗，切换分区时 scrollIntoView 把整个弹窗横向滚走。 -->
       <nav
         ref="nav"
         aria-label="编辑分区"
@@ -884,7 +969,7 @@ const fieldsHit = computed(() =>
           v-for="s in sections"
           :key="s.value"
           type="button"
-          class="focus-visible:ring-ring/50 flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition outline-none focus-visible:ring-3 max-md:min-h-11"
+          class="focus-visible:ring-ring/50 relative flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition outline-none focus-visible:ring-3 max-md:min-h-11"
           :class="
             section === s.value
               ? 'bg-primary/10 text-primary font-medium'
@@ -1115,85 +1200,90 @@ const fieldsHit = computed(() =>
             <HintText>
               命中任一匹配规则的请求进入字段读取；匹配规则的域名写入订阅的 MITM 列表。
             </HintText>
-            <div
-              v-for="(m, i) in doc.matchers"
-              :key="i"
-              data-item
-              class="grid gap-4 rounded-xl border p-4"
-            >
-              <div class="flex flex-wrap items-center gap-2">
-                <IconTile :icon="RouteIcon" size="sm" />
-                <span class="font-mono text-sm font-medium">{{ m.name || '未命名' }}</span>
-                <template v-if="tr?.matchers[i]">
-                  <StatusBadge v-if="tr.matchers[i].matched" tone="success" :icon="CircleCheckIcon"
-                    >样例命中</StatusBadge
+            <template v-for="(m, i) in doc.matchers" :key="i">
+              <ReuseRemoved v-if="removedAt('matchers', i)" />
+              <div data-item class="grid gap-4 rounded-xl border p-4">
+                <div class="flex flex-wrap items-center gap-2">
+                  <IconTile :icon="RouteIcon" size="sm" />
+                  <span class="min-w-0 font-mono text-sm font-medium [overflow-wrap:anywhere]">{{
+                    m.name || '未命名'
+                  }}</span>
+                  <template v-if="tr?.matchers[i]">
+                    <StatusBadge
+                      v-if="tr.matchers[i].matched"
+                      tone="success"
+                      :icon="CircleCheckIcon"
+                      >样例命中</StatusBadge
+                    >
+                    <StatusBadge v-else tone="neutral" :icon="CircleXIcon"
+                      >未命中：{{ tr.matchers[i].reason }}</StatusBadge
+                    >
+                  </template>
+                  <!-- 仅剩一条时不可删除：保留可聚焦、可点击，点击时说明原因 -->
+                  <Button
+                    :id="`m-del-${i}`"
+                    variant="ghost"
+                    size="icon-sm"
+                    class="ml-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                    aria-label="删除匹配规则"
+                    :aria-disabled="doc.matchers.length <= 1 || undefined"
+                    :title="doc.matchers.length <= 1 ? '至少保留一条匹配规则' : undefined"
+                    @click="removeMatcher(i)"
                   >
-                  <StatusBadge v-else tone="neutral" :icon="CircleXIcon"
-                    >未命中：{{ tr.matchers[i].reason }}</StatusBadge
+                    <Trash2Icon />
+                  </Button>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-[1fr_2fr]">
+                  <FormField
+                    label="名称"
+                    :for="`m-name-${i}`"
+                    :error="errors[`matchers[${i}].name`]"
+                    hint="字段通过该名称指定所属的匹配规则"
                   >
-                </template>
-                <!-- 仅剩一条时不可删除：保留可聚焦、可点击，点击时说明原因 -->
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  class="ml-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
-                  aria-label="删除匹配规则"
-                  :aria-disabled="doc.matchers.length <= 1 || undefined"
-                  :title="doc.matchers.length <= 1 ? '至少保留一条匹配规则' : undefined"
-                  @click="removeMatcher(i)"
-                >
-                  <Trash2Icon />
-                </Button>
+                    <Input :id="`m-name-${i}`" v-model="m.name" class="font-mono" />
+                  </FormField>
+                  <FormField
+                    label="域名"
+                    :for="`m-host-${i}`"
+                    :error="errors[`matchers[${i}].host`]"
+                    hint="精确域名，或以 *.example.com 形式通配子域名"
+                  >
+                    <Input
+                      :id="`m-host-${i}`"
+                      v-model="m.host"
+                      class="font-mono"
+                      placeholder="api.example.com"
+                    />
+                  </FormField>
+                  <FormField
+                    label="请求方法"
+                    :for="`m-method-${i}`"
+                    :error="errors[`matchers[${i}].method`]"
+                  >
+                    <NativeSelect :id="`m-method-${i}`" v-model="m.method" class="w-full">
+                      <NativeSelectOption v-for="x in methods" :key="x" :value="x">{{
+                        x || '任意'
+                      }}</NativeSelectOption>
+                    </NativeSelect>
+                  </FormField>
+                  <FormField
+                    label="路径"
+                    :for="`m-path-${i}`"
+                    :error="errors[`matchers[${i}].path`]"
+                    optional
+                    hint="正则表达式，仅匹配路径（不含查询参数）；留空表示匹配全部路径"
+                  >
+                    <Input
+                      :id="`m-path-${i}`"
+                      v-model="m.path"
+                      class="font-mono"
+                      placeholder="^/api/user/"
+                    />
+                  </FormField>
+                </div>
               </div>
-              <div class="grid gap-4 sm:grid-cols-[1fr_2fr]">
-                <FormField
-                  label="名称"
-                  :for="`m-name-${i}`"
-                  :error="errors[`matchers[${i}].name`]"
-                  hint="字段通过该名称指定所属的匹配规则"
-                >
-                  <Input :id="`m-name-${i}`" v-model="m.name" class="font-mono" />
-                </FormField>
-                <FormField
-                  label="域名"
-                  :for="`m-host-${i}`"
-                  :error="errors[`matchers[${i}].host`]"
-                  hint="精确域名，或以 *.example.com 形式通配子域名"
-                >
-                  <Input
-                    :id="`m-host-${i}`"
-                    v-model="m.host"
-                    class="font-mono"
-                    placeholder="api.example.com"
-                  />
-                </FormField>
-                <FormField
-                  label="请求方法"
-                  :for="`m-method-${i}`"
-                  :error="errors[`matchers[${i}].method`]"
-                >
-                  <NativeSelect :id="`m-method-${i}`" v-model="m.method" class="w-full">
-                    <NativeSelectOption v-for="x in methods" :key="x" :value="x">{{
-                      x || '任意'
-                    }}</NativeSelectOption>
-                  </NativeSelect>
-                </FormField>
-                <FormField
-                  label="路径"
-                  :for="`m-path-${i}`"
-                  :error="errors[`matchers[${i}].path`]"
-                  optional
-                  hint="正则表达式，仅匹配路径（不含查询参数）；留空表示匹配全部路径"
-                >
-                  <Input
-                    :id="`m-path-${i}`"
-                    v-model="m.path"
-                    class="font-mono"
-                    placeholder="^/api/user/"
-                  />
-                </FormField>
-              </div>
-            </div>
+            </template>
+            <ReuseRemoved v-if="removedAt('matchers', doc.matchers.length)" />
             <div class="grid justify-items-start gap-1.5">
               <Button id="add-matcher" variant="outline" @click="addMatcher">
                 <PlusIcon /> 添加匹配规则
@@ -1205,197 +1295,205 @@ const fieldsHit = computed(() =>
           <!-- 字段 -->
           <template v-else-if="section === 'fields'">
             <HintText> 客户端仅回传已声明的字段；服务端按相同的读取规则复核。 </HintText>
-            <div
-              v-for="(f, i) in doc.fields"
-              :key="i"
-              data-item
-              class="grid gap-4 rounded-xl border p-4"
-            >
-              <div class="flex flex-wrap items-center gap-2">
-                <IconTile :icon="KeyRoundIcon" size="sm" />
-                <span class="font-mono text-sm font-medium">{{ f.key || '未命名' }}</span>
-                <span v-if="f.name" class="text-muted-foreground text-sm">{{ f.name }}</span>
-                <StatusBadge :tone="typeOf(f).tone">{{ typeOf(f).short }}</StatusBadge>
-                <StatusBadge v-if="f.sensitive" tone="warning" :icon="LockIcon">敏感</StatusBadge>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  class="ml-auto"
-                  aria-label="删除字段"
-                  @click="removeField(i)"
-                >
-                  <Trash2Icon />
-                </Button>
-              </div>
+            <template v-for="(f, i) in doc.fields" :key="i">
+              <ReuseRemoved v-if="removedAt('fields', i)" />
+              <div data-item class="grid gap-4 rounded-xl border p-4">
+                <div class="flex flex-wrap items-center gap-2">
+                  <IconTile :icon="KeyRoundIcon" size="sm" />
+                  <span class="min-w-0 font-mono text-sm font-medium [overflow-wrap:anywhere]">{{
+                    f.key || '未命名'
+                  }}</span>
+                  <span v-if="f.name" class="text-muted-foreground text-sm">{{ f.name }}</span>
+                  <StatusBadge :tone="typeOf(f).tone">{{ typeOf(f).short }}</StatusBadge>
+                  <StatusBadge v-if="f.sensitive" tone="warning" :icon="LockIcon">敏感</StatusBadge>
+                  <Button
+                    :id="`f-del-${i}`"
+                    variant="ghost"
+                    size="icon-sm"
+                    class="ml-auto"
+                    aria-label="删除字段"
+                    @click="removeField(i)"
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </div>
 
-              <div class="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  label="字段标识"
-                  :for="`f-key-${i}`"
-                  :error="errors[`fields[${i}].key`]"
-                  hint="以小写字母开头，可包含小写字母、数字和 _；作为输出变量中的引用名"
-                >
-                  <Input
-                    :id="`f-key-${i}`"
-                    v-model="f.key"
-                    class="font-mono"
-                    placeholder="如 token"
-                  />
-                </FormField>
-                <FormField
-                  label="名称"
-                  :for="`f-name-${i}`"
-                  :error="errors[`fields[${i}].name`]"
-                  optional
-                >
-                  <Input :id="`f-name-${i}`" v-model="f.name" placeholder="如 登录令牌" />
-                </FormField>
-                <FormField
-                  label="匹配规则"
-                  :for="`f-matcher-${i}`"
-                  :error="errors[`fields[${i}].matcher`]"
-                  full
-                  hint="仅从命中该匹配规则的请求中读取"
-                >
-                  <NativeSelect :id="`f-matcher-${i}`" v-model="f.matcher" class="w-full">
-                    <NativeSelectOption value="">任一匹配规则</NativeSelectOption>
-                    <NativeSelectOption
-                      v-for="m in doc.matchers.filter((x) => x.name)"
-                      :key="m.name"
-                      :value="m.name"
-                      >{{ matcherLabel(m.name) }}</NativeSelectOption
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    label="字段标识"
+                    :for="`f-key-${i}`"
+                    :error="errors[`fields[${i}].key`]"
+                    hint="以小写字母开头，可包含小写字母、数字和 _；作为输出变量中的引用名"
+                  >
+                    <Input
+                      :id="`f-key-${i}`"
+                      v-model="f.key"
+                      class="font-mono"
+                      placeholder="如 token"
+                    />
+                  </FormField>
+                  <FormField
+                    label="名称"
+                    :for="`f-name-${i}`"
+                    :error="errors[`fields[${i}].name`]"
+                    optional
+                  >
+                    <Input :id="`f-name-${i}`" v-model="f.name" placeholder="如 登录令牌" />
+                  </FormField>
+                  <FormField
+                    label="匹配规则"
+                    :for="`f-matcher-${i}`"
+                    :error="errors[`fields[${i}].matcher`]"
+                    full
+                    hint="仅从命中该匹配规则的请求中读取"
+                  >
+                    <NativeSelect :id="`f-matcher-${i}`" v-model="f.matcher" class="w-full">
+                      <NativeSelectOption value="">任一匹配规则</NativeSelectOption>
+                      <NativeSelectOption
+                        v-for="m in doc.matchers.filter((x) => x.name)"
+                        :key="m.name"
+                        :value="m.name"
+                        >{{ matcherLabel(m.name) }}</NativeSelectOption
+                      >
+                    </NativeSelect>
+                  </FormField>
+                  <FormField label="读取位置" :for="`f-in-${i}`" :error="errors[`fields[${i}].in`]">
+                    <NativeSelect :id="`f-in-${i}`" v-model="f.in" class="w-full">
+                      <NativeSelectOption v-for="o in inOptions" :key="o.value" :value="o.value">{{
+                        o.label
+                      }}</NativeSelectOption>
+                    </NativeSelect>
+                  </FormField>
+                  <FormField
+                    :label="f.in === 'regex' ? '正则表达式' : '键名 / 路径'"
+                    :for="`f-path-${i}`"
+                    :error="errors[`fields[${i}].path`]"
+                    :hint="inOf(f).hint"
+                  >
+                    <Input
+                      :id="`f-path-${i}`"
+                      v-model="f.path"
+                      class="font-mono"
+                      :placeholder="inOf(f).placeholder"
+                    />
+                  </FormField>
+                  <FormField
+                    v-if="f.in === 'regex'"
+                    label="匹配对象"
+                    :for="`f-regex-on-${i}`"
+                    :error="errors[`fields[${i}].regex_on`]"
+                  >
+                    <NativeSelect :id="`f-regex-on-${i}`" v-model="f.regex_on" class="w-full">
+                      <NativeSelectOption value="url">完整 URL</NativeSelectOption>
+                      <NativeSelectOption value="body">请求正文</NativeSelectOption>
+                    </NativeSelect>
+                  </FormField>
+                </div>
+
+                <div class="grid gap-4 border-t pt-4 sm:grid-cols-2">
+                  <FormField
+                    label="类型"
+                    :for="`f-type-${i}`"
+                    :error="errors[`fields[${i}].type`]"
+                    :hint="
+                      f.type === 'jwt'
+                        ? '解析 exp：到期前提醒，已过期的值自动驳回'
+                        : '类型不符的值自动驳回'
+                    "
+                  >
+                    <NativeSelect :id="`f-type-${i}`" v-model="f.type" class="w-full">
+                      <NativeSelectOption
+                        v-for="o in typeOptions"
+                        :key="o.value"
+                        :value="o.value"
+                        >{{ o.label }}</NativeSelectOption
+                      >
+                    </NativeSelect>
+                  </FormField>
+                  <div class="grid grid-cols-2 gap-3">
+                    <FormField
+                      label="最小长度"
+                      :for="`f-min-${i}`"
+                      :error="errors[`fields[${i}].min_len`]"
+                      optional
                     >
-                  </NativeSelect>
-                </FormField>
-                <FormField label="读取位置" :for="`f-in-${i}`" :error="errors[`fields[${i}].in`]">
-                  <NativeSelect :id="`f-in-${i}`" v-model="f.in" class="w-full">
-                    <NativeSelectOption v-for="o in inOptions" :key="o.value" :value="o.value">{{
-                      o.label
-                    }}</NativeSelectOption>
-                  </NativeSelect>
-                </FormField>
-                <FormField
-                  :label="f.in === 'regex' ? '正则表达式' : '键名 / 路径'"
-                  :for="`f-path-${i}`"
-                  :error="errors[`fields[${i}].path`]"
-                  :hint="inOf(f).hint"
-                >
-                  <Input
-                    :id="`f-path-${i}`"
-                    v-model="f.path"
-                    class="font-mono"
-                    :placeholder="inOf(f).placeholder"
-                  />
-                </FormField>
-                <FormField
-                  v-if="f.in === 'regex'"
-                  label="匹配对象"
-                  :for="`f-regex-on-${i}`"
-                  :error="errors[`fields[${i}].regex_on`]"
-                >
-                  <NativeSelect :id="`f-regex-on-${i}`" v-model="f.regex_on" class="w-full">
-                    <NativeSelectOption value="url">完整 URL</NativeSelectOption>
-                    <NativeSelectOption value="body">请求正文</NativeSelectOption>
-                  </NativeSelect>
-                </FormField>
-              </div>
+                      <Input
+                        :id="`f-min-${i}`"
+                        v-model.number="f.min_len"
+                        type="number"
+                        min="0"
+                        placeholder="不限"
+                      />
+                    </FormField>
+                    <FormField
+                      label="最大长度"
+                      :for="`f-max-${i}`"
+                      :error="errors[`fields[${i}].max_len`]"
+                      optional
+                    >
+                      <Input
+                        :id="`f-max-${i}`"
+                        v-model.number="f.max_len"
+                        type="number"
+                        min="0"
+                        placeholder="不限"
+                      />
+                    </FormField>
+                  </div>
+                  <FormField
+                    label="校验正则"
+                    :for="`f-pattern-${i}`"
+                    :error="errors[`fields[${i}].pattern`]"
+                    optional
+                    full
+                    hint="不匹配的值自动驳回"
+                  >
+                    <Input
+                      :id="`f-pattern-${i}`"
+                      v-model="f.pattern"
+                      class="font-mono"
+                      placeholder="如 ^[A-Za-z0-9._-]+$"
+                    />
+                  </FormField>
+                  <FormField
+                    full
+                    hint="加密存储；界面中脱敏显示，查看原值记入审计；通知中不含字段值"
+                  >
+                    <Label class="font-normal"><Switch v-model="f.sensitive" /> 敏感字段</Label>
+                  </FormField>
+                </div>
 
-              <div class="grid gap-4 border-t pt-4 sm:grid-cols-2">
-                <FormField
-                  label="类型"
-                  :for="`f-type-${i}`"
-                  :error="errors[`fields[${i}].type`]"
-                  :hint="
-                    f.type === 'jwt'
-                      ? '解析 exp：到期前提醒，已过期的值自动驳回'
-                      : '类型不符的值自动驳回'
+                <!-- 样例取值结果 -->
+                <div
+                  v-if="fieldResult(f)"
+                  class="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
+                  :class="
+                    fieldResult(f)!.ok && !fieldResult(f)!.invalid
+                      ? 'border-success/25 bg-success/5'
+                      : fieldResult(f)!.ok
+                        ? 'border-warning/30 bg-warning/5'
+                        : 'border-border bg-muted/40'
                   "
                 >
-                  <NativeSelect :id="`f-type-${i}`" v-model="f.type" class="w-full">
-                    <NativeSelectOption v-for="o in typeOptions" :key="o.value" :value="o.value">{{
-                      o.label
-                    }}</NativeSelectOption>
-                  </NativeSelect>
-                </FormField>
-                <div class="grid grid-cols-2 gap-3">
-                  <FormField
-                    label="最小长度"
-                    :for="`f-min-${i}`"
-                    :error="errors[`fields[${i}].min_len`]"
-                    optional
-                  >
-                    <Input
-                      :id="`f-min-${i}`"
-                      v-model.number="f.min_len"
-                      type="number"
-                      min="0"
-                      placeholder="不限"
-                    />
-                  </FormField>
-                  <FormField
-                    label="最大长度"
-                    :for="`f-max-${i}`"
-                    :error="errors[`fields[${i}].max_len`]"
-                    optional
-                  >
-                    <Input
-                      :id="`f-max-${i}`"
-                      v-model.number="f.max_len"
-                      type="number"
-                      min="0"
-                      placeholder="不限"
-                    />
-                  </FormField>
-                </div>
-                <FormField
-                  label="校验正则"
-                  :for="`f-pattern-${i}`"
-                  :error="errors[`fields[${i}].pattern`]"
-                  optional
-                  full
-                  hint="不匹配的值自动驳回"
-                >
-                  <Input
-                    :id="`f-pattern-${i}`"
-                    v-model="f.pattern"
-                    class="font-mono"
-                    placeholder="如 ^[A-Za-z0-9._-]+$"
-                  />
-                </FormField>
-                <FormField full hint="加密存储；界面中脱敏显示，查看原值记入审计；通知中不含字段值">
-                  <Label class="font-normal"><Switch v-model="f.sensitive" /> 敏感字段</Label>
-                </FormField>
-              </div>
-
-              <!-- 样例取值结果 -->
-              <div
-                v-if="fieldResult(f)"
-                class="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
-                :class="
-                  fieldResult(f)!.ok && !fieldResult(f)!.invalid
-                    ? 'border-success/25 bg-success/5'
-                    : fieldResult(f)!.ok
-                      ? 'border-warning/30 bg-warning/5'
-                      : 'border-border bg-muted/40'
-                "
-              >
-                <FlaskConicalIcon class="text-muted-foreground mt-0.5 size-4 shrink-0" />
-                <div class="grid min-w-0 gap-0.5">
-                  <template v-if="fieldResult(f)!.ok">
-                    <span class="font-mono break-all">{{ fieldResult(f)!.value }}</span>
-                    <span v-if="fieldResult(f)!.invalid" class="text-warning text-xs"
-                      >校验未通过：{{ fieldResult(f)!.invalid }}</span
-                    >
-                    <span
-                      v-else-if="fieldResult(f)!.expires_at"
-                      class="text-muted-foreground text-xs"
-                      >过期时间 {{ fmtTime(fieldResult(f)!.expires_at!) }}</span
-                    >
-                  </template>
-                  <span v-else class="text-muted-foreground">{{ fieldResult(f)!.error }}</span>
+                  <FlaskConicalIcon class="text-muted-foreground mt-0.5 size-4 shrink-0" />
+                  <div class="grid min-w-0 gap-0.5">
+                    <template v-if="fieldResult(f)!.ok">
+                      <span class="font-mono break-all">{{ fieldResult(f)!.value }}</span>
+                      <span v-if="fieldResult(f)!.invalid" class="text-warning text-xs"
+                        >校验未通过：{{ fieldResult(f)!.invalid }}</span
+                      >
+                      <span
+                        v-else-if="fieldResult(f)!.expires_at"
+                        class="text-muted-foreground text-xs"
+                        >过期时间 {{ fmtTime(fieldResult(f)!.expires_at!) }}</span
+                      >
+                    </template>
+                    <span v-else class="text-muted-foreground">{{ fieldResult(f)!.error }}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            </template>
+            <ReuseRemoved v-if="removedAt('fields', doc.fields.length)" />
             <div class="grid justify-items-start gap-1.5">
               <Button id="add-field" variant="outline" @click="addField"
                 ><PlusIcon /> 添加字段</Button
@@ -1412,80 +1510,84 @@ const fieldsHit = computed(() =>
               >，例如
               <code class="bg-muted rounded px-1 font-mono">{{ examples.output }}</code>
             </HintText>
-            <div
-              v-for="(o, i) in doc.outputs"
-              :key="i"
-              data-item
-              class="grid gap-4 rounded-xl border p-4"
-            >
-              <div class="flex items-center gap-2">
-                <IconTile :icon="VariableIcon" size="sm" />
-                <span class="font-mono text-sm font-medium">{{ o.name || '未命名' }}</span>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  class="ml-auto"
-                  aria-label="删除输出变量"
-                  @click="removeOutput(i)"
-                >
-                  <Trash2Icon />
-                </Button>
-              </div>
-              <div class="grid gap-4 sm:grid-cols-[1fr_2fr]">
-                <FormField
-                  label="变量名"
-                  :for="`o-name-${i}`"
-                  :error="errors[`outputs[${i}].name`]"
-                >
-                  <Input
-                    :id="`o-name-${i}`"
-                    v-model="o.name"
-                    class="font-mono"
-                    placeholder="如 MY_APP_TOKEN"
-                  />
-                </FormField>
-                <FormField
-                  label="变量值"
-                  :for="`o-tpl-${i}`"
-                  :error="errors[`outputs[${i}].template`]"
-                >
-                  <Input :id="`o-tpl-${i}`" v-model="o.template" class="font-mono" />
-                  <div class="flex flex-wrap items-center gap-1">
-                    <span class="text-muted-foreground text-xs">插入字段</span>
-                    <Button
-                      v-for="f in doc.fields.filter((x) => x.key)"
-                      :key="f.key"
-                      variant="outline"
-                      size="xs"
+            <template v-for="(o, i) in doc.outputs" :key="i">
+              <ReuseRemoved v-if="removedAt('outputs', i)" />
+              <div data-item class="grid gap-4 rounded-xl border p-4">
+                <div class="flex items-center gap-2">
+                  <IconTile :icon="VariableIcon" size="sm" />
+                  <span class="min-w-0 font-mono text-sm font-medium [overflow-wrap:anywhere]">{{
+                    o.name || '未命名'
+                  }}</span>
+                  <Button
+                    :id="`o-del-${i}`"
+                    variant="ghost"
+                    size="icon-sm"
+                    class="ml-auto"
+                    aria-label="删除输出变量"
+                    @click="removeOutput(i)"
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-[1fr_2fr]">
+                  <FormField
+                    label="变量名"
+                    :for="`o-name-${i}`"
+                    :error="errors[`outputs[${i}].name`]"
+                  >
+                    <Input
+                      :id="`o-name-${i}`"
+                      v-model="o.name"
                       class="font-mono"
-                      @click="insertVar(i, f.key)"
-                    >
-                      {{ f.key }}
-                    </Button>
-                    <span
-                      v-if="!doc.fields.some((x) => x.key)"
-                      class="text-muted-foreground text-xs"
-                      >（暂无字段）</span
-                    >
-                  </div>
-                </FormField>
+                      placeholder="如 MY_APP_TOKEN"
+                    />
+                  </FormField>
+                  <FormField
+                    label="变量值"
+                    :for="`o-tpl-${i}`"
+                    :error="errors[`outputs[${i}].template`]"
+                  >
+                    <Input :id="`o-tpl-${i}`" v-model="o.template" class="font-mono" />
+                    <div class="flex flex-wrap items-center gap-1">
+                      <span class="text-muted-foreground text-xs">插入字段</span>
+                      <Button
+                        v-for="f in doc.fields.filter((x) => x.key)"
+                        :key="f.key"
+                        variant="outline"
+                        size="xs"
+                        class="font-mono"
+                        @click="insertVar(i, f.key)"
+                      >
+                        {{ f.key }}
+                      </Button>
+                      <span
+                        v-if="!doc.fields.some((x) => x.key)"
+                        class="text-muted-foreground text-xs"
+                        >（暂无字段）</span
+                      >
+                    </div>
+                  </FormField>
+                </div>
+                <div
+                  v-if="outputResult(o.name)"
+                  class="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
+                  :class="
+                    outputResult(o.name)!.ok
+                      ? 'border-success/25 bg-success/5'
+                      : 'border-border bg-muted/40'
+                  "
+                >
+                  <FlaskConicalIcon class="text-muted-foreground mt-0.5 size-4 shrink-0" />
+                  <span v-if="outputResult(o.name)!.ok" class="font-mono break-all">{{
+                    outputResult(o.name)!.value
+                  }}</span>
+                  <span v-else class="text-muted-foreground">{{
+                    outputResult(o.name)!.error
+                  }}</span>
+                </div>
               </div>
-              <div
-                v-if="outputResult(o.name)"
-                class="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
-                :class="
-                  outputResult(o.name)!.ok
-                    ? 'border-success/25 bg-success/5'
-                    : 'border-border bg-muted/40'
-                "
-              >
-                <FlaskConicalIcon class="text-muted-foreground mt-0.5 size-4 shrink-0" />
-                <span v-if="outputResult(o.name)!.ok" class="font-mono break-all">{{
-                  outputResult(o.name)!.value
-                }}</span>
-                <span v-else class="text-muted-foreground">{{ outputResult(o.name)!.error }}</span>
-              </div>
-            </div>
+            </template>
+            <ReuseRemoved v-if="removedAt('outputs', doc.outputs?.length ?? 0)" />
             <div class="grid justify-items-start gap-1.5">
               <Button id="add-output" variant="outline" @click="addOutput">
                 <PlusIcon /> 添加输出变量
