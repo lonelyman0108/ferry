@@ -48,14 +48,14 @@ watch(
         :name="`kv-key-${i}`"
         :aria-label="keyPlaceholder"
         :placeholder="keyPlaceholder"
-        class="w-2/5 font-mono text-xs"
+        class="w-2/5 font-mono"
       />
       <Input
         v-model="r.v"
         :name="`kv-value-${i}`"
         :aria-label="valuePlaceholder"
         :placeholder="valuePlaceholder"
-        class="flex-1 font-mono text-xs"
+        class="flex-1 font-mono"
       />
       <Button variant="ghost" size="icon" aria-label="删除" @click="rows.splice(i, 1)">
         <Trash2Icon />

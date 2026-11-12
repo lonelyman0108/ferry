@@ -79,6 +79,18 @@ const identityOpen = computed(() =>
 const setQuery = (q: Record<string, string | undefined>) =>
   router.replace({ query: { ...route.query, ...q } })
 
+// 编辑器里删除来源后回到来源列表。用 replace 顶替当前这条历史记录，浏览器后退不会回到已删除来源的详情。
+// 编辑器删除后还会发出 close，这时不再去掉地址上的 edit：再发起一次导航会取消正在进行的跳转，页面停在已删除来源的详情。
+let removed = false
+function onEditorSaved(sid: number) {
+  if (sid) return void refresh()
+  removed = true
+  void router.replace('/sources')
+}
+function onEditorClose() {
+  if (!removed) void setQuery({ edit: undefined })
+}
+
 const summary = computed(() => {
   const s = src.value
   const l = lane.value
@@ -440,8 +452,8 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
     :id="String(id)"
     :key="`edit-${id}`"
     :initial-section="editSection"
-    @close="setQuery({ edit: undefined })"
-    @saved="(sid: number) => (sid ? refresh() : router.push('/sources'))"
+    @close="onEditorClose"
+    @saved="onEditorSaved"
   />
   <IdentityDialog
     v-if="identityOpen"

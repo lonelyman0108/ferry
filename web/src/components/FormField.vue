@@ -43,7 +43,9 @@ onMounted(mark)
   <div ref="root" class="grid content-start gap-1.5" :class="full ? 'sm:col-span-2' : ''">
     <Label v-if="label" :for="$props.for" class="gap-1" :class="error ? 'text-destructive' : ''">
       {{ label }}
-      <span v-if="optional" class="text-muted-foreground text-xs font-normal">可选</span>
+      <span v-if="optional" class="text-muted-foreground text-xs leading-none font-normal"
+        >可选</span
+      >
     </Label>
     <slot />
     <p v-if="error" :id="errorId" class="text-destructive text-xs leading-relaxed">{{ error }}</p>

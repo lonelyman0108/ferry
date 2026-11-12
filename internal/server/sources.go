@@ -45,11 +45,12 @@ func (s *Server) writeSourceError(w http.ResponseWriter, r *http.Request, err er
 	var ve *source.ValidationError
 	switch {
 	case errors.As(err, &ve):
-		writeJSON(w, http.StatusBadRequest, errorBody{Error: "来源定义有误", Details: ve.Problems})
+		writeJSON(w, http.StatusBadRequest, errorBody{Error: "来源定义有误", Details: ve.Details(), Problems: ve.Problems})
 	case errors.Is(err, source.ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, source.ErrKeyExists), errors.Is(err, source.ErrKeyChanged):
-		writeError(w, http.StatusConflict, err.Error())
+		// 两者都出在 key 上，附上位置，界面把错误显示在来源标识的输入框下方。
+		writeJSON(w, http.StatusConflict, errorBody{Error: err.Error(), Problems: []source.Problem{{Path: "key", Message: err.Error()}}})
 	default:
 		s.internalError(w, r, err)
 	}

@@ -21,8 +21,10 @@ func TestSourceLifecycle(t *testing.T) {
 	if code := h.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, &created); code != 201 {
 		t.Fatalf("导入示例 = %d", code)
 	}
-	if code := h.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, nil); code != 409 {
-		t.Errorf("重复导入 = %d，期望 409", code)
+	var dup errorBody
+	if code := h.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, &dup); code != 409 ||
+		len(dup.Problems) != 1 || dup.Problems[0].Path != "key" {
+		t.Errorf("重复导入 = %d %+v，期望 409 且指向 key", code, dup)
 	}
 	id := itoa(created.ID)
 
@@ -69,6 +71,11 @@ func TestSourceLifecycle(t *testing.T) {
 	if code := h.do("PUT", "/api/v1/sources/"+id, got.Doc, &bad); code != 400 || len(bad.Details) < 2 {
 		t.Errorf("非法更新 = %d %+v，期望 400 且列出全部问题", code, bad)
 	}
+	// problems 与 details 一一对应，带上出错位置。
+	if len(bad.Problems) != len(bad.Details) || bad.Problems[0].Path != "fields[1].matcher" ||
+		!strings.HasPrefix(bad.Details[0], "fields[1].matcher ") || strings.HasPrefix(bad.Problems[0].Message, "fields") {
+		t.Errorf("非法更新的 problems = %+v，details = %v", bad.Problems, bad.Details)
+	}
 	got.Doc.Key = "other"
 	got.Doc.Fields[1].Matcher = "sign"
 	got.Doc.Outputs = got.Doc.Outputs[:2]
@@ -94,6 +101,14 @@ func TestSourceLifecycle(t *testing.T) {
 	var importErr errorBody
 	if code := h.do("POST", "/api/v1/sources/import", map[string]string{"yaml": "key: [oops"}, &importErr); code != 400 {
 		t.Errorf("坏 YAML = %d", code)
+	}
+	// 语法正确、定义不合法的 YAML 同样返回 details 和带位置的 problems。
+	importErr = errorBody{}
+	badDoc := "key: other\nname: 其他\nmatchers:\n  - name: main\n    host: \"\"\nfields: []\n"
+	if code := h.do("POST", "/api/v1/sources/import", map[string]string{"yaml": badDoc}, &importErr); code != 400 ||
+		importErr.Error != "来源定义有误" || len(importErr.Details) != 2 || len(importErr.Problems) != 2 ||
+		importErr.Problems[0].Path != "matchers[0].host" || importErr.Problems[1].Path != "fields" {
+		t.Errorf("不合法的 YAML 定义 = %d %+v", code, importErr)
 	}
 
 	var list []sourceSummary

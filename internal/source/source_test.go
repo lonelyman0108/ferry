@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -52,9 +53,70 @@ func TestValidateCollectsAllProblems(t *testing.T) {
 	if !errors.As(err, &ve) {
 		t.Fatalf("err = %v，期望 ValidationError", err)
 	}
-	for _, want := range []string{"key 仅允许", "name 不能为空", "重复", "matchers[1]", "fields[0].key", "matcher \"missing\" 不存在", "不支持的读取位置", "type \"date\"", "min_len", "pattern", "identity_field", "outputs[0].name", "未声明的字段"} {
+	got := map[string]string{}
+	for _, p := range ve.Problems {
+		got[p.Path] = p.Message
+	}
+	for _, path := range []string{
+		"key", "name", "matchers[1].name", "matchers[1].host",
+		"fields[0].key", "fields[1].matcher", "fields[1].in", "fields[1].type", "fields[1].min_len", "fields[1].pattern",
+		"identity_field", "outputs[0].name", "outputs[0].template",
+	} {
+		if got[path] == "" {
+			t.Errorf("缺少位置 %s 的问题：%+v", path, ve.Problems)
+		}
+	}
+	if strings.HasPrefix(got["matchers[1].host"], "matchers") || !strings.Contains(got["matchers[1].host"], "域名") {
+		t.Errorf("message 应只说明问题、不含位置：%q", got["matchers[1].host"])
+	}
+	// 只显示文字的场合用 Details，每条带上位置。
+	details := ve.Details()
+	if len(details) != len(ve.Problems) {
+		t.Fatalf("Details 与 Problems 条数不一致：%d / %d", len(details), len(ve.Problems))
+	}
+	for _, want := range []string{"key 仅允许", "name 不能为空", "matchers[1].name \"a\" 与其他匹配规则重名", "fields[1].matcher 匹配规则 \"missing\" 不存在", "outputs[0].template 引用了未声明的字段"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("缺少问题 %q：%v", want, err)
+		}
+	}
+}
+
+// 出错位置细化到 rules、probe 校验的具体一项。
+func TestValidateProblemPaths(t *testing.T) {
+	cases := []struct {
+		name string
+		edit func(d *Doc)
+		path string
+	}{
+		{"路径正则", func(d *Doc) { d.Matchers[0].Path = "(" }, "matchers[0].path"},
+		{"缺少读取路径", func(d *Doc) { d.Fields[0].Path = " " }, "fields[0].path"},
+		{"正则读取对象", func(d *Doc) { d.Fields[0].In, d.Fields[0].Path, d.Fields[0].RegexOn = "regex", "a(b)", "" }, "fields[0].regex_on"},
+		{"最大长度为负", func(d *Doc) { d.Fields[0].MaxLen = -1 }, "fields[0].max_len"},
+		{"字段数量", func(d *Doc) { d.Fields = nil }, "fields"},
+		{"检测地址", func(d *Doc) { d.Probe.URL = "ftp://x" }, "probe.url"},
+		{"检测请求头", func(d *Doc) { d.Probe.Headers = map[string]string{"X": "{{.nope}}"} }, "probe.headers"},
+		{"成功条件", func(d *Doc) { d.Probe.Expect = "status +" }, "probe.expect"},
+		{"检测超时", func(d *Doc) { d.Probe.Timeout = 99 }, "probe.timeout"},
+	}
+	for _, c := range cases {
+		d := ninebot(t)
+		d.Matchers = append([]MatcherDoc{}, d.Matchers...)
+		d.Fields = append([]FieldDoc{}, d.Fields...)
+		pr := *d.Probe
+		d.Probe = &pr
+		c.edit(&d)
+		d.Normalize()
+		var ve *ValidationError
+		if !errors.As(d.Validate(), &ve) {
+			t.Errorf("%s：期望 ValidationError", c.name)
+			continue
+		}
+		var paths []string
+		for _, p := range ve.Problems {
+			paths = append(paths, p.Path)
+		}
+		if !slices.Contains(paths, c.path) {
+			t.Errorf("%s：位置 = %v，期望包含 %s", c.name, paths, c.path)
 		}
 	}
 }

@@ -2,6 +2,7 @@ package rules
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"testing"
@@ -99,6 +100,34 @@ func TestValidate(t *testing.T) {
 	for _, f := range badFields {
 		if f.Validate() == nil {
 			t.Errorf("取值规则 %+v 应当不合法", f)
+		}
+	}
+}
+
+// 校验错误指出出错的是哪一项。
+func TestValidatePart(t *testing.T) {
+	part := func(err error) string {
+		var pe *PartError
+		if errors.As(err, &pe) {
+			return pe.Part
+		}
+		return ""
+	}
+	cases := []struct {
+		err  error
+		want string
+	}{
+		{Matcher{Host: "https://a.com"}.Validate(), "host"},
+		{Matcher{Host: "a.com", PathRegex: "("}.Validate(), "path"},
+		{Matcher{Host: "a.com", PathRegex: "^/a b"}.Validate(), "path"},
+		{Field{In: "nowhere", Path: "x"}.Validate(), "in"},
+		{Field{In: InHeader}.Validate(), "path"},
+		{Field{In: InRegex, Path: "abc", RegexOn: RegexOnURL}.Validate(), "path"},
+		{Field{In: InRegex, Path: "(a)"}.Validate(), "regex_on"},
+	}
+	for i, c := range cases {
+		if got := part(c.err); got != c.want {
+			t.Errorf("用例 %d：part = %q，期望 %q（%v）", i, got, c.want, c.err)
 		}
 	}
 }

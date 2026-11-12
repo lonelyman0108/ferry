@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -55,45 +56,52 @@ func sampleEnv() map[string]any {
 	return map[string]any{"status": 0, "headers": map[string]string{}, "body": "", "json": map[string]any{}}
 }
 
-// Validate 检查配置，fields 是来源已声明的字段 key。
+// Validate 检查配置，fields 是来源已声明的字段 key。返回的错误是 *rules.PartError，指向出错的那一项
+// （method、url、headers、body、expect、identity 或 timeout）。
 func (s Spec) Validate(fields []string) error {
 	switch strings.ToUpper(s.Method) {
 	case "", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD":
 	default:
-		return fmt.Errorf("有效性检测不支持 method %q", s.Method)
+		return rules.Invalid("method", "有效性检测不支持 method %q", s.Method)
 	}
 	if !strings.HasPrefix(s.URL, "http://") && !strings.HasPrefix(s.URL, "https://") {
-		return errors.New("有效性检测的 url 须以 http:// 或 https:// 开头")
+		return rules.Invalid("url", "有效性检测的 url 须以 http:// 或 https:// 开头")
 	}
-	templates := map[string]string{"url": s.URL, "body": s.Body}
-	for k, v := range s.Headers {
-		templates["headers."+k] = v
+	type tmpl struct{ part, name, text string }
+	templates := []tmpl{{"url", "url", s.URL}, {"body", "body", s.Body}}
+	keys := make([]string, 0, len(s.Headers))
+	for k := range s.Headers {
+		keys = append(keys, k)
 	}
-	for name, text := range templates {
-		if text == "" {
+	sort.Strings(keys)
+	for _, k := range keys {
+		templates = append(templates, tmpl{"headers", "headers." + k, s.Headers[k]})
+	}
+	for _, x := range templates {
+		if x.text == "" {
 			continue
 		}
-		t, err := rules.ParseTemplate(text)
+		t, err := rules.ParseTemplate(x.text)
 		if err == nil {
 			err = t.CheckFields(fields)
 		}
 		if err != nil {
-			return fmt.Errorf("有效性检测的 %s：%w", name, err)
+			return rules.Invalid(x.part, "有效性检测的 %s：%w", x.name, err)
 		}
 	}
 	if strings.TrimSpace(s.Expect) == "" {
-		return errors.New("有效性检测缺少成功条件 expect")
+		return rules.Invalid("expect", "有效性检测缺少成功条件 expect")
 	}
 	if _, err := expr.Compile(s.Expect, expr.Env(sampleEnv()), expr.AsBool()); err != nil {
-		return fmt.Errorf("成功条件表达式错误：%w", err)
+		return rules.Invalid("expect", "成功条件表达式错误：%w", err)
 	}
 	if s.Identity != "" {
 		if _, err := expr.Compile(s.Identity, expr.Env(sampleEnv())); err != nil {
-			return fmt.Errorf("身份表达式错误：%w", err)
+			return rules.Invalid("identity", "身份表达式错误：%w", err)
 		}
 	}
 	if s.Timeout < 0 || time.Duration(s.Timeout)*time.Second > maxTimeout {
-		return fmt.Errorf("有效性检测的 timeout 应在 0 到 %d 秒之间", int(maxTimeout/time.Second))
+		return rules.Invalid("timeout", "有效性检测的 timeout 应在 0 到 %d 秒之间", int(maxTimeout/time.Second))
 	}
 	return nil
 }

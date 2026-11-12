@@ -4,6 +4,7 @@ package source
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"html"
 	"net/http"
@@ -111,13 +112,46 @@ var (
 	outputNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,127}$`)
 )
 
+// Problem 是文档里的一个问题。Path 是出错的位置，写法同 JSON 路径（如 key、matchers[0].host、probe.url），
+// 涉及整份文档时为空；Message 只说明问题本身、不含位置，界面把它显示在对应的输入框下方。
+type Problem struct {
+	Path    string `json:"path,omitempty"`
+	Message string `json:"message"`
+}
+
+// String 返回带位置的完整说明，如「key 仅允许小写字母…」，供只显示文字的场合（YAML 导入、日志）。
+func (p Problem) String() string {
+	if p.Path == "" {
+		return p.Message
+	}
+	return p.Path + " " + p.Message
+}
+
 // ValidationError 汇总一份文档里的全部问题，方便界面一次提示完。
 type ValidationError struct {
-	Problems []string
+	Problems []Problem
+}
+
+// Details 返回每个问题带位置的完整说明。
+func (e *ValidationError) Details() []string {
+	out := make([]string, len(e.Problems))
+	for i, p := range e.Problems {
+		out[i] = p.String()
+	}
+	return out
 }
 
 func (e *ValidationError) Error() string {
-	return "来源定义有误：" + strings.Join(e.Problems, "；")
+	return "来源定义有误：" + strings.Join(e.Details(), "；")
+}
+
+// partPath 在 base 后面接上 err 指向的那一项（err 是 *rules.PartError 时），得到具体的出错位置。
+func partPath(base string, err error) string {
+	var pe *rules.PartError
+	if errors.As(err, &pe) {
+		return base + "." + pe.Part
+	}
+	return base
 }
 
 // Normalize 去掉首尾空白并填上默认值，校验前调用。
@@ -162,114 +196,129 @@ func (d *Doc) Normalize() {
 
 // Validate 检查文档，返回 *ValidationError 或 nil。调用前先 Normalize。
 func (d *Doc) Validate() error {
-	var p []string
-	add := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
+	var p []Problem
+	add := func(path, format string, args ...any) {
+		p = append(p, Problem{Path: path, Message: fmt.Sprintf(format, args...)})
+	}
+	// nested 记下 rules、probe 返回的错误，位置细化到出错的那一项。
+	nested := func(base string, err error) {
+		p = append(p, Problem{Path: partPath(base, err), Message: err.Error()})
+	}
 
 	if !sourceKeyRe.MatchString(d.Key) {
-		add("key 仅允许小写字母、数字、- 和 _，须以字母开头，最长 64 个字符")
+		add("key", "仅允许小写字母、数字、- 和 _，须以字母开头，最长 64 个字符")
 	}
 	if d.Name == "" || len(d.Name) > 128 {
-		add("name 不能为空，且不超过 128 个字节")
+		add("name", "不能为空，且不超过 128 个字节")
 	}
 	if d.Icon != "" {
 		if err := validateIcon(d.Icon); err != nil {
-			add("icon %v", err)
+			add("icon", "%v", err)
 		}
 	}
 	switch d.Notify {
 	case NotifyAlways, NotifyFirst, NotifyChanged:
 	default:
-		add("notify 仅允许 always、first 或 changed")
+		add("notify", "仅允许 always、first 或 changed")
 	}
 	if d.Review != ReviewAuto && d.Review != ReviewManual {
-		add("review 仅允许 auto 或 manual")
+		add("review", "仅允许 auto 或 manual")
 	}
 	if *d.MergeWindow < 0 || *d.MergeWindow > maxMergeWindow {
-		add("merge_window 应在 0 到 %d 秒之间", maxMergeWindow)
+		add("merge_window", "应在 0 到 %d 秒之间", maxMergeWindow)
 	}
 	if *d.MinInterval < 0 || *d.MinInterval > maxMinInterval {
-		add("min_interval 应在 0 到 %d 秒之间", maxMinInterval)
+		add("min_interval", "应在 0 到 %d 秒之间", maxMinInterval)
 	}
 
 	if len(d.Matchers) == 0 || len(d.Matchers) > maxMatchers {
-		add("matchers 需 1 到 %d 条", maxMatchers)
+		add("matchers", "需 1 到 %d 条", maxMatchers)
 	}
 	matchers := map[string]bool{}
 	for i, m := range d.Matchers {
+		at := fmt.Sprintf("matchers[%d]", i)
 		if !matcherRe.MatchString(m.Name) {
-			add("matchers[%d].name 仅允许小写字母、数字、- 和 _", i)
+			add(at+".name", "仅允许小写字母、数字、- 和 _")
 		} else if matchers[m.Name] {
-			add("matchers[%d].name %q 重复", i, m.Name)
+			add(at+".name", "%q 与其他匹配规则重名", m.Name)
 		}
 		matchers[m.Name] = true
 		if err := (rules.Matcher{Host: m.Host, PathRegex: m.Path, Method: m.Method}).Validate(); err != nil {
-			add("matchers[%d]：%v", i, err)
+			nested(at, err)
 		}
 		switch m.Method {
 		case "", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS":
 		default:
-			add("matchers[%d].method %q 不是受支持的 HTTP 方法", i, m.Method)
+			add(at+".method", "%q 不是受支持的 HTTP 方法", m.Method)
 		}
 	}
 
 	if len(d.Fields) == 0 || len(d.Fields) > maxFields {
-		add("fields 需 1 到 %d 个", maxFields)
+		add("fields", "需 1 到 %d 个", maxFields)
 	}
 	fields := map[string]bool{}
 	var fieldKeys []string
 	for i, f := range d.Fields {
+		at := fmt.Sprintf("fields[%d]", i)
 		if !fieldKeyRe.MatchString(f.Key) {
-			add("fields[%d].key 仅允许小写字母、数字和 _，须以字母开头", i)
+			add(at+".key", "仅允许小写字母、数字和 _，须以字母开头")
 		} else if fields[f.Key] {
-			add("fields[%d].key %q 重复", i, f.Key)
+			add(at+".key", "%q 与其他字段重复", f.Key)
 		}
 		fields[f.Key] = true
 		fieldKeys = append(fieldKeys, f.Key)
 		if f.Matcher != "" && !matchers[f.Matcher] {
-			add("fields[%d].matcher %q 不存在", i, f.Matcher)
+			add(at+".matcher", "匹配规则 %q 不存在", f.Matcher)
 		}
 		if err := (rules.Field{In: f.In, Path: f.Path, RegexOn: f.RegexOn}).Validate(); err != nil {
-			add("fields[%d]：%v", i, err)
+			nested(at, err)
 		}
 		switch f.Type {
 		case TypeText, TypeJWT, TypeCookie, TypeJSON, TypeNumber, TypeBool:
 		default:
-			add("fields[%d].type %q 不支持", i, f.Type)
+			add(at+".type", "不支持类型 %q", f.Type)
 		}
-		if f.MinLen < 0 || f.MaxLen < 0 || (f.MaxLen > 0 && f.MinLen > f.MaxLen) {
-			add("fields[%d] 的 min_len、max_len 无效：不能为负数，且 min_len 不能大于 max_len", i)
+		switch {
+		case f.MinLen < 0:
+			add(at+".min_len", "不能为负数")
+		case f.MaxLen > 0 && f.MinLen > f.MaxLen:
+			add(at+".min_len", "不能大于最大长度")
+		}
+		if f.MaxLen < 0 {
+			add(at+".max_len", "不能为负数")
 		}
 		if f.Pattern != "" {
 			if _, err := regexp.Compile(f.Pattern); err != nil {
-				add("fields[%d].pattern 不是合法的正则：%v", i, err)
+				add(at+".pattern", "不是合法的正则：%v", err)
 			}
 		}
 	}
 	if d.Probe != nil {
 		if err := d.Probe.Validate(fieldKeys); err != nil {
-			add("%v", err)
+			nested("probe", err)
 		}
 	}
 	if d.IdentityField != "" && !fields[d.IdentityField] {
-		add("identity_field %q 不是已声明的字段", d.IdentityField)
+		add("identity_field", "%q 不是已声明的字段", d.IdentityField)
 	}
 
 	if len(d.Outputs) > maxOutputs {
-		add("outputs 最多 %d 个", maxOutputs)
+		add("outputs", "最多 %d 个", maxOutputs)
 	}
 	outputs := map[string]bool{}
 	for i, o := range d.Outputs {
+		at := fmt.Sprintf("outputs[%d]", i)
 		if !outputNameRe.MatchString(o.Name) {
-			add("outputs[%d].name 仅允许字母、数字和 _，且不能以数字开头", i)
+			add(at+".name", "仅允许字母、数字和 _，且不能以数字开头")
 		} else if outputs[o.Name] {
-			add("outputs[%d].name %q 重复", i, o.Name)
+			add(at+".name", "%q 与其他输出变量重名", o.Name)
 		}
 		outputs[o.Name] = true
 		t, err := rules.ParseTemplate(o.Template)
 		if err != nil {
-			add("outputs[%d]：%v", i, err)
+			add(at+".template", "%v", err)
 		} else if err := t.CheckFields(fieldKeys); err != nil {
-			add("outputs[%d] 引用了未声明的字段：%v", i, err)
+			add(at+".template", "引用了未声明的字段：%v", err)
 		}
 	}
 

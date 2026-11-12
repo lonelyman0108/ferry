@@ -895,7 +895,7 @@ async function runPush() {
           <KeyValueEditor v-model="destForm.config.headers" />
         </FormField>
         <FormField label="请求体模板" for="d-body" optional full>
-          <Textarea id="d-body" v-model="destForm.config.body" rows="4" class="font-mono text-xs" />
+          <Textarea id="d-body" v-model="destForm.config.body" rows="4" class="font-mono" />
           <template #hint>
             Go 模板；留空时发送默认 JSON（source、identity、vars）。变量引用示例：<code
               class="font-mono"
@@ -995,7 +995,7 @@ async function runPush() {
         <Input
           v-model="bindForm.rename[o]"
           :aria-label="`${o} 重命名为`"
-          class="font-mono text-xs"
+          class="font-mono"
           :placeholder="o"
         />
       </div>

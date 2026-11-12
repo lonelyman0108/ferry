@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  CircleAlertIcon,
   CircleCheckIcon,
   CircleXIcon,
   DownloadIcon,
@@ -16,10 +17,28 @@ import {
   RouteIcon,
   Trash2Icon,
   TriangleAlertIcon,
+  Undo2Icon,
   VariableIcon,
 } from '@lucide/vue'
-import { createReusableTemplate, useMediaQuery, useScroll } from '@vueuse/core'
-import { computed, nextTick, onMounted, reactive, ref, useTemplateRef, watch } from 'vue'
+import { createReusableTemplate, useEventListener, useMediaQuery, useScroll } from '@vueuse/core'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  shallowRef,
+  useTemplateRef,
+  watch,
+} from 'vue'
+import {
+  onBeforeRouteLeave,
+  onBeforeRouteUpdate,
+  type RouteLocationNormalized,
+  useRoute,
+  useRouter,
+} from 'vue-router'
 import { toast } from 'vue-sonner'
 
 import { api, ApiError, errorText } from '@/api'
@@ -50,10 +69,13 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { fmtTime, secondaryKey } from '@/format'
+import { urlProblem } from '@/lib/form'
 import { icons } from '@/lib/icons'
 import type { Tone } from '@/lib/tone'
 import { useSourceIcons } from '@/stores/sourceIcons'
 import type { FieldDoc, ProbeSpec, SourceDoc, SourceView, TryResult, TryValue } from '@/types'
+
+import { locate } from './problems'
 
 // 来源编辑器弹窗。左侧分区导航，中间表单，右侧（宽屏）是共用的样例请求：
 // 任何改动都会用当前草稿重新试跑，匹配、取值、输出、检测各处就地显示结果。
@@ -61,11 +83,15 @@ import type { FieldDoc, ProbeSpec, SourceDoc, SourceView, TryResult, TryValue } 
 const props = defineProps<{ id?: string; initialSection?: string }>()
 const emit = defineEmits<{ close: []; saved: [id: number] }>()
 
+const route = useRoute()
+const router = useRouter()
 const isNew = computed(() => !props.id)
 const loaded = ref(false)
 const saving = ref(false)
-const problems = ref<string[]>([])
-const section = ref(props.initialSection || 'basic')
+const sectionOrder = ['basic', 'matchers', 'fields', 'outputs', 'probe', 'setup', 'sample']
+const pickSection = (v: unknown) =>
+  typeof v === 'string' && sectionOrder.includes(v) ? v : 'basic'
+const section = ref(pickSection(props.initialSection))
 const confirmClose = ref(false)
 const wide = useMediaQuery('(min-width: 1280px)')
 // 窄屏时分区导航是一行横向滚动的标签：切换分区或刚打开时把当前项滚到中间，
@@ -88,7 +114,9 @@ watch([section, () => loaded.value], async () => {
     ?.scrollIntoView({ inline: 'center', block: 'nearest' })
 })
 // 样例请求面板在宽屏放右栏，窄屏作为一个分区，两处共用同一份模板。
+// 接入清单里的操作即时生效、与样例无关，这个分区不显示右栏。
 const [DefineSample, ReuseSample] = createReusableTemplate()
+const sampleAside = computed(() => wide.value && section.value !== 'setup')
 
 function blank(): SourceDoc {
   return {
@@ -171,9 +199,26 @@ const sections = computed(() => {
   if (!wide.value) s.push({ value: 'sample', label: '样例测试', icon: FlaskConicalIcon })
   return s
 })
-watch(wide, (w) => {
-  if (w && section.value === 'sample') section.value = 'basic'
+watch(
+  wide,
+  (w) => {
+    if (w && section.value === 'sample') section.value = 'basic'
+  },
+  { immediate: true },
+)
+// 当前分区写进地址，刷新或复制链接后回到同一分区。已有来源用 ?edit=<分区>（详情页据此打开编辑器），
+// 新建来源用 ?section=<分区>。用 replace，切换分区不增加历史记录。
+const sectionParam = isNew.value ? 'section' : 'edit'
+watch(section, (s) => {
+  if (route.query[sectionParam] !== s)
+    void router.replace({ query: { ...route.query, [sectionParam]: s } })
 })
+watch(
+  () => route.query[sectionParam],
+  (v) => {
+    if (typeof v === 'string' && sectionOrder.includes(v)) section.value = v
+  },
+)
 
 // 匹配规则在下拉框里显示成“名称 · 域名路径”，比只看名称直观。
 const matcherLabel = (name: string) => {
@@ -303,6 +348,139 @@ function payload(): SourceDoc {
 
 const dirty = computed(() => loaded.value && JSON.stringify(payload()) !== saved.value)
 
+// ---- 离开确认 ----
+// 有未保存的修改时，关闭编辑器、点链接、浏览器后退等任何让编辑器关闭的跳转都先确认。
+// 浏览器后退、前进时，守卫执行前地址已经变了，取消后路由会退回原处；因此记下编辑器所在的历史位置，
+// 确认放弃后按同样的步数再走一次，其余跳转确认后重新导航到原目标。
+let discarded = false
+let pending: { delta: number } | { to: string } | null = null
+let position: unknown = window.history.state?.position
+watch(
+  () => route.fullPath,
+  () => (position = window.history.state?.position),
+)
+
+function leaveGuard(to: RouteLocationNormalized, from: RouteLocationNormalized) {
+  // 切换分区只改查询参数，编辑器仍然打开
+  const stays = to.path === from.path && (isNew.value || !!to.query.edit)
+  // 登录过期、尚未初始化时的强制跳转不拦
+  if (discarded || !dirty.value || stays || to.meta.public) return true
+  const now: unknown = window.history.state?.position
+  pending =
+    typeof now === 'number' && typeof position === 'number' && now !== position
+      ? { delta: now - position }
+      : { to: to.fullPath }
+  confirmClose.value = true
+  return false
+}
+onBeforeRouteLeave(leaveGuard)
+onBeforeRouteUpdate(leaveGuard)
+// 刷新、关闭标签页时交给浏览器自带的确认框。
+useEventListener(window, 'beforeunload', (e: BeforeUnloadEvent) => {
+  if (!dirty.value || discarded) return
+  e.preventDefault()
+  e.returnValue = ''
+})
+
+function requestClose() {
+  pending = null
+  if (dirty.value) confirmClose.value = true
+  else emit('close')
+}
+
+function discard() {
+  discarded = true
+  const p = pending
+  pending = null
+  if (!p) emit('close')
+  else if ('delta' in p) window.history.go(p.delta)
+  else void router.push(p.to)
+}
+
+// ---- 校验 ----
+// 保存前先在本地检查必填项，未通过时不提交；后端返回的问题带出错位置（如 matchers[0].host），
+// 两者合在一起显示在对应的输入框下方，并在顶部汇总、在分区导航上计数。
+// 本地检查在第一次保存后随填写实时更新；后端的问题在出错的值改动后消失，下次保存时重新校验。
+const tried = ref(false)
+const localProblems = computed(() => {
+  const out: Record<string, string> = {}
+  const need = (path: string, v: unknown, msg: string) => {
+    if (!String(v ?? '').trim()) out[path] = msg
+  }
+  if (isNew.value) need('key', doc.key, '请填写来源标识')
+  need('name', doc.name, '请填写名称')
+  doc.matchers.forEach((m, i) => {
+    need(`matchers[${i}].name`, m.name, '请填写名称')
+    need(`matchers[${i}].host`, m.host, '请填写域名')
+  })
+  if (!doc.fields.length) out.fields = '请添加至少一个字段'
+  doc.fields.forEach((f, i) => {
+    need(`fields[${i}].key`, f.key, '请填写字段标识')
+    need(`fields[${i}].path`, f.path, f.in === 'regex' ? '请填写正则表达式' : '请填写键名或路径')
+  })
+  doc.outputs?.forEach((o, i) => {
+    need(`outputs[${i}].name`, o.name, '请填写变量名')
+    need(`outputs[${i}].template`, o.template, '请填写变量值')
+  })
+  if (probeOn.value) {
+    const u = urlProblem(probe.url, '接口地址')
+    if (u) out['probe.url'] = u
+    need('probe.expect', probe.expect, '请填写成功条件')
+  }
+  return out
+})
+
+// 后端返回的问题，连同出错时那一处的值，值改动后不再显示。
+const flagged = ref<{ path: string; message: string; value: string }[]>([])
+// 按路径（如 fields[1].key）从提交内容里取值。
+function dig(obj: unknown, path: string): string {
+  let v = obj
+  for (const k of path.match(/[^.[\]]+/g) ?? []) v = (v as Record<string, unknown> | undefined)?.[k]
+  return JSON.stringify(v) ?? ''
+}
+const errors = computed(() => {
+  const out: Record<string, string> = {}
+  if (flagged.value.length) {
+    const cur = payload()
+    for (const f of flagged.value)
+      if (f.path && !out[f.path] && dig(cur, f.path) === f.value) out[f.path] = f.message
+  }
+  if (tried.value) Object.assign(out, localProblems.value)
+  return out
+})
+// 能对应到输入框的问题按分区和表单中的先后排列；对应不上的放进 general，只在汇总里显示。
+const issues = computed(() =>
+  Object.entries(errors.value)
+    .flatMap(([path, message]) => {
+      const spot = locate(path)
+      return spot ? [{ path, message, spot }] : []
+    })
+    .sort(
+      (a, b) =>
+        sectionOrder.indexOf(a.spot.section) - sectionOrder.indexOf(b.spot.section) ||
+        a.spot.order - b.spot.order,
+    ),
+)
+const general = computed(() =>
+  flagged.value
+    .filter((f) => !f.path || !locate(f.path))
+    .map((f) => (f.path ? `${f.path} ${f.message}` : f.message)),
+)
+const issueCount = (s: string) => issues.value.filter((x) => x.spot.section === s).length
+
+// 切到出错的分区，聚焦对应的输入框（不是输入框时聚焦其中第一个控件）。
+const summaryEl = useTemplateRef<HTMLElement>('summary')
+async function goto(path?: string) {
+  const spot = path ? locate(path) : undefined
+  if (spot) section.value = spot.section
+  await nextTick()
+  const el = spot ? document.getElementById(spot.id) : summaryEl.value
+  const sel = 'input, textarea, select, button'
+  const target = (el?.matches(sel) ? el : el?.querySelector<HTMLElement>(sel)) ?? el
+  target?.focus({ preventScroll: true })
+  target?.scrollIntoView({ block: 'center' })
+}
+
 onMounted(async () => {
   if (props.id) {
     try {
@@ -320,8 +498,13 @@ onMounted(async () => {
 })
 
 async function save() {
+  tried.value = true
+  flagged.value = []
+  if (issues.value.length) {
+    void goto(issues.value[0].path)
+    return
+  }
   saving.value = true
-  problems.value = []
   try {
     const body = payload()
     // 匹配域名变了，订阅的 MITM 域名也会变，手机上的订阅要更新。
@@ -336,6 +519,7 @@ async function save() {
       ? await api.post<SourceView>('/sources', body)
       : await api.put<SourceView>(`/sources/${props.id}`, body)
     fill(res.data)
+    tried.value = false
     if (hostsChanged)
       toast.success('已保存', {
         description: 'MITM 域名已变更，读取该来源的订阅需在客户端中更新',
@@ -346,8 +530,17 @@ async function save() {
     void useSourceIcons().load()
     emit('saved', res.data.id)
   } catch (e) {
-    if (e instanceof ApiError && e.details.length) problems.value = e.details
-    toast.error(e instanceof ApiError ? e.message : errorText(e))
+    if (e instanceof ApiError && (e.problems.length || e.details.length)) {
+      const cur = payload()
+      flagged.value = e.problems.length
+        ? e.problems.map((p) => ({
+            path: p.path ?? '',
+            message: p.message,
+            value: p.path ? dig(cur, p.path) : '',
+          }))
+        : e.details.map((message) => ({ path: '', message, value: '' }))
+      void goto(issues.value[0]?.path)
+    } else toast.error(errorText(e))
   } finally {
     saving.value = false
   }
@@ -357,6 +550,8 @@ async function remove() {
   try {
     await api.delete(`/sources/${props.id}`)
     toast.success('已删除')
+    // 来源已删除，未保存的修改随之作废，关闭时不再确认
+    discarded = true
     emit('saved', 0)
     emit('close')
   } catch (e) {
@@ -364,9 +559,116 @@ async function remove() {
   }
 }
 
-function requestClose() {
-  if (dirty.value) confirmClose.value = true
-  else emit('close')
+// 新增一项后滚动到它所在的卡片，并聚焦需要填写的第一个输入框。
+async function focusNew(id: string) {
+  await nextTick()
+  const el = document.getElementById(id)
+  el?.closest('[data-item]')?.scrollIntoView({ block: 'nearest' })
+  el?.focus({ preventScroll: true })
+}
+
+function addMatcher() {
+  doc.matchers.push({ name: `rule${doc.matchers.length + 1}`, host: '', path: '', method: '' })
+  void focusNew(`m-host-${doc.matchers.length - 1}`)
+}
+
+function addOutput() {
+  ;(doc.outputs ??= []).push({ name: '', template: '' })
+  void focusNew(`o-name-${doc.outputs.length - 1}`)
+}
+
+// ---- 删除与撤销 ----
+// 删除匹配规则、字段、输出变量后，原位置留一行「已删除…」和「撤销」按钮，焦点移到这个按钮上：
+// 编辑器把焦点限制在弹窗内，键盘够不到提示条上的撤销。提示条上同样可以撤销，两处共用这一份状态，
+// 任一处撤销后两处一起消失；再做其他编辑、切换分区或关闭编辑器时，占位行和提示条一起撤掉。
+// 只保留最近一次删除。撤销时按列表名重新取列表，保存后列表被替换也能放回原位置，焦点回到恢复项的删除按钮。
+type ListName = 'matchers' | 'fields' | 'outputs'
+const idPrefix: Record<ListName, string> = { matchers: 'm', fields: 'f', outputs: 'o' }
+const listOf = (name: ListName): unknown[] =>
+  name === 'outputs' ? (doc.outputs ??= []) : doc[name]
+const removed = shallowRef<{
+  list: ListName
+  index: number
+  label: string
+  item: unknown
+  restored?: () => void
+  toast: string | number
+  // 删除后的定义，与它不同说明又做了其他编辑
+  snapshot: string
+} | null>(null)
+const removedAt = (list: ListName, i: number) =>
+  removed.value?.list === list && removed.value.index === i
+const [DefineRemoved, ReuseRemoved] = createReusableTemplate()
+
+function dropRemoved() {
+  if (!removed.value) return
+  toast.dismiss(removed.value.toast)
+  removed.value = null
+}
+
+async function removeAt(list: ListName, i: number, label: string, restored?: () => void) {
+  dropRemoved()
+  const [item] = listOf(list).splice(i, 1)
+  const id = toast(`已删除${label}`, {
+    action: { label: '撤销', onClick: () => void undoRemove() },
+  })
+  removed.value = {
+    list,
+    index: i,
+    label,
+    item,
+    restored,
+    toast: id,
+    snapshot: JSON.stringify(payload()),
+  }
+  await nextTick()
+  document.getElementById('undo-remove')?.focus()
+}
+
+async function undoRemove() {
+  const r = removed.value
+  if (!r) return
+  dropRemoved()
+  const cur = listOf(r.list)
+  const at = Math.min(r.index, cur.length)
+  cur.splice(at, 0, r.item)
+  r.restored?.()
+  await nextTick()
+  document.getElementById(`${idPrefix[r.list]}-del-${at}`)?.focus()
+}
+
+watch(
+  () => JSON.stringify(payload()),
+  (s) => {
+    if (s !== removed.value?.snapshot) dropRemoved()
+  },
+)
+watch(section, dropRemoved)
+onBeforeUnmount(dropRemoved)
+
+const named = (noun: string, name?: string) => (name?.trim() ? `${noun}「${name.trim()}」` : noun)
+
+function removeMatcher(i: number) {
+  if (doc.matchers.length <= 1) {
+    toast.info('至少保留一条匹配规则')
+    return
+  }
+  void removeAt('matchers', i, named('匹配规则', doc.matchers[i].name))
+}
+
+function removeField(i: number) {
+  const f = doc.fields[i]
+  // 删掉身份字段时身份字段随之清空，撤销时一并恢复。在这里先清空，不等下方的监听，
+  // 否则清空发生在记下删除后的定义之后，会被当成又一次编辑，占位行随即消失
+  const identity = f.key && f.key === doc.identity_field ? f.key : ''
+  if (identity) doc.identity_field = ''
+  void removeAt('fields', i, named('字段', f.key), () => {
+    if (identity && !doc.identity_field) doc.identity_field = identity
+  })
+}
+
+function removeOutput(i: number) {
+  void removeAt('outputs', i, named('输出变量', doc.outputs?.[i].name))
 }
 
 function addField() {
@@ -383,6 +685,7 @@ function addField() {
     max_len: undefined,
     pattern: '',
   })
+  void focusNew(`f-key-${doc.fields.length - 1}`)
 }
 
 function insertVar(i: number, key: string) {
@@ -505,7 +808,7 @@ const fieldsHit = computed(() =>
 
 <template>
   <DefineSample>
-    <div class="grid gap-4">
+    <div class="@container grid gap-4">
       <div class="flex items-start gap-3">
         <IconTile :icon="FlaskConicalIcon" size="sm" />
         <div class="grid gap-0.5">
@@ -523,17 +826,22 @@ const fieldsHit = computed(() =>
           ><EraserIcon /> 清除样例</Button
         >
       </div>
-      <div class="grid grid-cols-[6.5rem_1fr] gap-2">
-        <NativeSelect v-model="sample.method" aria-label="请求方法" class="w-full">
+      <!-- URL 往往很长，用多行文本框完整显示；回车不换行，粘贴进来的换行去掉。
+           面板较窄时（宽屏右栏、手机）请求方法单独一行，URL 占满宽度 -->
+      <div class="grid items-start gap-2 @md:grid-cols-[6.5rem_1fr]">
+        <NativeSelect v-model="sample.method" aria-label="请求方法" class="w-[6.5rem]">
           <NativeSelectOption v-for="x in methods.slice(1)" :key="x" :value="x">{{
             x
           }}</NativeSelectOption>
         </NativeSelect>
-        <Input
-          v-model="sample.url"
+        <Textarea
+          :model-value="sample.url"
           aria-label="URL"
-          class="font-mono text-xs"
+          rows="2"
+          class="font-mono break-all"
           placeholder="https://api.example.com/user?id=1"
+          @update:model-value="(v) => (sample.url = String(v).replace(/[\r\n]+/g, ''))"
+          @keydown.enter.prevent
         />
       </div>
       <FormField label="请求头" for="s-headers" hint="每行一条，格式为「名称: 值」">
@@ -541,12 +849,12 @@ const fieldsHit = computed(() =>
           id="s-headers"
           v-model="sample.headers"
           rows="6"
-          class="font-mono text-xs"
+          class="font-mono"
           placeholder="Authorization: Bearer …&#10;Cookie: a=1; b=2"
         />
       </FormField>
       <FormField label="请求体" for="s-body" optional>
-        <Textarea id="s-body" v-model="sample.body" rows="4" class="font-mono text-xs" />
+        <Textarea id="s-body" v-model="sample.body" rows="4" class="font-mono" />
       </FormField>
 
       <div v-if="sample.url.trim()" class="grid gap-2 rounded-lg border p-3 text-sm">
@@ -581,15 +889,38 @@ const fieldsHit = computed(() =>
             <CircleXIcon v-else class="text-muted-foreground mt-0.5 size-3.5" />
             <span class="min-w-0">
               <span class="font-mono font-medium">{{ k }}</span>
-              <span class="text-muted-foreground block truncate font-mono">{{
-                v.ok ? (v.invalid ? v.invalid : v.value) : v.error
-              }}</span>
+              <span
+                class="text-muted-foreground line-clamp-2 font-mono break-all"
+                :title="v.ok ? (v.invalid ? v.invalid : v.value) : v.error"
+                >{{ v.ok ? (v.invalid ? v.invalid : v.value) : v.error }}</span
+              >
             </span>
           </div>
         </template>
       </div>
     </div>
   </DefineSample>
+
+  <!-- 删除后留在原位置的占位行；手机上按钮按全站规则高 44px -->
+  <DefineRemoved>
+    <div
+      v-if="removed"
+      class="flex items-center gap-3 rounded-xl border border-dashed px-4 py-2 text-sm"
+    >
+      <span id="removed-label" class="text-muted-foreground mr-auto min-w-0 wrap-anywhere"
+        >已删除{{ removed.label }}</span
+      >
+      <Button
+        id="undo-remove"
+        variant="outline"
+        size="sm"
+        class="shrink-0"
+        aria-describedby="removed-label"
+        @click="undoRemove"
+        ><Undo2Icon /> 撤销</Button
+      >
+    </div>
+  </DefineRemoved>
 
   <DialogShell
     :open="true"
@@ -623,9 +954,11 @@ const fieldsHit = computed(() =>
 
     <div
       v-if="loaded"
-      class="grid h-full min-h-0 grid-rows-[auto_1fr] lg:grid-cols-[12rem_1fr] lg:grid-rows-1 xl:grid-cols-[12rem_1fr_24rem]"
+      class="grid h-full min-h-0 grid-rows-[auto_1fr] lg:grid-cols-[12rem_1fr] lg:grid-rows-1"
+      :class="sampleAside && 'xl:grid-cols-[12rem_1fr_24rem]'"
     >
-      <!-- 分区导航 -->
+      <!-- 分区导航。按钮设为 relative：里面 sr-only 的绝对定位文字以按钮为参照，
+           否则会以弹窗为参照撑宽弹窗，切换分区时 scrollIntoView 把整个弹窗横向滚走。 -->
       <nav
         ref="nav"
         aria-label="编辑分区"
@@ -636,7 +969,7 @@ const fieldsHit = computed(() =>
           v-for="s in sections"
           :key="s.value"
           type="button"
-          class="focus-visible:ring-ring/50 flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition outline-none focus-visible:ring-3 max-md:min-h-11"
+          class="focus-visible:ring-ring/50 relative flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition outline-none focus-visible:ring-3 max-md:min-h-11"
           :class="
             section === s.value
               ? 'bg-primary/10 text-primary font-medium'
@@ -647,6 +980,13 @@ const fieldsHit = computed(() =>
         >
           <component :is="s.icon" class="size-4" />
           <span class="mr-auto">{{ s.label }}</span>
+          <span
+            v-if="issueCount(s.value)"
+            class="text-destructive flex items-center gap-0.5 text-xs font-medium tabular-nums"
+          >
+            <CircleAlertIcon class="size-3.5" aria-hidden="true" />{{ issueCount(s.value)
+            }}<span class="sr-only">项问题</span>
+          </span>
           <span
             v-if="s.count !== undefined"
             class="bg-muted-foreground/15 min-w-5 rounded-full px-1.5 text-center text-xs tabular-nums"
@@ -666,15 +1006,33 @@ const fieldsHit = computed(() =>
       <!-- 表单 -->
       <div class="min-h-0 overflow-y-auto">
         <div class="mx-auto grid max-w-4xl gap-5 p-5">
-          <Alert v-if="problems.length" variant="destructive">
-            <TriangleAlertIcon />
-            <AlertTitle>定义校验未通过</AlertTitle>
-            <AlertDescription>
-              <ul class="list-disc pl-4">
-                <li v-for="p in problems" :key="p">{{ p }}</li>
-              </ul>
-            </AlertDescription>
-          </Alert>
+          <!-- 错误汇总：每一项可点，切到所在分区并聚焦对应的输入框 -->
+          <div
+            v-if="issues.length || general.length"
+            ref="summary"
+            tabindex="-1"
+            class="outline-none"
+          >
+            <Alert variant="destructive">
+              <TriangleAlertIcon />
+              <AlertTitle>定义校验未通过，共 {{ issues.length + general.length }} 项</AlertTitle>
+              <AlertDescription>
+                <ul class="grid">
+                  <li v-for="x in issues" :key="x.path">
+                    <button
+                      type="button"
+                      class="focus-visible:ring-ring/50 -mx-1 rounded-sm px-1 py-0.5 text-left underline-offset-2 outline-none hover:underline focus-visible:ring-3 max-md:min-h-11"
+                      @click="goto(x.path)"
+                    >
+                      <span class="font-medium">{{ x.spot.label }}</span
+                      >：{{ x.message }}
+                    </button>
+                  </li>
+                  <li v-for="g in general" :key="g" class="py-0.5">{{ g }}</li>
+                </ul>
+              </AlertDescription>
+            </Alert>
+          </div>
 
           <!-- 基本 -->
           <template v-if="section === 'basic'">
@@ -686,6 +1044,7 @@ const fieldsHit = computed(() =>
                 <FormField
                   label="来源标识"
                   for="src-key"
+                  :error="errors.key"
                   :hint="
                     isNew
                       ? '以小写字母开头，可包含小写字母、数字、- 和 _；用于变量备注 ferry:<标识>；创建后不可修改'
@@ -700,7 +1059,7 @@ const fieldsHit = computed(() =>
                     placeholder="如 my_app"
                   />
                 </FormField>
-                <FormField label="名称" for="src-name">
+                <FormField label="名称" for="src-name" :error="errors.name">
                   <Input id="src-name" v-model="doc.name" placeholder="显示名称" />
                 </FormField>
                 <FormField
@@ -708,7 +1067,7 @@ const fieldsHit = computed(() =>
                   for="src-icon"
                   optional
                   full
-                  :error="iconError"
+                  :error="iconError || errors.icon"
                   hint="PNG、JPEG、WebP 或 SVG，不超过 64 KB；未设置时显示名称首字"
                 >
                   <div class="flex items-center gap-3">
@@ -739,7 +1098,7 @@ const fieldsHit = computed(() =>
                     />
                   </div>
                 </FormField>
-                <FormField label="说明" for="src-desc" optional full>
+                <FormField label="说明" for="src-desc" optional full :error="errors.description">
                   <Textarea
                     id="src-desc"
                     v-model="doc.description"
@@ -756,7 +1115,7 @@ const fieldsHit = computed(() =>
                 <p class="text-muted-foreground text-xs">通知策略与回传频率</p>
               </div>
               <div class="grid gap-4 sm:grid-cols-2">
-                <FormField label="设备通知" for="src-notify">
+                <FormField label="设备通知" for="src-notify" :error="errors.notify">
                   <NativeSelect id="src-notify" v-model="doc.notify" class="w-full">
                     <NativeSelectOption value="always">每次回传</NativeSelectOption>
                     <NativeSelectOption value="changed">值变化时</NativeSelectOption>
@@ -766,6 +1125,7 @@ const fieldsHit = computed(() =>
                 <FormField
                   label="最短回传间隔（秒）"
                   for="src-interval"
+                  :error="errors.min_interval"
                   hint="间隔内相同值不重复回传"
                 >
                   <Input
@@ -788,7 +1148,12 @@ const fieldsHit = computed(() =>
                 <p class="text-muted-foreground text-xs">合并、校验与生效策略</p>
               </div>
               <div class="grid gap-4 sm:grid-cols-2">
-                <FormField label="生效方式" for="src-review" hint="校验失败的值自动驳回">
+                <FormField
+                  label="生效方式"
+                  for="src-review"
+                  :error="errors.review"
+                  hint="校验失败的值自动驳回"
+                >
                   <NativeSelect id="src-review" v-model="doc.review" class="w-full">
                     <NativeSelectOption value="auto">校验通过后自动生效</NativeSelectOption>
                     <NativeSelectOption value="manual">人工审核后生效</NativeSelectOption>
@@ -797,6 +1162,7 @@ const fieldsHit = computed(() =>
                 <FormField
                   label="合并窗口（秒）"
                   for="src-merge"
+                  :error="errors.merge_window"
                   hint="自首次回传起计时，窗口内的回传合并为一批；字段齐全时提前处理；0 表示立即处理"
                 >
                   <Input
@@ -810,6 +1176,7 @@ const fieldsHit = computed(() =>
                 <FormField
                   label="身份字段"
                   for="src-identity"
+                  :error="errors.identity_field"
                   full
                   hint="用于区分多个身份（如多账号）的字段；留空表示单一身份"
                 >
@@ -833,254 +1200,305 @@ const fieldsHit = computed(() =>
             <HintText>
               命中任一匹配规则的请求进入字段读取；匹配规则的域名写入订阅的 MITM 列表。
             </HintText>
-            <div v-for="(m, i) in doc.matchers" :key="i" class="grid gap-4 rounded-xl border p-4">
-              <div class="flex flex-wrap items-center gap-2">
-                <IconTile :icon="RouteIcon" size="sm" />
-                <span class="font-mono text-sm font-medium">{{ m.name || '未命名' }}</span>
-                <template v-if="tr?.matchers[i]">
-                  <StatusBadge v-if="tr.matchers[i].matched" tone="success" :icon="CircleCheckIcon"
-                    >样例命中</StatusBadge
+            <template v-for="(m, i) in doc.matchers" :key="i">
+              <ReuseRemoved v-if="removedAt('matchers', i)" />
+              <div data-item class="grid gap-4 rounded-xl border p-4">
+                <div class="flex flex-wrap items-center gap-2">
+                  <IconTile :icon="RouteIcon" size="sm" />
+                  <span class="min-w-0 font-mono text-sm font-medium [overflow-wrap:anywhere]">{{
+                    m.name || '未命名'
+                  }}</span>
+                  <template v-if="tr?.matchers[i]">
+                    <StatusBadge
+                      v-if="tr.matchers[i].matched"
+                      tone="success"
+                      :icon="CircleCheckIcon"
+                      >样例命中</StatusBadge
+                    >
+                    <StatusBadge v-else tone="neutral" :icon="CircleXIcon"
+                      >未命中：{{ tr.matchers[i].reason }}</StatusBadge
+                    >
+                  </template>
+                  <!-- 仅剩一条时不可删除：保留可聚焦、可点击，点击时说明原因 -->
+                  <Button
+                    :id="`m-del-${i}`"
+                    variant="ghost"
+                    size="icon-sm"
+                    class="ml-auto aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                    aria-label="删除匹配规则"
+                    :aria-disabled="doc.matchers.length <= 1 || undefined"
+                    :title="doc.matchers.length <= 1 ? '至少保留一条匹配规则' : undefined"
+                    @click="removeMatcher(i)"
                   >
-                  <StatusBadge v-else tone="neutral" :icon="CircleXIcon"
-                    >未命中：{{ tr.matchers[i].reason }}</StatusBadge
+                    <Trash2Icon />
+                  </Button>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-[1fr_2fr]">
+                  <FormField
+                    label="名称"
+                    :for="`m-name-${i}`"
+                    :error="errors[`matchers[${i}].name`]"
+                    hint="字段通过该名称指定所属的匹配规则"
                   >
-                </template>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  class="ml-auto"
-                  aria-label="删除匹配规则"
-                  :disabled="doc.matchers.length <= 1"
-                  @click="doc.matchers.splice(i, 1)"
-                >
-                  <Trash2Icon />
-                </Button>
+                    <Input :id="`m-name-${i}`" v-model="m.name" class="font-mono" />
+                  </FormField>
+                  <FormField
+                    label="域名"
+                    :for="`m-host-${i}`"
+                    :error="errors[`matchers[${i}].host`]"
+                    hint="精确域名，或以 *.example.com 形式通配子域名"
+                  >
+                    <Input
+                      :id="`m-host-${i}`"
+                      v-model="m.host"
+                      class="font-mono"
+                      placeholder="api.example.com"
+                    />
+                  </FormField>
+                  <FormField
+                    label="请求方法"
+                    :for="`m-method-${i}`"
+                    :error="errors[`matchers[${i}].method`]"
+                  >
+                    <NativeSelect :id="`m-method-${i}`" v-model="m.method" class="w-full">
+                      <NativeSelectOption v-for="x in methods" :key="x" :value="x">{{
+                        x || '任意'
+                      }}</NativeSelectOption>
+                    </NativeSelect>
+                  </FormField>
+                  <FormField
+                    label="路径"
+                    :for="`m-path-${i}`"
+                    :error="errors[`matchers[${i}].path`]"
+                    optional
+                    hint="正则表达式，仅匹配路径（不含查询参数）；留空表示匹配全部路径"
+                  >
+                    <Input
+                      :id="`m-path-${i}`"
+                      v-model="m.path"
+                      class="font-mono"
+                      placeholder="^/api/user/"
+                    />
+                  </FormField>
+                </div>
               </div>
-              <div class="grid gap-4 sm:grid-cols-[1fr_2fr]">
-                <FormField
-                  label="名称"
-                  :for="`m-name-${i}`"
-                  hint="字段通过该名称指定所属的匹配规则"
-                >
-                  <Input :id="`m-name-${i}`" v-model="m.name" class="font-mono" />
-                </FormField>
-                <FormField
-                  label="域名"
-                  :for="`m-host-${i}`"
-                  hint="精确域名，或以 *.example.com 形式通配子域名"
-                >
-                  <Input
-                    :id="`m-host-${i}`"
-                    v-model="m.host"
-                    class="font-mono"
-                    placeholder="api.example.com"
-                  />
-                </FormField>
-                <FormField label="请求方法" :for="`m-method-${i}`">
-                  <NativeSelect :id="`m-method-${i}`" v-model="m.method" class="w-full">
-                    <NativeSelectOption v-for="x in methods" :key="x" :value="x">{{
-                      x || '任意'
-                    }}</NativeSelectOption>
-                  </NativeSelect>
-                </FormField>
-                <FormField
-                  label="路径"
-                  :for="`m-path-${i}`"
-                  optional
-                  hint="正则表达式，仅匹配路径（不含查询参数）；留空表示匹配全部路径"
-                >
-                  <Input
-                    :id="`m-path-${i}`"
-                    v-model="m.path"
-                    class="font-mono"
-                    placeholder="^/api/user/"
-                  />
-                </FormField>
-              </div>
-            </div>
-            <div>
-              <Button
-                variant="outline"
-                @click="
-                  doc.matchers.push({
-                    name: `rule${doc.matchers.length + 1}`,
-                    host: '',
-                    path: '',
-                    method: '',
-                  })
-                "
-              >
+            </template>
+            <ReuseRemoved v-if="removedAt('matchers', doc.matchers.length)" />
+            <div class="grid justify-items-start gap-1.5">
+              <Button id="add-matcher" variant="outline" @click="addMatcher">
                 <PlusIcon /> 添加匹配规则
               </Button>
+              <p v-if="errors.matchers" class="text-destructive text-xs">{{ errors.matchers }}</p>
             </div>
           </template>
 
           <!-- 字段 -->
           <template v-else-if="section === 'fields'">
             <HintText> 客户端仅回传已声明的字段；服务端按相同的读取规则复核。 </HintText>
-            <div v-for="(f, i) in doc.fields" :key="i" class="grid gap-4 rounded-xl border p-4">
-              <div class="flex flex-wrap items-center gap-2">
-                <IconTile :icon="KeyRoundIcon" size="sm" />
-                <span class="font-mono text-sm font-medium">{{ f.key || '未命名' }}</span>
-                <span v-if="f.name" class="text-muted-foreground text-sm">{{ f.name }}</span>
-                <StatusBadge :tone="typeOf(f).tone">{{ typeOf(f).short }}</StatusBadge>
-                <StatusBadge v-if="f.sensitive" tone="warning" :icon="LockIcon">敏感</StatusBadge>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  class="ml-auto"
-                  aria-label="删除字段"
-                  @click="doc.fields.splice(i, 1)"
-                >
-                  <Trash2Icon />
-                </Button>
-              </div>
+            <template v-for="(f, i) in doc.fields" :key="i">
+              <ReuseRemoved v-if="removedAt('fields', i)" />
+              <div data-item class="grid gap-4 rounded-xl border p-4">
+                <div class="flex flex-wrap items-center gap-2">
+                  <IconTile :icon="KeyRoundIcon" size="sm" />
+                  <span class="min-w-0 font-mono text-sm font-medium [overflow-wrap:anywhere]">{{
+                    f.key || '未命名'
+                  }}</span>
+                  <span v-if="f.name" class="text-muted-foreground text-sm">{{ f.name }}</span>
+                  <StatusBadge :tone="typeOf(f).tone">{{ typeOf(f).short }}</StatusBadge>
+                  <StatusBadge v-if="f.sensitive" tone="warning" :icon="LockIcon">敏感</StatusBadge>
+                  <Button
+                    :id="`f-del-${i}`"
+                    variant="ghost"
+                    size="icon-sm"
+                    class="ml-auto"
+                    aria-label="删除字段"
+                    @click="removeField(i)"
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </div>
 
-              <div class="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  label="字段标识"
-                  :for="`f-key-${i}`"
-                  hint="以小写字母开头，可包含小写字母、数字和 _；作为输出变量中的引用名"
-                >
-                  <Input
-                    :id="`f-key-${i}`"
-                    v-model="f.key"
-                    class="font-mono"
-                    placeholder="如 token"
-                  />
-                </FormField>
-                <FormField label="名称" :for="`f-name-${i}`" optional>
-                  <Input :id="`f-name-${i}`" v-model="f.name" placeholder="如 登录令牌" />
-                </FormField>
-                <FormField
-                  label="匹配规则"
-                  :for="`f-matcher-${i}`"
-                  full
-                  hint="仅从命中该匹配规则的请求中读取"
-                >
-                  <NativeSelect :id="`f-matcher-${i}`" v-model="f.matcher" class="w-full">
-                    <NativeSelectOption value="">任一匹配规则</NativeSelectOption>
-                    <NativeSelectOption
-                      v-for="m in doc.matchers.filter((x) => x.name)"
-                      :key="m.name"
-                      :value="m.name"
-                      >{{ matcherLabel(m.name) }}</NativeSelectOption
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    label="字段标识"
+                    :for="`f-key-${i}`"
+                    :error="errors[`fields[${i}].key`]"
+                    hint="以小写字母开头，可包含小写字母、数字和 _；作为输出变量中的引用名"
+                  >
+                    <Input
+                      :id="`f-key-${i}`"
+                      v-model="f.key"
+                      class="font-mono"
+                      placeholder="如 token"
+                    />
+                  </FormField>
+                  <FormField
+                    label="名称"
+                    :for="`f-name-${i}`"
+                    :error="errors[`fields[${i}].name`]"
+                    optional
+                  >
+                    <Input :id="`f-name-${i}`" v-model="f.name" placeholder="如 登录令牌" />
+                  </FormField>
+                  <FormField
+                    label="匹配规则"
+                    :for="`f-matcher-${i}`"
+                    :error="errors[`fields[${i}].matcher`]"
+                    full
+                    hint="仅从命中该匹配规则的请求中读取"
+                  >
+                    <NativeSelect :id="`f-matcher-${i}`" v-model="f.matcher" class="w-full">
+                      <NativeSelectOption value="">任一匹配规则</NativeSelectOption>
+                      <NativeSelectOption
+                        v-for="m in doc.matchers.filter((x) => x.name)"
+                        :key="m.name"
+                        :value="m.name"
+                        >{{ matcherLabel(m.name) }}</NativeSelectOption
+                      >
+                    </NativeSelect>
+                  </FormField>
+                  <FormField label="读取位置" :for="`f-in-${i}`" :error="errors[`fields[${i}].in`]">
+                    <NativeSelect :id="`f-in-${i}`" v-model="f.in" class="w-full">
+                      <NativeSelectOption v-for="o in inOptions" :key="o.value" :value="o.value">{{
+                        o.label
+                      }}</NativeSelectOption>
+                    </NativeSelect>
+                  </FormField>
+                  <FormField
+                    :label="f.in === 'regex' ? '正则表达式' : '键名 / 路径'"
+                    :for="`f-path-${i}`"
+                    :error="errors[`fields[${i}].path`]"
+                    :hint="inOf(f).hint"
+                  >
+                    <Input
+                      :id="`f-path-${i}`"
+                      v-model="f.path"
+                      class="font-mono"
+                      :placeholder="inOf(f).placeholder"
+                    />
+                  </FormField>
+                  <FormField
+                    v-if="f.in === 'regex'"
+                    label="匹配对象"
+                    :for="`f-regex-on-${i}`"
+                    :error="errors[`fields[${i}].regex_on`]"
+                  >
+                    <NativeSelect :id="`f-regex-on-${i}`" v-model="f.regex_on" class="w-full">
+                      <NativeSelectOption value="url">完整 URL</NativeSelectOption>
+                      <NativeSelectOption value="body">请求正文</NativeSelectOption>
+                    </NativeSelect>
+                  </FormField>
+                </div>
+
+                <div class="grid gap-4 border-t pt-4 sm:grid-cols-2">
+                  <FormField
+                    label="类型"
+                    :for="`f-type-${i}`"
+                    :error="errors[`fields[${i}].type`]"
+                    :hint="
+                      f.type === 'jwt'
+                        ? '解析 exp：到期前提醒，已过期的值自动驳回'
+                        : '类型不符的值自动驳回'
+                    "
+                  >
+                    <NativeSelect :id="`f-type-${i}`" v-model="f.type" class="w-full">
+                      <NativeSelectOption
+                        v-for="o in typeOptions"
+                        :key="o.value"
+                        :value="o.value"
+                        >{{ o.label }}</NativeSelectOption
+                      >
+                    </NativeSelect>
+                  </FormField>
+                  <div class="grid grid-cols-2 gap-3">
+                    <FormField
+                      label="最小长度"
+                      :for="`f-min-${i}`"
+                      :error="errors[`fields[${i}].min_len`]"
+                      optional
                     >
-                  </NativeSelect>
-                </FormField>
-                <FormField label="读取位置" :for="`f-in-${i}`">
-                  <NativeSelect :id="`f-in-${i}`" v-model="f.in" class="w-full">
-                    <NativeSelectOption v-for="o in inOptions" :key="o.value" :value="o.value">{{
-                      o.label
-                    }}</NativeSelectOption>
-                  </NativeSelect>
-                </FormField>
-                <FormField
-                  :label="f.in === 'regex' ? '正则表达式' : '键名 / 路径'"
-                  :for="`f-path-${i}`"
-                  :hint="inOf(f).hint"
-                >
-                  <Input
-                    :id="`f-path-${i}`"
-                    v-model="f.path"
-                    class="font-mono"
-                    :placeholder="inOf(f).placeholder"
-                  />
-                </FormField>
-                <FormField v-if="f.in === 'regex'" label="匹配对象" :for="`f-regex-on-${i}`">
-                  <NativeSelect :id="`f-regex-on-${i}`" v-model="f.regex_on" class="w-full">
-                    <NativeSelectOption value="url">完整 URL</NativeSelectOption>
-                    <NativeSelectOption value="body">请求正文</NativeSelectOption>
-                  </NativeSelect>
-                </FormField>
-              </div>
+                      <Input
+                        :id="`f-min-${i}`"
+                        v-model.number="f.min_len"
+                        type="number"
+                        min="0"
+                        placeholder="不限"
+                      />
+                    </FormField>
+                    <FormField
+                      label="最大长度"
+                      :for="`f-max-${i}`"
+                      :error="errors[`fields[${i}].max_len`]"
+                      optional
+                    >
+                      <Input
+                        :id="`f-max-${i}`"
+                        v-model.number="f.max_len"
+                        type="number"
+                        min="0"
+                        placeholder="不限"
+                      />
+                    </FormField>
+                  </div>
+                  <FormField
+                    label="校验正则"
+                    :for="`f-pattern-${i}`"
+                    :error="errors[`fields[${i}].pattern`]"
+                    optional
+                    full
+                    hint="不匹配的值自动驳回"
+                  >
+                    <Input
+                      :id="`f-pattern-${i}`"
+                      v-model="f.pattern"
+                      class="font-mono"
+                      placeholder="如 ^[A-Za-z0-9._-]+$"
+                    />
+                  </FormField>
+                  <FormField
+                    full
+                    hint="加密存储；界面中脱敏显示，查看原值记入审计；通知中不含字段值"
+                  >
+                    <Label class="font-normal"><Switch v-model="f.sensitive" /> 敏感字段</Label>
+                  </FormField>
+                </div>
 
-              <div class="grid gap-4 border-t pt-4 sm:grid-cols-2">
-                <FormField
-                  label="类型"
-                  :for="`f-type-${i}`"
-                  :hint="
-                    f.type === 'jwt'
-                      ? '解析 exp：到期前提醒，已过期的值自动驳回'
-                      : '类型不符的值自动驳回'
+                <!-- 样例取值结果 -->
+                <div
+                  v-if="fieldResult(f)"
+                  class="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
+                  :class="
+                    fieldResult(f)!.ok && !fieldResult(f)!.invalid
+                      ? 'border-success/25 bg-success/5'
+                      : fieldResult(f)!.ok
+                        ? 'border-warning/30 bg-warning/5'
+                        : 'border-border bg-muted/40'
                   "
                 >
-                  <NativeSelect :id="`f-type-${i}`" v-model="f.type" class="w-full">
-                    <NativeSelectOption v-for="o in typeOptions" :key="o.value" :value="o.value">{{
-                      o.label
-                    }}</NativeSelectOption>
-                  </NativeSelect>
-                </FormField>
-                <div class="grid grid-cols-2 gap-3">
-                  <FormField label="最小长度" :for="`f-min-${i}`" optional>
-                    <Input
-                      :id="`f-min-${i}`"
-                      v-model.number="f.min_len"
-                      type="number"
-                      min="0"
-                      placeholder="不限"
-                    />
-                  </FormField>
-                  <FormField label="最大长度" :for="`f-max-${i}`" optional>
-                    <Input
-                      :id="`f-max-${i}`"
-                      v-model.number="f.max_len"
-                      type="number"
-                      min="0"
-                      placeholder="不限"
-                    />
-                  </FormField>
+                  <FlaskConicalIcon class="text-muted-foreground mt-0.5 size-4 shrink-0" />
+                  <div class="grid min-w-0 gap-0.5">
+                    <template v-if="fieldResult(f)!.ok">
+                      <span class="font-mono break-all">{{ fieldResult(f)!.value }}</span>
+                      <span v-if="fieldResult(f)!.invalid" class="text-warning text-xs"
+                        >校验未通过：{{ fieldResult(f)!.invalid }}</span
+                      >
+                      <span
+                        v-else-if="fieldResult(f)!.expires_at"
+                        class="text-muted-foreground text-xs"
+                        >过期时间 {{ fmtTime(fieldResult(f)!.expires_at!) }}</span
+                      >
+                    </template>
+                    <span v-else class="text-muted-foreground">{{ fieldResult(f)!.error }}</span>
+                  </div>
                 </div>
-                <FormField
-                  label="校验正则"
-                  :for="`f-pattern-${i}`"
-                  optional
-                  full
-                  hint="不匹配的值自动驳回"
-                >
-                  <Input
-                    :id="`f-pattern-${i}`"
-                    v-model="f.pattern"
-                    class="font-mono"
-                    placeholder="如 ^[A-Za-z0-9._-]+$"
-                  />
-                </FormField>
-                <FormField full hint="加密存储；界面中脱敏显示，查看原值记入审计；通知中不含字段值">
-                  <Label class="font-normal"><Switch v-model="f.sensitive" /> 敏感字段</Label>
-                </FormField>
               </div>
-
-              <!-- 样例取值结果 -->
-              <div
-                v-if="fieldResult(f)"
-                class="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
-                :class="
-                  fieldResult(f)!.ok && !fieldResult(f)!.invalid
-                    ? 'border-success/25 bg-success/5'
-                    : fieldResult(f)!.ok
-                      ? 'border-warning/30 bg-warning/5'
-                      : 'border-border bg-muted/40'
-                "
+            </template>
+            <ReuseRemoved v-if="removedAt('fields', doc.fields.length)" />
+            <div class="grid justify-items-start gap-1.5">
+              <Button id="add-field" variant="outline" @click="addField"
+                ><PlusIcon /> 添加字段</Button
               >
-                <FlaskConicalIcon class="text-muted-foreground mt-0.5 size-4 shrink-0" />
-                <div class="grid min-w-0 gap-0.5">
-                  <template v-if="fieldResult(f)!.ok">
-                    <span class="font-mono break-all">{{ fieldResult(f)!.value }}</span>
-                    <span v-if="fieldResult(f)!.invalid" class="text-warning text-xs"
-                      >校验未通过：{{ fieldResult(f)!.invalid }}</span
-                    >
-                    <span
-                      v-else-if="fieldResult(f)!.expires_at"
-                      class="text-muted-foreground text-xs"
-                      >过期时间 {{ fmtTime(fieldResult(f)!.expires_at!) }}</span
-                    >
-                  </template>
-                  <span v-else class="text-muted-foreground">{{ fieldResult(f)!.error }}</span>
-                </div>
-              </div>
-            </div>
-            <div>
-              <Button variant="outline" @click="addField"><PlusIcon /> 添加字段</Button>
+              <p v-if="errors.fields" class="text-destructive text-xs">{{ errors.fields }}</p>
             </div>
           </template>
 
@@ -1092,71 +1510,89 @@ const fieldsHit = computed(() =>
               >，例如
               <code class="bg-muted rounded px-1 font-mono">{{ examples.output }}</code>
             </HintText>
-            <div v-for="(o, i) in doc.outputs" :key="i" class="grid gap-4 rounded-xl border p-4">
-              <div class="flex items-center gap-2">
-                <IconTile :icon="VariableIcon" size="sm" />
-                <span class="font-mono text-sm font-medium">{{ o.name || '未命名' }}</span>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  class="ml-auto"
-                  aria-label="删除输出变量"
-                  @click="doc.outputs!.splice(i, 1)"
-                >
-                  <Trash2Icon />
-                </Button>
-              </div>
-              <div class="grid gap-4 sm:grid-cols-[1fr_2fr]">
-                <FormField label="变量名" :for="`o-name-${i}`">
-                  <Input
-                    :id="`o-name-${i}`"
-                    v-model="o.name"
-                    class="font-mono"
-                    placeholder="如 MY_APP_TOKEN"
-                  />
-                </FormField>
-                <FormField label="变量值" :for="`o-tpl-${i}`">
-                  <Input :id="`o-tpl-${i}`" v-model="o.template" class="font-mono" />
-                  <div class="flex flex-wrap items-center gap-1">
-                    <span class="text-muted-foreground text-xs">插入字段</span>
-                    <Button
-                      v-for="f in doc.fields.filter((x) => x.key)"
-                      :key="f.key"
-                      variant="outline"
-                      size="xs"
+            <template v-for="(o, i) in doc.outputs" :key="i">
+              <ReuseRemoved v-if="removedAt('outputs', i)" />
+              <div data-item class="grid gap-4 rounded-xl border p-4">
+                <div class="flex items-center gap-2">
+                  <IconTile :icon="VariableIcon" size="sm" />
+                  <span class="min-w-0 font-mono text-sm font-medium [overflow-wrap:anywhere]">{{
+                    o.name || '未命名'
+                  }}</span>
+                  <Button
+                    :id="`o-del-${i}`"
+                    variant="ghost"
+                    size="icon-sm"
+                    class="ml-auto"
+                    aria-label="删除输出变量"
+                    @click="removeOutput(i)"
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-[1fr_2fr]">
+                  <FormField
+                    label="变量名"
+                    :for="`o-name-${i}`"
+                    :error="errors[`outputs[${i}].name`]"
+                  >
+                    <Input
+                      :id="`o-name-${i}`"
+                      v-model="o.name"
                       class="font-mono"
-                      @click="insertVar(i, f.key)"
-                    >
-                      {{ f.key }}
-                    </Button>
-                    <span
-                      v-if="!doc.fields.some((x) => x.key)"
-                      class="text-muted-foreground text-xs"
-                      >（暂无字段）</span
-                    >
-                  </div>
-                </FormField>
+                      placeholder="如 MY_APP_TOKEN"
+                    />
+                  </FormField>
+                  <FormField
+                    label="变量值"
+                    :for="`o-tpl-${i}`"
+                    :error="errors[`outputs[${i}].template`]"
+                  >
+                    <Input :id="`o-tpl-${i}`" v-model="o.template" class="font-mono" />
+                    <div class="flex flex-wrap items-center gap-1">
+                      <span class="text-muted-foreground text-xs">插入字段</span>
+                      <Button
+                        v-for="f in doc.fields.filter((x) => x.key)"
+                        :key="f.key"
+                        variant="outline"
+                        size="xs"
+                        class="font-mono"
+                        @click="insertVar(i, f.key)"
+                      >
+                        {{ f.key }}
+                      </Button>
+                      <span
+                        v-if="!doc.fields.some((x) => x.key)"
+                        class="text-muted-foreground text-xs"
+                        >（暂无字段）</span
+                      >
+                    </div>
+                  </FormField>
+                </div>
+                <div
+                  v-if="outputResult(o.name)"
+                  class="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
+                  :class="
+                    outputResult(o.name)!.ok
+                      ? 'border-success/25 bg-success/5'
+                      : 'border-border bg-muted/40'
+                  "
+                >
+                  <FlaskConicalIcon class="text-muted-foreground mt-0.5 size-4 shrink-0" />
+                  <span v-if="outputResult(o.name)!.ok" class="font-mono break-all">{{
+                    outputResult(o.name)!.value
+                  }}</span>
+                  <span v-else class="text-muted-foreground">{{
+                    outputResult(o.name)!.error
+                  }}</span>
+                </div>
               </div>
-              <div
-                v-if="outputResult(o.name)"
-                class="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
-                :class="
-                  outputResult(o.name)!.ok
-                    ? 'border-success/25 bg-success/5'
-                    : 'border-border bg-muted/40'
-                "
-              >
-                <FlaskConicalIcon class="text-muted-foreground mt-0.5 size-4 shrink-0" />
-                <span v-if="outputResult(o.name)!.ok" class="font-mono break-all">{{
-                  outputResult(o.name)!.value
-                }}</span>
-                <span v-else class="text-muted-foreground">{{ outputResult(o.name)!.error }}</span>
-              </div>
-            </div>
-            <div>
-              <Button variant="outline" @click="doc.outputs!.push({ name: '', template: '' })">
+            </template>
+            <ReuseRemoved v-if="removedAt('outputs', doc.outputs?.length ?? 0)" />
+            <div class="grid justify-items-start gap-1.5">
+              <Button id="add-output" variant="outline" @click="addOutput">
                 <PlusIcon /> 添加输出变量
               </Button>
+              <p v-if="errors.outputs" class="text-destructive text-xs">{{ errors.outputs }}</p>
             </div>
           </template>
 
@@ -1174,7 +1610,7 @@ const fieldsHit = computed(() =>
             </div>
             <template v-if="probeOn">
               <div class="grid gap-4 sm:grid-cols-[8rem_1fr]">
-                <FormField label="请求方法" for="p-method">
+                <FormField label="请求方法" for="p-method" :error="errors['probe.method']">
                   <NativeSelect id="p-method" v-model="probe.method" class="w-full">
                     <NativeSelectOption
                       v-for="x in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']"
@@ -1184,7 +1620,7 @@ const fieldsHit = computed(() =>
                     >
                   </NativeSelect>
                 </FormField>
-                <FormField label="接口地址" for="p-url">
+                <FormField label="接口地址" for="p-url" :error="errors['probe.url']">
                   <Input
                     id="p-url"
                     v-model="probe.url"
@@ -1193,7 +1629,7 @@ const fieldsHit = computed(() =>
                   />
                 </FormField>
               </div>
-              <FormField label="请求头" optional>
+              <FormField id="p-headers" label="请求头" optional :error="errors['probe.headers']">
                 <KeyValueEditor v-model="probe.headers" />
                 <template #hint>
                   接口地址、请求头、请求体支持字段引用
@@ -1202,10 +1638,10 @@ const fieldsHit = computed(() =>
                   <code class="font-mono">{{ examples.header }}</code>
                 </template>
               </FormField>
-              <FormField label="请求体" for="p-body" optional>
-                <Textarea id="p-body" v-model="probe.body" rows="3" class="font-mono text-xs" />
+              <FormField label="请求体" for="p-body" optional :error="errors['probe.body']">
+                <Textarea id="p-body" v-model="probe.body" rows="3" class="font-mono" />
               </FormField>
-              <FormField label="成功条件" for="p-expect">
+              <FormField label="成功条件" for="p-expect" :error="errors['probe.expect']">
                 <div class="flex flex-wrap gap-1">
                   <Button
                     v-for="p in expectPresets"
@@ -1233,6 +1669,7 @@ const fieldsHit = computed(() =>
                 <FormField
                   label="身份表达式"
                   for="p-identity"
+                  :error="errors['probe.identity']"
                   optional
                   hint="从响应中读取身份标识，如 json.data.userId"
                 >
@@ -1243,7 +1680,7 @@ const fieldsHit = computed(() =>
                     placeholder="json.data.userId"
                   />
                 </FormField>
-                <FormField label="超时（秒）" for="p-timeout">
+                <FormField label="超时（秒）" for="p-timeout" :error="errors['probe.timeout']">
                   <Input
                     id="p-timeout"
                     v-model.number="probe.timeout"
@@ -1298,18 +1735,20 @@ const fieldsHit = computed(() =>
           <!-- 接入清单：加入订阅、在客户端里安装、推送到目的地、等第一次回传 -->
           <template v-else-if="section === 'setup'">
             <HintText v-if="isNew">保存来源后，可在此处将其加入订阅并配置推送规则。</HintText>
-            <SourceSetup
-              v-else
-              :source="{ id: Number(id), key: doc.key, name: doc.name, enabled: !!doc.enabled }"
-            />
+            <template v-else>
+              <HintText>接入清单中的操作即时生效，与底部的保存无关。</HintText>
+              <SourceSetup
+                :source="{ id: Number(id), key: doc.key, name: doc.name, enabled: !!doc.enabled }"
+              />
+            </template>
           </template>
 
           <ReuseSample v-else-if="section === 'sample'" />
         </div>
       </div>
 
-      <!-- 样例请求（宽屏常驻） -->
-      <aside v-if="wide" class="min-h-0 overflow-y-auto border-l">
+      <!-- 样例请求（宽屏常驻；接入清单与样例无关，不显示） -->
+      <aside v-if="sampleAside" class="min-h-0 overflow-y-auto border-l">
         <div class="p-4"><ReuseSample /></div>
       </aside>
     </div>
@@ -1350,7 +1789,7 @@ const fieldsHit = computed(() =>
       </AlertDialogHeader>
       <AlertDialogFooter>
         <AlertDialogCancel>继续编辑</AlertDialogCancel>
-        <AlertDialogAction @click="emit('close')">放弃修改</AlertDialogAction>
+        <AlertDialogAction @click="discard">放弃修改</AlertDialogAction>
       </AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>
