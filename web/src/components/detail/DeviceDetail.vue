@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BoxesIcon, QrCodeIcon, SettingsIcon, SmartphoneIcon } from '@lucide/vue'
+import { QrCodeIcon, SettingsIcon } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -8,12 +8,16 @@ import { api, errorText } from '@/api'
 import { clientName } from '@/components/flow/inbox'
 import InboxItem from '@/components/flow/InboxItem.vue'
 import { deviceBadges, sourceBadges } from '@/components/flow/nodes'
+import EntityIcon from '@/components/EntityIcon.vue'
+import SourceAvatar from '@/components/SourceAvatar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fmtAgo, fmtTime } from '@/format'
+import { deviceMark } from '@/lib/icons'
 import { useFlow } from '@/stores/flow'
 import { useOverview } from '@/stores/overview'
+import { useSourceIcons } from '@/stores/sourceIcons'
 import type { SourceSummary, Subscription } from '@/types'
 import SubscriptionInstallDialog from '@/views/SubscriptionInstallDialog.vue'
 
@@ -39,6 +43,7 @@ async function load() {
     ])
     sub.value = s.data
     sources.value = src.data
+    useSourceIcons().set(src.data)
     emit('title', s.data.name)
   } catch (e) {
     toast.error(errorText(e))
@@ -99,10 +104,7 @@ async function onUpdated() {
   </div>
   <div v-else class="grid grid-cols-1 gap-6">
     <header class="flex flex-wrap items-start gap-x-4 gap-y-3">
-      <span
-        class="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg border"
-        ><SmartphoneIcon class="size-5"
-      /></span>
+      <EntityIcon :mark="deviceMark(sub.client)" size="lg" />
       <div class="min-w-0 flex-1">
         <h1 class="flex flex-wrap items-center gap-2 text-xl font-semibold">
           {{ sub.name }}
@@ -148,7 +150,7 @@ async function onUpdated() {
               class="hover:bg-accent/50 flex w-full flex-wrap items-center gap-2 p-3 text-left"
               @click="emit('focus', 'source', s.id)"
             >
-              <BoxesIcon class="text-muted-foreground size-4" />
+              <SourceAvatar :name="s.name" :skey="s.key" :disabled="!s.enabled" size="xs" />
               <span class="font-medium">{{ s.name }}</span>
               <span class="text-muted-foreground font-mono text-xs">{{ s.key }}</span>
               <StatusBadge v-for="b in sourceBadges(s)" :key="b.label" :tone="b.tone" dot>{{

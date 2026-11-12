@@ -1,14 +1,5 @@
 <script setup lang="ts">
-import {
-  BellRingIcon,
-  BoxesIcon,
-  MoonIcon,
-  PlusIcon,
-  RefreshCwIcon,
-  SendIcon,
-  SmartphoneIcon,
-  SunIcon,
-} from '@lucide/vue'
+import { MoonIcon, PlusIcon, RefreshCwIcon, SunIcon } from '@lucide/vue'
 import { onKeyStroke } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -22,12 +13,16 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
+import EntityIcon from '@/components/EntityIcon.vue'
 import { useInboxActions } from '@/components/flow/inbox'
+import SourceAvatar from '@/components/SourceAvatar.vue'
 import { commandOpen } from '@/lib/command'
+import { channelMark, destMark, deviceMark } from '@/lib/icons'
 import { navItems } from '@/lib/nav'
 import { toggleTheme } from '@/lib/theme'
 import { useFlow } from '@/stores/flow'
 import { useOverview } from '@/stores/overview'
+import { useSourceIcons } from '@/stores/sourceIcons'
 import {
   type Channel,
   clients,
@@ -71,7 +66,10 @@ watch(commandOpen, async (open) => {
     api.get<Destination[]>('/destinations'),
     api.get<Channel[]>('/channels'),
   ])
-  if (a.status === 'fulfilled') sources.value = a.value.data
+  if (a.status === 'fulfilled') {
+    sources.value = a.value.data
+    useSourceIcons().set(a.value.data)
+  }
   if (b.status === 'fulfilled') subs.value = b.value.data
   if (c.status === 'fulfilled') dests.value = c.value.data
   if (d.status === 'fulfilled') channels.value = d.value.data
@@ -115,12 +113,12 @@ function run(fn: () => void) {
       <CommandGroup heading="页面">
         <template v-for="m in navItems" :key="m.path">
           <CommandItem
-            v-for="p in m.pages ?? [{ path: m.path, label: m.label }]"
+            v-for="p in m.pages ?? [{ path: m.path, label: m.label, icon: m.icon }]"
             :key="p.path"
             :value="`页面 ${m.label} ${p.label}`"
             @select="go(p.path)"
           >
-            <component :is="m.icon" />
+            <component :is="p.icon ?? m.icon" />
             {{ p.label === m.label ? m.label : `${m.label} · ${p.label}` }}
           </CommandItem>
         </template>
@@ -132,7 +130,8 @@ function run(fn: () => void) {
           :value="`来源 ${s.name} ${s.key}`"
           @select="go(`/sources/${s.id}`)"
         >
-          <BoxesIcon /> {{ s.name }}
+          <SourceAvatar :name="s.name" :skey="s.key" :icon="s.icon ?? ''" size="xs" />
+          {{ s.name }}
           <span class="text-muted-foreground ml-auto font-mono text-xs">{{ s.key }}</span>
         </CommandItem>
       </CommandGroup>
@@ -143,7 +142,7 @@ function run(fn: () => void) {
           :value="`订阅 ${s.name} ${clientName(s.client)}`"
           @select="go(`/subscriptions/${s.id}`)"
         >
-          <SmartphoneIcon /> {{ s.name }}
+          <EntityIcon :mark="deviceMark(s.client)" size="xs" /> {{ s.name }}
           <span class="text-muted-foreground ml-auto text-xs">{{ clientName(s.client) }}</span>
         </CommandItem>
       </CommandGroup>
@@ -154,7 +153,7 @@ function run(fn: () => void) {
           :value="`目的地 ${d.name}`"
           @select="go(`/destinations/${d.id}`)"
         >
-          <SendIcon /> {{ d.name }}
+          <EntityIcon :mark="destMark(d.kind)" size="xs" /> {{ d.name }}
         </CommandItem>
       </CommandGroup>
       <CommandGroup v-if="channels.length" heading="通知渠道">
@@ -164,7 +163,7 @@ function run(fn: () => void) {
           :value="`通知渠道 ${c.name}`"
           @select="go('/notify')"
         >
-          <BellRingIcon /> {{ c.name }}
+          <EntityIcon :mark="channelMark(c.kind)" size="xs" /> {{ c.name }}
         </CommandItem>
       </CommandGroup>
     </CommandList>

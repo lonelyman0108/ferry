@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-  BoxesIcon,
   ClockIcon,
   DownloadIcon,
   EllipsisIcon,
@@ -12,7 +11,6 @@ import {
   LockOpenIcon,
   PlusIcon,
   RefreshCwIcon,
-  SmartphoneIcon,
   TriangleAlertIcon,
 } from '@lucide/vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -59,6 +57,7 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
 import { copyText, fmtAgo, fmtTime } from '@/format'
 import { useFormCheck } from '@/lib/form'
+import { icons } from '@/lib/icons'
 import { useOverview } from '@/stores/overview'
 import {
   clients,
@@ -319,7 +318,7 @@ async function rotateKey(s: Subscription) {
   </EmptyState>
   <EmptyState
     v-else-if="!list.length"
-    :icon="SmartphoneIcon"
+    :icon="icons.subscription"
     title="暂无订阅"
     description="每台设备上的每个代理客户端需单独安装订阅，安装后开始回传登录态。"
   >
@@ -357,7 +356,7 @@ async function rotateKey(s: Subscription) {
           ></span
         >
         <span class="flex items-center gap-1"
-          ><BoxesIcon class="size-3.5" />{{
+          ><component :is="icons.source" class="size-3.5" />{{
             s.all_sources ? '全部来源' : s.source_keys.map(sourceName).join('、')
           }}</span
         >
@@ -395,7 +394,9 @@ async function rotateKey(s: Subscription) {
               >
               <DropdownMenuItem @click="openPreview(s)"><EyeIcon /> 预览订阅文件</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem @click="askRotate(s)"><RefreshCwIcon /> 更换令牌</DropdownMenuItem>
+              <DropdownMenuItem @click="askRotate(s)"
+                ><component :is="icons.rotateToken" /> 更换令牌</DropdownMenuItem
+              >
               <DropdownMenuItem v-if="sealed(s)" @click="askRotateKey(s)"
                 ><LockIcon /> 更换密钥</DropdownMenuItem
               >
@@ -418,7 +419,6 @@ async function rotateKey(s: Subscription) {
     :title="`预览：${preview?.name ?? ''}`"
     :description="preview?.file_name"
     :icon="FileCodeIcon"
-    tone="indigo"
     size="lg"
     @close="preview = null"
   >
@@ -464,8 +464,8 @@ async function rotateKey(s: Subscription) {
     v-model:open="showForm"
     :title="editing ? '编辑订阅' : '新建订阅'"
     :description="editing ? form.name : '每台设备上的每个代理客户端对应一份订阅，令牌相互独立'"
-    :icon="SmartphoneIcon"
-    tone="indigo"
+    :brand="form.client"
+    :icon="icons.subscription"
     size="lg"
     :busy="busy"
     @submit="submit"

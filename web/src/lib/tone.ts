@@ -1,4 +1,6 @@
-// 界面里的配色分两类：语义色（成功、警告、失败等状态）和各功能区的主题色（侧边栏、页面标题、图标块共用）。
+// 界面里的配色分两类：语义色（primary、success、warning、danger、info、neutral）表示状态和选中；
+// 分类色（violet、sky、indigo、emerald、amber、slate）只用在徽章上区分类型，如目的地类型、推送方式、字段类型。
+// 图标块（IconTile）表示对象或概念时一律用 neutral，颜色只留给状态；品牌图标和来源头像自带颜色，不走这里。
 // 类名必须完整写出来，Tailwind 只认源码里出现过的字面量。
 
 export type Tone =

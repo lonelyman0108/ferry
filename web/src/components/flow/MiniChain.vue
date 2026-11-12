@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ChevronRightIcon } from '@lucide/vue'
 
+import EntityIcon from '@/components/EntityIcon.vue'
 import type { Flow } from '@/types'
 
 import type { EdgeState, FocusKind } from './nodes'
@@ -41,6 +42,7 @@ const edgeTone: Record<EdgeState, string> = {
         class="bg-card flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm"
         @click="emit('select', n.kind, n.id)"
       >
+        <EntityIcon :mark="n.mark" size="xs" />
         {{ n.title }}
         <span class="w-4 border-t-2" :class="edgeTone[n.edge ?? 'idle']" aria-hidden="true" />
         <span v-if="edgeText[n.edge ?? 'idle']" class="text-muted-foreground text-xs">{{
@@ -51,8 +53,8 @@ const edgeTone: Record<EdgeState, string> = {
     <ChevronRightIcon v-if="groups.up.length" class="text-muted-foreground size-4 shrink-0" />
     <span
       v-if="current"
-      class="border-primary ring-primary/20 bg-card flex min-h-11 shrink-0 items-center rounded-lg border px-3 text-sm font-medium ring-[3px]"
-      >{{ current.title }}</span
+      class="border-primary ring-primary/20 bg-card flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium ring-[3px]"
+      ><EntityIcon :mark="current.mark" size="xs" />{{ current.title }}</span
     >
     <ChevronRightIcon v-if="groups.down.length" class="text-muted-foreground size-4 shrink-0" />
     <button
@@ -63,6 +65,7 @@ const edgeTone: Record<EdgeState, string> = {
       @click="emit('select', n.kind, n.id)"
     >
       <span class="w-4 border-t-2" :class="edgeTone[n.edge ?? 'idle']" aria-hidden="true" />
+      <EntityIcon :mark="n.mark" size="xs" />
       {{ n.title }}
       <span v-if="edgeText[n.edge ?? 'idle']" class="text-muted-foreground text-xs">{{
         edgeText[n.edge ?? 'idle']

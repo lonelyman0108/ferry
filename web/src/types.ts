@@ -42,6 +42,8 @@ export interface SourceDoc {
   key: string
   name: string
   description?: string
+  // 自定义图标，base64 图片 data URI；为空时显示名称首字
+  icon?: string
   enabled?: boolean
   identity_field?: string
   merge_window?: number
@@ -64,6 +66,7 @@ export interface SourceSummary {
   id: number
   key: string
   name: string
+  icon?: string
   enabled: boolean
   matchers: number
   fields: number

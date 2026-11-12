@@ -24,7 +24,7 @@ var ErrKeyChanged = errors.New("来源创建后 key 不可修改")
 func FromModel(s store.Source) Doc {
 	enabled, mw, mi := s.Enabled, s.MergeWindowSec, s.MinIntervalSec
 	d := Doc{
-		Key: s.Key, Name: s.Name, Description: s.Description, Enabled: &enabled,
+		Key: s.Key, Name: s.Name, Description: s.Description, Icon: s.Icon, Enabled: &enabled,
 		IdentityField: s.IdentityField, MergeWindow: &mw, Notify: s.NotifyMode, MinInterval: &mi, Debug: s.Debug, Review: s.ReviewMode,
 		Matchers: []MatcherDoc{}, Fields: []FieldDoc{}, Outputs: []OutputDoc{},
 	}
@@ -142,7 +142,7 @@ func Delete(ctx context.Context, db *gorm.DB, id uint) error {
 }
 
 func applyScalars(s *store.Source, d Doc) {
-	s.Name, s.Description, s.Enabled = d.Name, d.Description, *d.Enabled
+	s.Name, s.Description, s.Icon, s.Enabled = d.Name, d.Description, d.Icon, *d.Enabled
 	s.IdentityField, s.MergeWindowSec, s.NotifyMode = d.IdentityField, *d.MergeWindow, d.Notify
 	s.MinIntervalSec, s.Debug, s.ReviewMode = *d.MinInterval, d.Debug, d.Review
 	s.Probe = ""

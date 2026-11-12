@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { BoxesIcon, SendIcon, SmartphoneIcon, WebhookIcon } from '@lucide/vue'
 import { useResizeObserver } from '@vueuse/core'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
+import { destMark, deviceMark, sourceMark } from '@/lib/icons'
 import type { Flow } from '@/types'
 
 import { clientName } from './inbox'
@@ -190,7 +190,7 @@ const paths = computed(() =>
           @focusout="focused = null"
         >
           <FlowNode
-            :icon="SmartphoneIcon"
+            :mark="deviceMark(d.client)"
             :title="d.name"
             :subtitle="clientName(d.client)"
             :badges="deviceBadges(d)"
@@ -217,7 +217,7 @@ const paths = computed(() =>
           @focusout="focused = null"
         >
           <FlowNode
-            :icon="BoxesIcon"
+            :mark="sourceMark(s)"
             :title="s.name"
             :subtitle="s.key"
             mono
@@ -247,7 +247,7 @@ const paths = computed(() =>
           @focusout="focused = null"
         >
           <FlowNode
-            :icon="d.kind === 'webhook' ? WebhookIcon : SendIcon"
+            :mark="destMark(d.kind)"
             :title="d.name"
             :subtitle="d.kind === 'webhook' ? 'Webhook' : '青龙'"
             :badges="destBadges(flow, d)"

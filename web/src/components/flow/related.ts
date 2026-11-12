@@ -1,6 +1,6 @@
-import { BoxesIcon, SendIcon, SmartphoneIcon, WebhookIcon } from '@lucide/vue'
-import { type Component, computed } from 'vue'
+import { computed } from 'vue'
 
+import { destMark, deviceMark, type Mark, sourceMark } from '@/lib/icons'
 import type { Flow } from '@/types'
 
 import { clientName } from './inbox'
@@ -22,7 +22,7 @@ export interface RailNode {
   key: string
   kind: FocusKind
   id: number
-  icon: Component
+  mark: Mark
   title: string
   subtitle: string
   mono?: boolean
@@ -39,7 +39,7 @@ export function useRelated(flow: () => Flow, kind: () => FocusKind, id: () => nu
       key: nodeKey('device', id),
       kind: 'device',
       id,
-      icon: SmartphoneIcon,
+      mark: deviceMark(d.client),
       title: d.name,
       subtitle: clientName(d.client),
       badges: deviceBadges(d),
@@ -55,7 +55,7 @@ export function useRelated(flow: () => Flow, kind: () => FocusKind, id: () => nu
       key: nodeKey('source', id),
       kind: 'source',
       id,
-      icon: BoxesIcon,
+      mark: sourceMark(s),
       title: s.name,
       subtitle: s.key,
       mono: true,
@@ -72,7 +72,7 @@ export function useRelated(flow: () => Flow, kind: () => FocusKind, id: () => nu
       key: nodeKey('destination', id),
       kind: 'destination',
       id,
-      icon: d.kind === 'webhook' ? WebhookIcon : SendIcon,
+      mark: destMark(d.kind),
       title: d.name,
       subtitle: d.kind === 'webhook' ? 'Webhook' : '青龙',
       badges: destBadges(flow(), d),

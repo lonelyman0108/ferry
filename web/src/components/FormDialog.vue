@@ -28,7 +28,7 @@ withDefaults(
     description: '',
     icon: undefined,
     brand: undefined,
-    tone: 'primary',
+    tone: 'neutral',
     submitText: '保存',
     size: 'md',
   },

@@ -1,20 +1,15 @@
-import {
-  ActivityIcon,
-  BoxesIcon,
-  LayoutDashboardIcon,
-  SendIcon,
-  SettingsIcon,
-  SmartphoneIcon,
-} from '@lucide/vue'
+import { ActivityIcon, LayoutDashboardIcon, SettingsIcon } from '@lucide/vue'
 import type { Component } from 'vue'
 
-import type { Tone } from './tone'
+import { icons } from './icons'
 
 // 一个导航项下面可以有几页，页面标题下用一排链接切换。
 export interface SubPage {
   path: string
   label: string
   description: string
+  // 命令面板里的图标，不给时用所属导航项的
+  icon?: Component
 }
 
 export interface NavItem {
@@ -23,7 +18,6 @@ export interface NavItem {
   // 手机底部导航用的短名
   short: string
   icon: Component
-  tone: Tone
   // 页面标题下的一句话说明
   description: string
   pages?: SubPage[]
@@ -36,35 +30,36 @@ export const navItems: NavItem[] = [
     label: '总览',
     short: '总览',
     icon: LayoutDashboardIcon,
-    tone: 'primary',
     description: '待处理事项与各来源状态',
   },
   {
     path: '/sources',
     label: '来源',
     short: '来源',
-    icon: BoxesIcon,
-    tone: 'primary',
+    icon: icons.source,
     description: '读取规则、身份与登录态',
   },
   {
     path: '/subscriptions',
     label: '订阅',
     short: '订阅',
-    icon: SmartphoneIcon,
-    tone: 'primary',
+    icon: icons.subscription,
     description: '代理客户端中安装的插件与安装链接',
   },
   {
     path: '/destinations',
     label: '推送',
     short: '推送',
-    icon: SendIcon,
-    tone: 'primary',
+    icon: icons.push,
     description: '目的地、推送规则与通知',
     pages: [
-      { path: '/destinations', label: '目的地', description: '目的地、推送规则与推送记录' },
-      { path: '/notify', label: '通知', description: '通知渠道与通知规则' },
+      {
+        path: '/destinations',
+        label: '目的地',
+        description: '目的地、推送规则与推送记录',
+        icon: icons.destination,
+      },
+      { path: '/notify', label: '通知', description: '通知渠道与通知规则', icon: icons.notify },
     ],
   },
   {
@@ -72,7 +67,6 @@ export const navItems: NavItem[] = [
     label: '记录',
     short: '记录',
     icon: ActivityIcon,
-    tone: 'primary',
     description: '回传、审核、推送与通知的完整记录',
   },
   {
@@ -80,7 +74,6 @@ export const navItems: NavItem[] = [
     label: '设置',
     short: '设置',
     icon: SettingsIcon,
-    tone: 'primary',
     description: '访问地址与账户',
     pages: [
       {

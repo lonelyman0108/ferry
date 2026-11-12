@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import {
-  BoxesIcon,
   CircleCheckIcon,
   CircleXIcon,
   DownloadIcon,
   EraserIcon,
   FileTextIcon,
   FlaskConicalIcon,
+  ImageUpIcon,
   KeyRoundIcon,
-  ListChecksIcon,
   LoaderCircleIcon,
   LockIcon,
   PlayIcon,
@@ -30,6 +29,7 @@ import HintText from '@/components/HintText.vue'
 import DialogShell from '@/components/DialogShell.vue'
 import IconTile from '@/components/IconTile.vue'
 import KeyValueEditor from '@/components/KeyValueEditor.vue'
+import SourceAvatar from '@/components/SourceAvatar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import SourceSetup from './SourceSetup.vue'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -50,7 +50,9 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { fmtTime, secondaryKey } from '@/format'
+import { icons } from '@/lib/icons'
 import type { Tone } from '@/lib/tone'
+import { useSourceIcons } from '@/stores/sourceIcons'
 import type { FieldDoc, ProbeSpec, SourceDoc, SourceView, TryResult, TryValue } from '@/types'
 
 // 来源编辑器弹窗。左侧分区导航，中间表单，右侧（宽屏）是共用的样例请求：
@@ -93,6 +95,7 @@ function blank(): SourceDoc {
     key: '',
     name: '',
     description: '',
+    icon: '',
     enabled: true,
     identity_field: '',
     merge_window: 60,
@@ -163,7 +166,7 @@ const sections = computed(() => {
     { value: 'fields', label: '字段', icon: KeyRoundIcon, count: doc.fields.length },
     { value: 'outputs', label: '输出变量', icon: VariableIcon, count: doc.outputs?.length ?? 0 },
     { value: 'probe', label: '有效性检测', icon: RadarIcon, on: probeOn.value },
-    { value: 'setup', label: '接入清单', icon: ListChecksIcon },
+    { value: 'setup', label: '接入清单', icon: icons.checklist },
   ]
   if (!wide.value) s.push({ value: 'sample', label: '样例测试', icon: FlaskConicalIcon })
   return s
@@ -176,6 +179,40 @@ watch(wide, (w) => {
 const matcherLabel = (name: string) => {
   const m = doc.matchers.find((x) => x.name === name)
   return m ? `${m.name} · ${m.host || '未填域名'}${m.path ? ' ' + m.path : ''}` : name
+}
+
+// 自定义图标：选一张图片读成 data URI 存进定义里。类型和大小的限制与后端校验一致。
+const iconTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']
+const maxIconBytes = 64 * 1024
+const iconInput = useTemplateRef<HTMLInputElement>('iconInput')
+const iconError = ref('')
+
+function pickIcon() {
+  iconInput.value?.click()
+}
+
+function readIcon(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (!iconTypes.includes(file.type)) {
+    iconError.value = '仅支持 PNG、JPEG、WebP 或 SVG 图片'
+    return
+  }
+  if (file.size > maxIconBytes) {
+    iconError.value = `图片为 ${Math.ceil(file.size / 1024)} KB，超过 64 KB 上限，请压缩后重试`
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = () => {
+    doc.icon = String(reader.result)
+    iconError.value = ''
+  }
+  reader.onerror = () => {
+    iconError.value = '读取图片失败'
+  }
+  reader.readAsDataURL(file)
 }
 
 function fill(v: SourceDoc) {
@@ -221,6 +258,7 @@ function payload(): SourceDoc {
     key: doc.key.trim(),
     name: doc.name.trim(),
     description: opt(doc.description),
+    icon: opt(doc.icon),
     enabled: doc.enabled,
     identity_field: opt(doc.identity_field),
     merge_window: Number(doc.merge_window) || 0,
@@ -305,6 +343,7 @@ async function save() {
       })
     else toast.success('已保存')
     if (isNew.value) storeSample(String(res.data.id))
+    void useSourceIcons().load()
     emit('saved', res.data.id)
   } catch (e) {
     if (e instanceof ApiError && e.details.length) problems.value = e.details
@@ -468,7 +507,7 @@ const fieldsHit = computed(() =>
   <DefineSample>
     <div class="grid gap-4">
       <div class="flex items-start gap-3">
-        <IconTile :icon="FlaskConicalIcon" tone="sky" size="sm" />
+        <IconTile :icon="FlaskConicalIcon" size="sm" />
         <div class="grid gap-0.5">
           <span class="text-sm font-semibold">样例请求</span>
           <span class="text-muted-foreground text-xs"
@@ -555,8 +594,7 @@ const fieldsHit = computed(() =>
   <DialogShell
     :open="true"
     :title="isNew ? '新建来源' : doc.name || doc.key"
-    :icon="BoxesIcon"
-    tone="violet"
+    :icon="icons.source"
     size="full"
     bare
     :enabled="loaded ? doc.enabled : undefined"
@@ -564,6 +602,14 @@ const fieldsHit = computed(() =>
     @update:enabled="(v) => (doc.enabled = v)"
     @close="requestClose"
   >
+    <template v-if="doc.name || doc.icon" #icon>
+      <SourceAvatar
+        :name="doc.name"
+        :skey="doc.key"
+        :icon="doc.icon ?? ''"
+        :disabled="doc.enabled === false"
+      />
+    </template>
     <template #badges>
       <StatusBadge v-if="dirty" tone="warning" dot>未保存</StatusBadge>
     </template>
@@ -656,6 +702,42 @@ const fieldsHit = computed(() =>
                 </FormField>
                 <FormField label="名称" for="src-name">
                   <Input id="src-name" v-model="doc.name" placeholder="显示名称" />
+                </FormField>
+                <FormField
+                  label="图标"
+                  for="src-icon"
+                  optional
+                  full
+                  :error="iconError"
+                  hint="PNG、JPEG、WebP 或 SVG，不超过 64 KB；未设置时显示名称首字"
+                >
+                  <div class="flex items-center gap-3">
+                    <SourceAvatar
+                      :name="doc.name || doc.key || '?'"
+                      :skey="doc.key"
+                      :icon="doc.icon ?? ''"
+                      size="lg"
+                    />
+                    <Button id="src-icon" type="button" variant="outline" @click="pickIcon"
+                      ><ImageUpIcon /> {{ doc.icon ? '更换图片' : '选择图片' }}</Button
+                    >
+                    <Button
+                      v-if="doc.icon"
+                      type="button"
+                      variant="ghost"
+                      @click="((doc.icon = ''), (iconError = ''))"
+                      ><EraserIcon /> 清除</Button
+                    >
+                    <input
+                      ref="iconInput"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      class="hidden"
+                      tabindex="-1"
+                      aria-hidden="true"
+                      @change="readIcon"
+                    />
+                  </div>
                 </FormField>
                 <FormField label="说明" for="src-desc" optional full>
                   <Textarea
@@ -753,7 +835,7 @@ const fieldsHit = computed(() =>
             </HintText>
             <div v-for="(m, i) in doc.matchers" :key="i" class="grid gap-4 rounded-xl border p-4">
               <div class="flex flex-wrap items-center gap-2">
-                <IconTile :icon="RouteIcon" tone="indigo" size="sm" />
+                <IconTile :icon="RouteIcon" size="sm" />
                 <span class="font-mono text-sm font-medium">{{ m.name || '未命名' }}</span>
                 <template v-if="tr?.matchers[i]">
                   <StatusBadge v-if="tr.matchers[i].matched" tone="success" :icon="CircleCheckIcon"
@@ -838,7 +920,7 @@ const fieldsHit = computed(() =>
             <HintText> 客户端仅回传已声明的字段；服务端按相同的读取规则复核。 </HintText>
             <div v-for="(f, i) in doc.fields" :key="i" class="grid gap-4 rounded-xl border p-4">
               <div class="flex flex-wrap items-center gap-2">
-                <IconTile :icon="KeyRoundIcon" :tone="typeOf(f).tone" size="sm" />
+                <IconTile :icon="KeyRoundIcon" size="sm" />
                 <span class="font-mono text-sm font-medium">{{ f.key || '未命名' }}</span>
                 <span v-if="f.name" class="text-muted-foreground text-sm">{{ f.name }}</span>
                 <StatusBadge :tone="typeOf(f).tone">{{ typeOf(f).short }}</StatusBadge>
@@ -1012,7 +1094,7 @@ const fieldsHit = computed(() =>
             </HintText>
             <div v-for="(o, i) in doc.outputs" :key="i" class="grid gap-4 rounded-xl border p-4">
               <div class="flex items-center gap-2">
-                <IconTile :icon="VariableIcon" tone="emerald" size="sm" />
+                <IconTile :icon="VariableIcon" size="sm" />
                 <span class="font-mono text-sm font-medium">{{ o.name || '未命名' }}</span>
                 <Button
                   variant="ghost"

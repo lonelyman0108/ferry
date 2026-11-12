@@ -8,7 +8,7 @@ import {
   DownloadIcon,
   GlobeIcon,
   KeyRoundIcon,
-  ListChecksIcon,
+  ClipboardCheckIcon,
   LoaderCircleIcon,
   ShieldCheckIcon,
   TriangleAlertIcon,
@@ -118,7 +118,7 @@ const steps = computed<Step[]>(() => {
   s.push(
     { id: 'admin', title: '管理员', description: '后台登录账号', icon: UserRoundIcon },
     { id: 'endpoint', title: '访问地址', description: '设备访问地址', icon: GlobeIcon },
-    { id: 'review', title: '确认', description: '核对配置', icon: ListChecksIcon },
+    { id: 'review', title: '确认', description: '核对配置', icon: ClipboardCheckIcon },
   )
   if (status.value?.needs_config && !preset.value?.master_key) {
     s.push({ id: 'key', title: '主密钥', description: '备份加密密钥', icon: ShieldCheckIcon })

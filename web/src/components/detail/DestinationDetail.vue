@@ -1,12 +1,5 @@
 <script setup lang="ts">
-import {
-  BoxesIcon,
-  PlugZapIcon,
-  RefreshCwIcon,
-  SendIcon,
-  SettingsIcon,
-  WebhookIcon,
-} from '@lucide/vue'
+import { PlugZapIcon, RefreshCwIcon, SettingsIcon } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -14,10 +7,13 @@ import { toast } from 'vue-sonner'
 import { api, errorText } from '@/api'
 import InboxItem from '@/components/flow/InboxItem.vue'
 import { destBadges, destStates } from '@/components/flow/nodes'
+import EntityIcon from '@/components/EntityIcon.vue'
+import SourceAvatar from '@/components/SourceAvatar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fmtAgo, fmtTime } from '@/format'
+import { destMark } from '@/lib/icons'
 import { useFlow } from '@/stores/flow'
 import { useOverview } from '@/stores/overview'
 import { bindingModes, type Destination, type PushJob, pushStates, pushTrigger } from '@/types'
@@ -60,8 +56,8 @@ watch(
 )
 
 const node = computed(() => flow.data?.destinations.find((d) => d.id === props.id))
-const sourceName = (id: number) =>
-  flow.data?.sources.find((s) => s.id === id)?.name ?? '已删除的来源'
+const sourceOf = (id: number) => flow.data?.sources.find((s) => s.id === id)
+const sourceName = (id: number) => sourceOf(id)?.name ?? '已删除的来源'
 const bindings = computed(() =>
   (flow.data?.bindings ?? []).filter((b) => b.destination_id === props.id),
 )
@@ -149,10 +145,7 @@ const jobState = (j: PushJob) =>
   </div>
   <div v-else class="grid grid-cols-1 gap-6">
     <header class="flex flex-wrap items-start gap-x-4 gap-y-3">
-      <span
-        class="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg border"
-        ><component :is="dest.kind === 'webhook' ? WebhookIcon : SendIcon" class="size-5"
-      /></span>
+      <EntityIcon :mark="destMark(dest.kind)" size="lg" />
       <div class="min-w-0 flex-1">
         <h1 class="flex flex-wrap items-center gap-2 text-xl font-semibold">
           {{ dest.name }}
@@ -198,7 +191,12 @@ const jobState = (j: PushJob) =>
         <p v-if="!bindings.length" class="text-muted-foreground text-sm">暂无关联的推送规则。</p>
         <ul v-else class="bg-card divide-y rounded-lg border">
           <li v-for="b in bindings" :key="b.id" class="flex flex-wrap items-center gap-2 p-3">
-            <BoxesIcon class="text-muted-foreground size-4" />
+            <SourceAvatar
+              :name="sourceName(b.source_id)"
+              :skey="sourceOf(b.source_id)?.key ?? ''"
+              size="xs"
+              :disabled="sourceOf(b.source_id)?.enabled === false"
+            />
             <button
               type="button"
               class="font-medium hover:underline"

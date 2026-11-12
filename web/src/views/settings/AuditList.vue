@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CogIcon, KeyRoundIcon, SmartphoneIcon, UserRoundIcon, UserRoundXIcon } from '@lucide/vue'
+import { BotIcon, KeyRoundIcon, UserRoundIcon, UserRoundXIcon } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -18,6 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { fmtTime } from '@/format'
+import { icons } from '@/lib/icons'
 import type { Tone } from '@/lib/tone'
 import {
   auditCategories,
@@ -73,8 +74,8 @@ function tone(a: AuditLog): Tone {
 const actorIcons = {
   user: UserRoundIcon,
   token: KeyRoundIcon,
-  subscription: SmartphoneIcon,
-  system: CogIcon,
+  subscription: icons.subscription,
+  system: BotIcon,
   anonymous: UserRoundXIcon,
 }
 const actorIcon = (a: AuditLog) => (a.actor_kind ? actorIcons[a.actor_kind] : UserRoundIcon)
