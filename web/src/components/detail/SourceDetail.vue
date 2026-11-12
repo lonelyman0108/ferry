@@ -217,7 +217,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
       </div>
     </section>
 
-    <div class="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+    <div class="grid grid-cols-1 gap-8 @3xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
       <div class="grid grid-cols-1 content-start gap-8">
         <DetailSection title="身份与当前值" aside="敏感值仅显示首尾字符">
           <p v-if="!lane.identities.length" class="text-muted-foreground text-sm">
@@ -255,9 +255,11 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
                 <dt class="text-muted-foreground truncate font-mono" :title="f.name">
                   {{ f.key }}
                 </dt>
-                <dd class="truncate font-mono">{{ f.current?.value ?? '—' }}</dd>
+                <dd class="font-mono [overflow-wrap:anywhere]">
+                  {{ f.current?.value ?? '—' }}
+                </dd>
                 <dd
-                  class="text-xs"
+                  class="text-xs whitespace-nowrap"
                   :class="isSoon(f.current?.expires_at) ? 'text-warning' : 'text-muted-foreground'"
                 >
                   {{ f.current?.expires_at ? fmtUntil(f.current.expires_at) + '过期' : '' }}
@@ -268,20 +270,20 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
               <li
                 v-for="p in a.pushes"
                 :key="p.binding_id"
-                class="flex flex-wrap items-center gap-2 text-sm"
+                class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 text-sm"
               >
-                <EntityIcon :mark="destMark(p.destination_kind)" size="xs" />
-                <span>{{ p.destination_name }}</span>
-                <StatusBadge :tone="pushState(p).tone" dot>{{ pushState(p).label }}</StatusBadge>
-                <span v-if="p.last" class="text-muted-foreground text-xs">{{
-                  fmtAgo(p.last.finished_at ?? p.last.created_at)
-                }}</span>
-
+                <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <EntityIcon :mark="destMark(p.destination_kind)" size="xs" />
+                  <span class="min-w-0 [overflow-wrap:anywhere]">{{ p.destination_name }}</span>
+                  <StatusBadge :tone="pushState(p).tone" dot>{{ pushState(p).label }}</StatusBadge>
+                  <span v-if="p.last" class="text-muted-foreground text-xs">{{
+                    fmtAgo(p.last.finished_at ?? p.last.created_at)
+                  }}</span>
+                </span>
                 <Button
                   v-if="p.enabled"
                   variant="ghost"
                   size="sm"
-                  class="ml-auto"
                   :disabled="!!busy"
                   @click="pushNow(p, a.id)"
                 >
@@ -292,7 +294,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
                 </Button>
                 <span
                   v-if="p.last?.last_error && p.last.status !== 'success'"
-                  class="text-destructive w-full truncate pl-5 text-xs"
+                  class="text-destructive col-span-2 truncate pl-5 text-xs"
                   :title="p.last.last_error"
                   >{{ p.last.last_error }}</span
                 >

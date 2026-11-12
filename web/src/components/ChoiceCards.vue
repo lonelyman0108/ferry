@@ -17,6 +17,8 @@ defineProps<{
     tone?: Tone
     // 品牌图标名（lib/brands），优先于 icon
     brand?: string
+    // 跟在说明后面的代码片段（如 ferry:<来源>:<身份>），整体不折行
+    code?: string
   }[]
   disabled?: boolean
   label?: string
@@ -24,6 +26,9 @@ defineProps<{
   cols?: 2 | 3
 }>()
 const colClass = { 2: 'grid-cols-2', 3: 'grid-cols-2 sm:grid-cols-3' }
+// 手机上按列排时每张卡只有一百多像素宽，图标、文字、圆点挤在一行会把 Shadowrocket 这类名称从词中间折断。
+// 这时改成上下两行：图标和圆点在上，名称占满下一行。
+const stacked = 'max-sm:flex-wrap max-sm:gap-y-2'
 </script>
 
 <template>
@@ -42,6 +47,7 @@ const colClass = { 2: 'grid-cols-2', 3: 'grid-cols-2 sm:grid-cols-3' }
       :class="
         cn(
           'flex items-center gap-3 rounded-lg border p-3 text-left transition',
+          cols && stacked,
           model === o.value
             ? 'border-primary bg-primary/5 ring-primary/30 ring-2'
             : 'hover:border-foreground/25 hover:bg-muted/40',
@@ -61,17 +67,19 @@ const colClass = { 2: 'grid-cols-2', 3: 'grid-cols-2 sm:grid-cols-3' }
         "
         ><component :is="o.icon"
       /></span>
-      <span class="min-w-0 flex-1">
-        <span class="block text-sm font-medium [overflow-wrap:anywhere]">{{ o.label }}</span>
-        <span v-if="o.description" class="text-muted-foreground block text-xs">{{
-          o.description
-        }}</span>
+      <span :class="cn('min-w-0 flex-1', cols && 'max-sm:order-last max-sm:basis-full')">
+        <span class="block text-sm font-medium break-words">{{ o.label }}</span>
+        <span v-if="o.description" class="text-muted-foreground block text-xs"
+          >{{ o.description
+          }}<code v-if="o.code" class="ml-1 font-mono whitespace-nowrap">{{ o.code }}</code></span
+        >
       </span>
       <!-- 单选圆点固定在右侧居中，不随文字长短漂移，也不压住说明文字 -->
       <span
         :class="
           cn(
             'flex size-4 shrink-0 items-center justify-center rounded-full border transition',
+            cols && 'max-sm:ml-auto',
             model === o.value
               ? 'border-primary bg-primary text-primary-foreground'
               : 'border-input',

@@ -22,7 +22,8 @@ import {
 
 // 三列流向图：设备（订阅）→ 来源 → 目的地。连线画在一层 SVG 上，端点位置按节点卡实际渲染的位置量出来。
 // 线型表示通不通：实线正常，红虚线失败，琥珀虚线等待重试，灰虚线没连通或没推过。
-// 窄屏上不画线，三列上下排，每张卡用一句话写去向（宽屏上这句话留给读屏）。
+// 按图本身的宽度（容器断点，不看视口）切换：不足 36rem 时不画线，三列上下排，每张卡用一句话写去向
+// （够宽时这句话留给读屏）。侧栏展开、收件箱占位时图会比视口窄得多，按视口切会把右列挤出去。
 // 键盘聚焦到节点时和鼠标悬停一样高亮相关连线。
 const props = defineProps<{ flow: Flow; selected?: string | null }>()
 const emit = defineEmits<{ select: [kind: 'device' | 'source' | 'destination', id: number] }>()
@@ -142,9 +143,9 @@ const paths = computed(() =>
 </script>
 
 <template>
-  <div ref="root" class="relative">
+  <div ref="root" class="@container relative">
     <svg
-      class="pointer-events-none absolute inset-0 hidden overflow-visible md:block"
+      class="pointer-events-none absolute inset-0 hidden overflow-visible @xl:block"
       :width="size.w"
       :height="size.h"
       aria-hidden="true"
@@ -159,7 +160,7 @@ const paths = computed(() =>
         :stroke-width="p.hl ? 2 : 1.5"
       />
     </svg>
-    <div class="pointer-events-none absolute inset-0 hidden md:block">
+    <div class="pointer-events-none absolute inset-0 hidden @xl:block">
       <span
         v-for="p in paths.filter((x) => x.label)"
         :key="p.id"
@@ -175,7 +176,7 @@ const paths = computed(() =>
     </div>
 
     <div
-      class="relative grid gap-6 md:grid-cols-[minmax(150px,190px)_minmax(200px,250px)_minmax(150px,200px)] md:items-center md:justify-between md:gap-10"
+      class="relative grid gap-6 @xl:grid-cols-[minmax(150px,190px)_minmax(200px,250px)_minmax(150px,200px)] @xl:items-center @xl:justify-between @xl:gap-8"
     >
       <section class="grid min-w-0 grid-cols-1 content-center gap-3" aria-label="设备">
         <h2 class="text-muted-foreground flex justify-between px-0.5 text-xs">
@@ -260,7 +261,7 @@ const paths = computed(() =>
           />
           <p
             v-if="d.enabled && (d.state === 'failed' || d.state === 'retrying') && d.last_error"
-            class="text-destructive mt-1 hidden truncate px-1 text-xs md:block"
+            class="text-destructive mt-1 hidden truncate px-1 text-xs @xl:block"
             :title="d.last_error"
           >
             {{ d.last_error }}

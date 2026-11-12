@@ -141,7 +141,7 @@ function detail(a: AuditLog) {
     <Table>
       <TableHeader class="bg-muted/40">
         <TableRow>
-          <TableHead>时间</TableHead>
+          <TableHead class="w-40 max-sm:w-24">时间</TableHead>
           <TableHead>操作</TableHead>
           <TableHead class="hidden md:table-cell">操作者</TableHead>
           <TableHead class="hidden md:table-cell">对象</TableHead>
@@ -200,7 +200,7 @@ function detail(a: AuditLog) {
       </TableBody>
     </Table>
   </div>
-  <div v-if="more">
-    <Button variant="outline" @click="load(true)">加载更多</Button>
+  <div v-if="more" class="mt-4 flex justify-center">
+    <Button variant="outline" size="sm" @click="load(true)">加载更多</Button>
   </div>
 </template>

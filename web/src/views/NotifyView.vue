@@ -335,11 +335,17 @@ function secretHint(key: string, fallback = '') {
 </script>
 
 <template>
-  <PageHeader />
+  <!-- 当前标签页的主操作放在标题行右侧（与订阅页一致），手机上换到标题下方并保留文字 -->
+  <PageHeader>
+    <template #actions>
+      <Button v-if="tab === 'channels'" @click="newChannel"><PlusIcon /> 新建通知渠道</Button>
+      <Button v-else @click="newRule"><PlusIcon /> 新建通知规则</Button>
+    </template>
+  </PageHeader>
 
   <Tabs v-model="tab">
-    <div class="mb-2 flex flex-wrap items-center gap-2">
-      <TabsList class="mr-auto">
+    <div class="mb-2 flex">
+      <TabsList class="no-scrollbar max-w-full overflow-x-auto">
         <TabsTrigger value="channels"
           ><component :is="icons.channel" /> 通知渠道
           <span
@@ -355,12 +361,6 @@ function secretHint(key: string, fallback = '') {
           ></TabsTrigger
         >
       </TabsList>
-      <Button v-if="tab === 'channels'" class="max-sm:min-w-11 max-sm:px-0" @click="newChannel"
-        ><PlusIcon /><span class="max-sm:sr-only">新建通知渠道</span></Button
-      >
-      <Button v-else class="max-sm:min-w-11 max-sm:px-0" @click="newRule"
-        ><PlusIcon /><span class="max-sm:sr-only">新建通知规则</span></Button
-      >
     </div>
 
     <TabsContent value="channels" class="grid gap-3">

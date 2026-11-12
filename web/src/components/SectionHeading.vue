@@ -6,7 +6,7 @@ defineProps<{ title: string; description?: string; icon?: Component }>()
 </script>
 
 <template>
-  <div class="mb-3 flex flex-wrap items-end gap-2">
+  <div class="mb-3 flex flex-wrap items-center gap-2">
     <div class="mr-auto min-w-0">
       <h2 class="flex items-center gap-2 text-base font-semibold">
         <component :is="icon" v-if="icon" class="text-muted-foreground size-4" />

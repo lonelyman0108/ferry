@@ -186,7 +186,7 @@ const jobState = (j: PushJob) =>
       </div>
     </section>
 
-    <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
+    <div class="grid grid-cols-1 gap-8 @3xl:grid-cols-2">
       <DetailSection title="推送至此的来源" :aside="`${bindings.length} 条推送规则`">
         <p v-if="!bindings.length" class="text-muted-foreground text-sm">暂无关联的推送规则。</p>
         <ul v-else class="bg-card divide-y rounded-lg border">

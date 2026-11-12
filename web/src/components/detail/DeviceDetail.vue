@@ -141,7 +141,7 @@ async function onUpdated() {
       </div>
     </section>
 
-    <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
+    <div class="grid grid-cols-1 gap-8 @3xl:grid-cols-2">
       <DetailSection title="覆盖的来源" :aside="`${covered.length} 个`">
         <ul class="bg-card divide-y rounded-lg border">
           <li v-for="s in covered" :key="s.id">

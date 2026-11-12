@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import {
   ArrowUpCircleIcon,
+  ChartColumnIcon,
   CheckCircle2Icon,
   ClipboardCopyIcon,
+  CloudOffIcon,
   CpuIcon,
   DatabaseIcon,
   FileCogIcon,
+  InfoIcon,
   PackageIcon,
   RefreshCwIcon,
-  ShieldAlertIcon,
 } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
@@ -97,7 +99,12 @@ const sections = computed(() => {
       icon: PackageIcon,
       rows: [
         { k: '版本号', v: v.build.version },
-        { k: '提交', v: v.build.commit, mono: true, href: commitURL.value },
+        {
+          k: '提交',
+          v: v.build.commit === 'unknown' ? '—' : v.build.commit,
+          mono: true,
+          href: commitURL.value,
+        },
         { k: '构建时间', v: v.build.date === 'unknown' ? '—' : fmtTime(v.build.date) },
         { k: 'Go', v: v.build.go, mono: true },
       ],
@@ -184,50 +191,58 @@ async function copyDiagnostics() {
     </template>
   </PageHeader>
 
+  <!-- 手机上检查结果独占一行，检查时间和「重新检查」在下一行两端对齐 -->
   <section
-    class="bg-card mb-6 flex flex-wrap items-center gap-3 rounded-lg border p-4"
+    class="bg-card mb-6 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border p-4"
     aria-label="检查更新"
   >
-    <template v-if="update?.newer">
-      <ArrowUpCircleIcon class="text-primary size-5" />
-      <span class="text-sm"
-        >发现新版本 <b>{{ update.latest }}</b
-        >，当前版本 {{ update.current }}</span
-      >
-      <a
-        :href="update.url"
-        target="_blank"
-        rel="noopener"
-        class="text-primary text-sm underline-offset-2 hover:underline"
-        >查看更新说明</a
-      >
-    </template>
-    <template v-else-if="update && !update.error && isRelease">
-      <CheckCircle2Icon class="text-success size-5" />
-      <span class="text-sm">已是最新版本 {{ update.current }}</span>
-    </template>
-    <template v-else-if="update">
-      <ShieldAlertIcon class="text-muted-foreground size-5" />
-      <span class="text-muted-foreground text-sm">
-        <template v-if="update.error">检查更新：{{ update.error }}</template>
-        <template v-else
-          >当前为开发构建（{{ update.current }}），最新发布版本为 {{ update.latest }}</template
+    <div class="flex min-w-0 flex-wrap items-center gap-3 max-sm:basis-full">
+      <template v-if="update?.newer">
+        <ArrowUpCircleIcon class="text-primary size-5" />
+        <span class="text-sm"
+          >发现新版本 <b>{{ update.latest }}</b
+          >，当前版本 {{ update.current }}</span
         >
-      </span>
-    </template>
-    <span v-else class="text-muted-foreground text-sm">正在检查更新…</span>
-    <span v-if="update" class="text-muted-foreground ml-auto text-xs"
-      >最近检查 {{ fmtAgo(update.checked_at) }}</span
-    >
-    <Button
-      variant="ghost"
-      size="sm"
-      :class="!update && 'ml-auto'"
-      :disabled="checking"
-      @click="checkUpdate(true)"
-    >
-      <RefreshCwIcon :class="checking && 'animate-spin'" /> 重新检查
-    </Button>
+        <a
+          :href="update.url"
+          target="_blank"
+          rel="noopener"
+          class="text-primary text-sm underline-offset-2 hover:underline"
+          >查看更新说明</a
+        >
+      </template>
+      <template v-else-if="update && !update.error && isRelease">
+        <CheckCircle2Icon class="text-success size-5" />
+        <span class="text-sm">已是最新版本 {{ update.current }}</span>
+      </template>
+      <template v-else-if="update?.error">
+        <CloudOffIcon class="text-warning size-5 shrink-0" />
+        <span class="text-muted-foreground min-w-0 flex-1 text-sm"
+          >检查更新：{{ update.error }}</span
+        >
+      </template>
+      <template v-else-if="update">
+        <InfoIcon class="text-muted-foreground size-5 shrink-0" />
+        <span class="text-muted-foreground min-w-0 flex-1 text-sm"
+          >当前为开发构建（{{ update.current }}），最新发布版本为 {{ update.latest }}</span
+        >
+      </template>
+      <span v-else class="text-muted-foreground text-sm">正在检查更新…</span>
+    </div>
+    <div class="flex items-center gap-3 max-sm:w-full max-sm:justify-between sm:ml-auto">
+      <span v-if="update" class="text-muted-foreground text-xs"
+        >最近检查 {{ fmtAgo(update.checked_at) }}</span
+      >
+      <Button
+        variant="ghost"
+        size="sm"
+        class="max-sm:ml-auto"
+        :disabled="checking"
+        @click="checkUpdate(true)"
+      >
+        <RefreshCwIcon :class="checking && 'animate-spin'" /> 重新检查
+      </Button>
+    </div>
   </section>
 
   <ListSkeleton v-if="!info" :rows="4" />
@@ -243,7 +258,7 @@ async function copyDiagnostics() {
       <dl class="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
         <template v-for="r in s.rows" :key="r.k">
           <dt class="text-muted-foreground">{{ r.k }}</dt>
-          <dd class="break-all" :class="r.mono && 'font-mono'">
+          <dd :class="r.mono ? 'font-mono break-all' : 'break-words'">
             <a
               v-if="r.href"
               :href="r.href"
@@ -265,7 +280,9 @@ async function copyDiagnostics() {
     </section>
 
     <section class="bg-card grid grid-cols-1 gap-3 rounded-lg border p-4 lg:col-span-2">
-      <h2 class="font-semibold">数据量</h2>
+      <h2 class="flex items-center gap-2 font-semibold">
+        <ChartColumnIcon class="text-muted-foreground size-4" />数据量
+      </h2>
       <dl class="grid grid-cols-3 gap-3 sm:grid-cols-6">
         <div v-for="c in counts" :key="c.k">
           <dt class="text-muted-foreground text-xs">{{ c.k }}</dt>

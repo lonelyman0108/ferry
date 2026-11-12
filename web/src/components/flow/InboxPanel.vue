@@ -8,9 +8,11 @@ import { itemKey, readDismissed, writeDismissed } from './inbox'
 import InboxItem from './InboxItem.vue'
 
 // 总览的收件箱：分“要处理”“提醒”两组，每条就地处理。可以折叠成一行。
+// 窄于 1280 时收件箱排在流向图上面，“提醒”组默认收起，免得把图挤出首屏；宽屏上收件箱限高、内部滚动，默认展开。
 const props = defineProps<{ items: AttentionItem[] }>()
 const emit = defineEmits<{ changed: [] }>()
 const open = defineModel<boolean>('open', { default: true })
+const noticeOpen = ref(window.matchMedia('(min-width: 1280px)').matches)
 
 const dismissed = ref(readDismissed())
 const visible = computed(() => props.items.filter((it) => !dismissed.value.has(itemKey(it))))
@@ -27,7 +29,7 @@ function dismiss(it: AttentionItem) {
 
 <template>
   <section
-    class="bg-card flex max-h-full flex-col overflow-hidden rounded-xl border shadow-lg shadow-black/5 dark:shadow-black/40"
+    class="bg-card flex max-h-full min-h-0 flex-col overflow-hidden rounded-xl border shadow-lg shadow-black/5 dark:shadow-black/40"
     aria-label="待处理"
   >
     <h2 class="shrink-0">
@@ -65,8 +67,24 @@ function dismiss(it: AttentionItem) {
         :key="group.label"
       >
         <template v-if="group.list.length">
-          <h3 class="text-muted-foreground px-4 pt-3 pb-1 text-xs">{{ group.label }}</h3>
+          <h3 v-if="group.label === '提醒'" class="text-muted-foreground text-xs">
+            <button
+              type="button"
+              class="hover:bg-accent/50 flex min-h-11 w-full items-center gap-2 px-4 text-left"
+              :class="action.length > 0 && 'border-t'"
+              :aria-expanded="noticeOpen"
+              @click="noticeOpen = !noticeOpen"
+            >
+              提醒<span class="tabular-nums">{{ group.list.length }} 条</span>
+              <ChevronDownIcon
+                class="ml-auto size-4 transition-transform"
+                :class="!noticeOpen && '-rotate-90'"
+              />
+            </button>
+          </h3>
+          <h3 v-else class="text-muted-foreground px-4 pt-3 pb-1 text-xs">{{ group.label }}</h3>
           <TransitionGroup
+            v-if="group.label !== '提醒' || noticeOpen"
             tag="ul"
             leave-active-class="transition duration-200"
             leave-to-class="opacity-0 -translate-x-3"

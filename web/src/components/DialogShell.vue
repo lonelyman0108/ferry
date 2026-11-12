@@ -75,7 +75,7 @@ const width = {
       @interact-outside.prevent
       @open-auto-focus="focusDialog"
     >
-      <!-- 头部不换行：窄屏时隐藏图标，标题截断，开关和关闭始终在右侧同一行 -->
+      <!-- 头部不换行：窄屏时隐藏图标，标题截断，开关和关闭始终在右侧同一行；说明在窄屏上最多显示两行 -->
       <div class="flex items-center gap-3 border-b px-4 py-3 sm:px-5">
         <span v-if="$slots.icon" class="flex max-sm:hidden"><slot name="icon" /></span>
         <BrandIcon v-else-if="brand" :brand="brand" class="max-sm:hidden" />
@@ -85,7 +85,10 @@ const width = {
             <span class="truncate">{{ title }}</span>
             <slot name="badges" />
           </DialogTitle>
-          <DialogDescription v-if="description || $slots.description" class="truncate">
+          <DialogDescription
+            v-if="description || $slots.description"
+            class="line-clamp-2 sm:line-clamp-none sm:truncate"
+          >
             <slot name="description">{{ description }}</slot>
           </DialogDescription>
         </div>

@@ -435,8 +435,9 @@ async function rotateKey(s: Subscription) {
           <span v-if="!preview.hostnames.length" class="text-muted-foreground text-sm">无</span>
         </div>
       </div>
+      <!-- 长行（脚本规则、hostname 列表）自动折行，不靠横向滚动，macOS 默认隐藏滚动条时也看得全 -->
       <pre
-        class="bg-muted/50 max-h-[50vh] overflow-auto rounded-lg border p-3 font-mono text-xs leading-relaxed"
+        class="bg-muted/50 max-h-[50vh] overflow-y-auto rounded-lg border p-3 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap"
         >{{ preview.content }}</pre>
     </div>
     <template #footer>

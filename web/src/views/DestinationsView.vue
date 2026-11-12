@@ -107,13 +107,15 @@ const modeOptions = [
   {
     value: 'per_identity' as const,
     label: '每个身份一条',
-    description: '按身份分别写入，备注 ferry:<来源>:<身份>',
+    description: '按身份分别写入，备注',
+    code: 'ferry:<来源>:<身份>',
     icon: SplitIcon,
   },
   {
     value: 'joined' as const,
     label: '合并为一条',
-    description: '多个身份以 & 连接，备注 ferry:<来源>',
+    description: '多个身份以 & 连接，备注',
+    code: 'ferry:<来源>',
     icon: MergeIcon,
   },
 ]
@@ -476,13 +478,20 @@ async function runPush() {
 </script>
 
 <template>
-  <PageHeader />
+  <!-- 当前标签页的主操作放在标题行右侧（与订阅页一致），手机上换到标题下方并保留文字 -->
+  <PageHeader>
+    <template #actions>
+      <Button v-if="tab === 'destinations'" @click="newDest"><PlusIcon /> 新建目的地</Button>
+      <Button v-else-if="tab === 'bindings'" @click="newBinding"><PlusIcon /> 新建推送规则</Button>
+      <Button v-else variant="outline" @click="loadPushes"><RefreshCwIcon /> 刷新</Button>
+    </template>
+  </PageHeader>
 
   <Tabs v-model="tab">
-    <!-- 手机上标签栏和右侧按钮保持同一行：标签去掉图标，仍放不下时横向滚动 -->
-    <div class="mb-2 flex flex-wrap items-center gap-2 max-sm:flex-nowrap">
+    <!-- 手机上标签去掉图标，仍放不下时横向滚动 -->
+    <div class="mb-2 flex">
       <TabsList
-        class="no-scrollbar mr-auto max-sm:min-w-0 max-sm:overflow-x-auto max-sm:[&_svg]:hidden"
+        class="no-scrollbar max-w-full max-sm:min-w-0 max-sm:overflow-x-auto max-sm:[&_svg]:hidden"
       >
         <TabsTrigger value="destinations"
           ><component :is="icons.destination" /> 目的地
@@ -500,15 +509,6 @@ async function runPush() {
         >
         <TabsTrigger value="pushes" @click="loadPushes"><HistoryIcon /> 推送记录</TabsTrigger>
       </TabsList>
-      <Button v-if="tab === 'destinations'" class="max-sm:min-w-11 max-sm:px-0" @click="newDest"
-        ><PlusIcon /><span class="max-sm:sr-only">新建目的地</span></Button
-      >
-      <Button v-else-if="tab === 'bindings'" class="max-sm:min-w-11 max-sm:px-0" @click="newBinding"
-        ><PlusIcon /><span class="max-sm:sr-only">新建推送规则</span></Button
-      >
-      <Button v-else variant="outline" class="max-sm:min-w-11 max-sm:px-0" @click="loadPushes"
-        ><RefreshCwIcon /><span class="max-sm:sr-only">刷新</span></Button
-      >
     </div>
 
     <!-- 目的地 -->
@@ -707,7 +707,8 @@ async function runPush() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow v-for="p in pushes" :key="p.id">
+            <!-- 各列顶端对齐：推送规则、状态两列会折成多行 -->
+            <TableRow v-for="p in pushes" :key="p.id" class="[&>td]:align-top">
               <TableCell class="whitespace-nowrap" :title="fmtTime(p.created_at)">{{
                 fmtAgo(p.created_at)
               }}</TableCell>
@@ -716,7 +717,7 @@ async function runPush() {
                 <div class="text-muted-foreground font-mono text-xs">
                   {{ identityKey(p.identity_id) }}
                 </div>
-                <!-- 窄屏不显示详情列，出错原因放在这里 -->
+                <!-- 窄屏不显示详情列，出错原因或推送的变量放在这里 -->
                 <div
                   v-if="p.last_error"
                   class="mt-1 text-xs wrap-break-word md:hidden"
@@ -724,24 +725,34 @@ async function runPush() {
                 >
                   {{ p.last_error }}
                 </div>
-              </TableCell>
-              <TableCell class="align-top">
-                <StatusBadge :tone="pushStates[pushStateOf(p)].tone" dot>{{
-                  pushStates[pushStateOf(p)].label
-                }}</StatusBadge>
-                <div v-if="p.attempts > 1" class="text-muted-foreground text-xs">
-                  第 {{ p.attempts }} 次
+                <div v-else-if="p.vars" class="mt-1 flex flex-wrap gap-1 text-xs md:hidden">
+                  <code
+                    v-for="v in p.vars.split(',')"
+                    :key="v"
+                    class="bg-muted rounded px-1.5 py-0.5 font-mono break-all"
+                    >{{ v }}</code
+                  >
                 </div>
-                <!-- 窄屏没有操作列，重试按钮放在状态下面 -->
-                <Button
-                  v-if="canRetry(p)"
-                  variant="outline"
-                  size="xs"
-                  class="mt-1 md:hidden"
-                  :disabled="retrying === p.id"
-                  @click="retry(p)"
-                  ><RefreshCwIcon /> 重试</Button
-                >
+              </TableCell>
+              <TableCell>
+                <div class="flex flex-col items-start gap-1">
+                  <StatusBadge :tone="pushStates[pushStateOf(p)].tone" dot>{{
+                    pushStates[pushStateOf(p)].label
+                  }}</StatusBadge>
+                  <span v-if="p.attempts > 1" class="text-muted-foreground text-xs">
+                    第 {{ p.attempts }} 次
+                  </span>
+                  <!-- 窄屏没有操作列，重试按钮放在状态下面 -->
+                  <Button
+                    v-if="canRetry(p)"
+                    variant="outline"
+                    size="xs"
+                    class="md:hidden"
+                    :disabled="retrying === p.id"
+                    @click="retry(p)"
+                    ><RefreshCwIcon /> 重试</Button
+                  >
+                </div>
               </TableCell>
               <TableCell class="hidden md:table-cell">{{
                 pushTrigger[p.trigger] ?? p.trigger
@@ -944,9 +955,18 @@ async function runPush() {
     </FormSection>
 
     <FormSection title="变量重命名" description="留空则沿用原变量名" :cols="1">
-      <div v-for="o in outputs" :key="o" class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-        <code class="bg-muted truncate rounded px-2 py-1.5 font-mono text-xs">{{ o }}</code>
-        <ArrowRightIcon class="text-muted-foreground size-4" />
+      <!-- 手机上原变量名在上、输入框在下，变量名完整显示，不截断 -->
+      <div
+        v-for="o in outputs"
+        :key="o"
+        class="grid grid-cols-1 items-center gap-1.5 sm:grid-cols-[1fr_auto_1fr] sm:gap-2"
+      >
+        <code
+          class="bg-muted justify-self-start rounded px-2 py-1.5 font-mono text-xs break-all sm:justify-self-stretch sm:truncate sm:break-normal"
+          :title="o"
+          >{{ o }}</code
+        >
+        <ArrowRightIcon class="text-muted-foreground size-4 max-sm:hidden" />
         <Input
           v-model="bindForm.rename[o]"
           :aria-label="`${o} 重命名为`"
