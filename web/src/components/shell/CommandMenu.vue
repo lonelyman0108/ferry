@@ -5,6 +5,7 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { api } from '@/api'
+import { Button } from '@/components/ui/button'
 import {
   CommandDialog,
   CommandEmpty,
@@ -12,6 +13,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandShortcut,
 } from '@/components/ui/command'
 import EntityIcon from '@/components/EntityIcon.vue'
 import { useInboxActions } from '@/components/flow/inbox'
@@ -89,37 +91,51 @@ function run(fn: () => void) {
 </script>
 
 <template>
+  <!-- 筛选按条目的文字内容匹配，不看 value（value 只用来区分条目）。类别词和别名放在带 hidden 的元素里：
+       进入文字内容、参与匹配，但不显示，也不进读屏名称。页面条目另带页面说明和 keywords，
+       搜页内标签页的名称（如通知规则、推送记录、审计日志）也能找到所在的页面。
+       副文本用 CommandShortcut：它靠右，并让 CommandItem 末尾那个不可见的勾选图标不再占位，各行副文本右端对齐。 -->
   <CommandDialog
     v-model:open="commandOpen"
     class="sm:max-w-xl"
     title="搜索与命令"
     description="搜索页面、对象或操作"
   >
-    <CommandInput placeholder="搜索页面、来源、订阅、目的地或操作…" />
+    <!-- 手机上没有 Esc 键，在输入框右侧放一个取消按钮；桌面用 Esc 或点遮罩关闭 -->
+    <div
+      class="flex items-center *:data-[slot=command-input-wrapper]:min-w-0 *:data-[slot=command-input-wrapper]:flex-1"
+    >
+      <CommandInput placeholder="搜索页面、来源、订阅、目的地或操作…" />
+      <Button variant="ghost" class="mt-1 mr-1 shrink-0 md:hidden" @click="commandOpen = false"
+        >取消</Button
+      >
+    </div>
     <CommandList class="max-h-[min(60vh,420px)]">
       <CommandEmpty>无匹配结果</CommandEmpty>
       <CommandGroup heading="操作">
-        <CommandItem value="新建来源" @select="go('/sources/new')"
+        <CommandItem value="new-source" @select="go('/sources/new')"
           ><PlusIcon /> 新建来源</CommandItem
         >
-        <CommandItem v-if="failed.length" value="重试全部失败推送" @select="retryFailed"
+        <CommandItem v-if="failed.length" value="retry-failed" @select="retryFailed"
           ><RefreshCwIcon /> 重试全部失败推送（{{ failed.length }} 条）</CommandItem
         >
-        <CommandItem value="切换深浅色 主题" @select="run(toggleTheme)"
-          ><SunIcon class="dark:hidden" /><MoonIcon class="hidden dark:block" />
-          切换深浅色</CommandItem
-        >
+        <CommandItem value="toggle-theme" @select="run(toggleTheme)">
+          <SunIcon class="dark:hidden" /><MoonIcon class="hidden dark:block" />
+          切换深浅色
+          <span hidden>主题 深色 浅色</span>
+        </CommandItem>
       </CommandGroup>
       <CommandGroup heading="页面">
         <template v-for="m in navItems" :key="m.path">
           <CommandItem
-            v-for="p in m.pages ?? [{ path: m.path, label: m.label, icon: m.icon }]"
+            v-for="p in m.pages ?? [m]"
             :key="p.path"
-            :value="`页面 ${m.label} ${p.label}`"
+            :value="`page:${p.path}`"
             @select="go(p.path)"
           >
             <component :is="p.icon ?? m.icon" />
             {{ p.label === m.label ? m.label : `${m.label} · ${p.label}` }}
+            <span hidden>页面 {{ p.description }} {{ p.keywords }}</span>
           </CommandItem>
         </template>
       </CommandGroup>
@@ -127,43 +143,58 @@ function run(fn: () => void) {
         <CommandItem
           v-for="s in sources"
           :key="s.id"
-          :value="`来源 ${s.name} ${s.key}`"
+          :value="`source:${s.id}`"
           @select="go(`/sources/${s.id}`)"
         >
-          <SourceAvatar :name="s.name" :skey="s.key" :icon="s.icon ?? ''" size="xs" />
-          {{ s.name }}
-          <span class="text-muted-foreground ml-auto font-mono text-xs">{{ s.key }}</span>
+          <SourceAvatar
+            :name="s.name"
+            :skey="s.key"
+            :icon="s.icon ?? ''"
+            :disabled="!s.enabled"
+            size="xs"
+          />
+          <span class="min-w-0 flex-1 truncate">{{ s.name }}</span>
+          <CommandShortcut class="shrink-0 font-mono tracking-normal">{{ s.key }}</CommandShortcut>
+          <span hidden>来源</span>
         </CommandItem>
       </CommandGroup>
       <CommandGroup v-if="subs.length" heading="订阅">
         <CommandItem
           v-for="s in subs"
           :key="s.id"
-          :value="`订阅 ${s.name} ${clientName(s.client)}`"
+          :value="`subscription:${s.id}`"
           @select="go(`/subscriptions/${s.id}`)"
         >
-          <EntityIcon :mark="deviceMark(s.client)" size="xs" /> {{ s.name }}
-          <span class="text-muted-foreground ml-auto text-xs">{{ clientName(s.client) }}</span>
+          <EntityIcon :mark="deviceMark(s.client)" size="xs" />
+          <span class="min-w-0 flex-1 truncate">{{ s.name }}</span>
+          <CommandShortcut class="shrink-0 tracking-normal">{{
+            clientName(s.client)
+          }}</CommandShortcut>
+          <span hidden>订阅</span>
         </CommandItem>
       </CommandGroup>
       <CommandGroup v-if="dests.length" heading="目的地">
         <CommandItem
           v-for="d in dests"
           :key="d.id"
-          :value="`目的地 ${d.name}`"
+          :value="`destination:${d.id}`"
           @select="go(`/destinations/${d.id}`)"
         >
-          <EntityIcon :mark="destMark(d.kind)" size="xs" /> {{ d.name }}
+          <EntityIcon :mark="destMark(d.kind)" size="xs" />
+          <span class="min-w-0 truncate">{{ d.name }}</span>
+          <span hidden>目的地</span>
         </CommandItem>
       </CommandGroup>
       <CommandGroup v-if="channels.length" heading="通知渠道">
         <CommandItem
           v-for="c in channels"
           :key="c.id"
-          :value="`通知渠道 ${c.name}`"
+          :value="`channel:${c.id}`"
           @select="go('/notify')"
         >
-          <EntityIcon :mark="channelMark(c.kind)" size="xs" /> {{ c.name }}
+          <EntityIcon :mark="channelMark(c.kind)" size="xs" />
+          <span class="min-w-0 truncate">{{ c.name }}</span>
+          <span hidden>通知渠道</span>
         </CommandItem>
       </CommandGroup>
     </CommandList>

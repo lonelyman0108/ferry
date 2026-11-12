@@ -10,6 +10,8 @@ export interface SubPage {
   description: string
   // 命令面板里的图标，不给时用所属导航项的
   icon?: Component
+  // 命令面板里额外的检索词，不显示：页内标签页的名称，说明里已经有的不必重复
+  keywords?: string
 }
 
 export interface NavItem {
@@ -20,6 +22,8 @@ export interface NavItem {
   icon: Component
   // 页面标题下的一句话说明
   description: string
+  // 同 SubPage.keywords
+  keywords?: string
   pages?: SubPage[]
 }
 
@@ -68,6 +72,7 @@ export const navItems: NavItem[] = [
     short: '记录',
     icon: ActivityIcon,
     description: '回传、审核、推送与通知的完整记录',
+    keywords: '时间线 审计日志',
   },
   {
     path: '/settings',
@@ -81,7 +86,12 @@ export const navItems: NavItem[] = [
         label: '访问地址',
         description: '设备拉取读取规则、回传登录态所用的地址',
       },
-      { path: '/account', label: '账户', description: '登录密码、API 令牌与深浅色' },
+      {
+        path: '/account',
+        label: '账户',
+        description: '登录密码、API 令牌与深浅色',
+        keywords: '修改密码 外观 API令牌 令牌',
+      },
       {
         path: '/settings/system',
         label: '系统信息',
