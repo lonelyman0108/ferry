@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { api } from '../api'
 import type { Overview } from '../types'
@@ -24,5 +24,15 @@ export const useOverview = defineStore('overview', () => {
     return quiet ? pending.catch(() => {}) : pending
   }
 
-  return { data, load }
+  // 顶栏状态胶囊的口径：要处理的是得动手的事（待审核、推送失败），其余算提醒。
+  const summary = computed(() => {
+    const a = data.value?.attention
+    if (!a) return null
+    return {
+      action: a.pending_review + a.push_failed,
+      notice: a.expiring + a.expired + a.outdated + a.never_connected + a.push_retrying,
+    }
+  })
+
+  return { data, load, summary }
 })
