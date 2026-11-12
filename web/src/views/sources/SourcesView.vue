@@ -289,7 +289,7 @@ async function importYAML() {
         id="yaml-text"
         v-model="yaml"
         rows="20"
-        class="font-mono text-xs"
+        class="font-mono"
         placeholder="key: example&#10;name: 示例&#10;matchers: …"
       />
     </FormField>

@@ -522,7 +522,7 @@ async function rotateKey(s: Subscription) {
           id="sub-script"
           v-model="form.script_url"
           placeholder="https://…/ferry.js"
-          class="font-mono text-xs"
+          class="font-mono"
         />
         <HintText v-if="scriptAtRisk" tone="warning">
           主地址使用 http，脚本在传输过程中可能被篡改；建议填写 https 地址（与 Ferry 版本一致的

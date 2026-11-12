@@ -167,6 +167,12 @@
   }
 }
 
+/* 弹窗打开时 reka-ui 给 body 加了 pointer-events: none，提示条渲染在弹窗之外，随之点不到；
+   提示条上有「撤销」这类操作按钮，这里单独恢复。 */
+[data-sonner-toast] {
+  pointer-events: auto;
+}
+
 /* 手机上可点的控件至少 44px 高（按钮、标签页、下拉框、输入框、菜单项），图标按钮同时至少 44px 宽；
    行内文字链接不在此列。只在窄屏生效，桌面保持紧凑。shadcn-vue 的组件源码不改，按 data-slot 统一放大。 */
 @media (max-width: 767px) {

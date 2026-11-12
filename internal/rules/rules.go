@@ -58,44 +58,59 @@ type Field struct {
 	RegexOn string
 }
 
-// Validate 检查匹配规则本身是否合法。
+// PartError 指出规则里出错的是哪一项。Part 是该项在来源定义里的键名（如 host、path、in、regex_on），
+// 调用方据此给出精确的出错位置；错误文字与 Err 相同。
+type PartError struct {
+	Part string
+	Err  error
+}
+
+func (e *PartError) Error() string { return e.Err.Error() }
+func (e *PartError) Unwrap() error { return e.Err }
+
+// Invalid 返回指向 part 这一项的错误，format 和 args 同 fmt.Errorf。
+func Invalid(part, format string, args ...any) error {
+	return &PartError{Part: part, Err: fmt.Errorf(format, args...)}
+}
+
+// Validate 检查匹配规则本身是否合法。返回的错误是 *PartError，指向 host 或 path。
 func (m Matcher) Validate() error {
 	h := strings.TrimPrefix(m.Host, "*.")
 	if h == "" || strings.ContainsAny(h, "*/: ") || strings.HasPrefix(h, ".") || strings.HasSuffix(h, ".") {
-		return fmt.Errorf("域名 %q 不合法，仅支持精确域名或 *.example.com 形式", m.Host)
+		return Invalid("host", "域名 %q 不合法，仅支持精确域名或 *.example.com 形式", m.Host)
 	}
 	if m.PathRegex != "" {
 		if _, err := regexp.Compile(m.PathRegex); err != nil {
-			return fmt.Errorf("路径正则不合法：%w", err)
+			return Invalid("path", "路径正则不合法：%w", err)
 		}
 		// 订阅里 Surge 用逗号、Loon 用空格分隔参数，正则里出现它们会让订阅解析出错。
 		if strings.ContainsAny(m.PathRegex, ", \t") {
-			return fmt.Errorf(`路径正则不能包含逗号或空白字符（订阅格式的分隔符）；逗号请写作 \x2C，空格请写作 \x20`)
+			return Invalid("path", `路径正则不能包含逗号或空白字符（订阅格式的分隔符）；逗号请写作 \x2C，空格请写作 \x20`)
 		}
 	}
 	return nil
 }
 
-// Validate 检查取值规则本身是否合法。
+// Validate 检查取值规则本身是否合法。返回的错误是 *PartError，指向 in、path 或 regex_on。
 func (f Field) Validate() error {
 	switch f.In {
 	case InHeader, InCookie, InQuery, InBodyJSON, InBodyForm:
 		if strings.TrimSpace(f.Path) == "" {
-			return fmt.Errorf("读取位置 %s 缺少 path", f.In)
+			return Invalid("path", "读取位置 %s 缺少 path", f.In)
 		}
 	case InRegex:
 		re, err := regexp.Compile(f.Path)
 		if err != nil {
-			return fmt.Errorf("读取正则不合法：%w", err)
+			return Invalid("path", "读取正则不合法：%w", err)
 		}
 		if re.NumSubexp() < 1 {
-			return fmt.Errorf("读取正则至少需要一个捕获组")
+			return Invalid("path", "读取正则至少需要一个捕获组")
 		}
 		if f.RegexOn != RegexOnURL && f.RegexOn != RegexOnBody {
-			return fmt.Errorf("regex 读取须指定 regex_on 为 url 或 body")
+			return Invalid("regex_on", "regex 读取须指定 regex_on 为 url 或 body")
 		}
 	default:
-		return fmt.Errorf("不支持的读取位置 %q", f.In)
+		return Invalid("in", "不支持的读取位置 %q", f.In)
 	}
 	return nil
 }

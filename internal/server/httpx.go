@@ -8,6 +8,8 @@ import (
 	"mime"
 	"net"
 	"net/http"
+
+	"github.com/lonelyman0108/ferry/internal/source"
 )
 
 const maxBodyBytes = 1 << 20
@@ -15,6 +17,8 @@ const maxBodyBytes = 1 << 20
 type errorBody struct {
 	Error   string   `json:"error"`
 	Details []string `json:"details,omitempty"`
+	// Problems 与 Details 一一对应，另带出错位置，界面据此把错误显示在对应的输入框下方。
+	Problems []source.Problem `json:"problems,omitempty"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
