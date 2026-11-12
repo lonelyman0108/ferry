@@ -158,6 +158,15 @@
   }
 }
 
+/* 命令面板的分组标题。CommandGroup 自带的标题样式选的是 cmdk-group-heading 属性，标题元素上并没有这个属性，
+   样式落不到标题上，标题和条目一样大、一样颜色。这里按 data-slot 补上：小一号、次要色，左边与条目的图标对齐。
+   放在 components 层，个别地方仍可用工具类覆盖。 */
+@layer components {
+  [data-slot='command-group-heading'] {
+    @apply text-muted-foreground px-2 py-1.5 text-xs font-medium;
+  }
+}
+
 /* 手机上可点的控件至少 44px 高（按钮、标签页、下拉框、输入框、菜单项），图标按钮同时至少 44px 宽；
    行内文字链接不在此列。只在窄屏生效，桌面保持紧凑。shadcn-vue 的组件源码不改，按 data-slot 统一放大。 */
 @media (max-width: 767px) {
@@ -168,6 +177,7 @@
   [data-slot='input'],
   [data-slot='dropdown-menu-item'],
   [data-slot='dropdown-menu-radio-item'],
+  [data-slot='command-item'],
   [data-slot='dropdown-menu-trigger'][data-size],
   [data-slot='alert-dialog-trigger'][data-size] {
     min-height: 2.75rem;
