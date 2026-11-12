@@ -148,18 +148,6 @@ async function logout() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter class="gap-2">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton tooltip="跳转或执行（⌘K）" @click="commandOpen = true">
-              <SearchIcon class="text-muted-foreground" />
-              <span class="text-muted-foreground">搜索与命令</span>
-              <kbd
-                class="bg-muted text-muted-foreground ml-auto rounded border px-1.5 font-mono text-xs"
-                >⌘K</kbd
-              >
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
         <div
           class="flex items-center justify-between gap-2 px-2 group-data-[collapsible=icon]:hidden"
         >
@@ -230,13 +218,13 @@ async function logout() {
           class="bg-card hover:bg-accent text-muted-foreground ml-auto hidden h-8 items-center gap-2 rounded-md border px-3 text-sm transition-colors md:inline-flex"
           @click="commandOpen = true"
         >
-          <SearchIcon class="size-4" /> 跳转或执行
+          <SearchIcon class="size-4" /> 搜索
           <kbd class="bg-muted rounded border px-1.5 font-mono text-xs">⌘K</kbd>
         </button>
         <button
           type="button"
           class="hover:bg-accent inline-flex size-10 items-center justify-center rounded-md border md:hidden"
-          aria-label="跳转或执行"
+          aria-label="搜索"
           @click="commandOpen = true"
         >
           <SearchIcon class="size-4" />
