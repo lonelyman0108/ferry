@@ -6,6 +6,8 @@ import { api } from '../api'
 export interface User {
   id: number
   username: string
+  // 服务的版本号，侧栏底部显示
+  version?: string
 }
 
 export const useAuth = defineStore('auth', () => {

@@ -85,6 +85,11 @@ export const navItems: NavItem[] = [
     pages: [
       { path: '/settings', label: '访问地址', description: '手机拉取规则、回传登录态用的地址' },
       { path: '/account', label: '账户', description: '登录密码、API 令牌与深浅色' },
+      {
+        path: '/settings/system',
+        label: '系统信息',
+        description: '版本、运行环境、数据库与配置来源',
+      },
     ],
   },
 ]
@@ -101,5 +106,8 @@ export function navFor(path: string): NavItem {
 
 // 当前地址是导航项下的哪一页。
 export function pageFor(path: string): SubPage | undefined {
-  return navFor(path).pages?.find((p) => path === p.path || path.startsWith(p.path + '/'))
+  // 子页地址可能互为前缀（/settings 与 /settings/system），取最长的那个。
+  return navFor(path)
+    .pages?.filter((p) => path === p.path || path.startsWith(p.path + '/'))
+    .sort((a, b) => b.path.length - a.path.length)[0]
 }

@@ -13,6 +13,9 @@ var (
 	Date    = "unknown"
 )
 
+// Repo 是发布版本所在的 GitHub 仓库，检查更新时用。
+const Repo = "lonelyman0108/ferry"
+
 // String 返回一行可读的构建信息。
 func String() string {
 	return fmt.Sprintf("ferry %s (commit %s, built %s, %s %s/%s)",

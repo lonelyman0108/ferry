@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/lonelyman0108/ferry/internal/auth"
+	"github.com/lonelyman0108/ferry/internal/buildinfo"
 	"github.com/lonelyman0108/ferry/internal/store"
 )
 
@@ -142,6 +143,8 @@ type loginInput struct {
 type userView struct {
 	ID       uint   `json:"id"`
 	Username string `json:"username"`
+	// Version 是服务的版本号，侧栏底部显示；只在 /auth/me 里给出。
+	Version string `json:"version,omitempty"`
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -191,7 +194,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, actorUser(u.ID), "auth.login", "", "")
 	s.setSessionCookie(w, r, raw, int(sessionTTL/time.Second))
-	writeJSON(w, http.StatusOK, userView{ID: u.ID, Username: u.Username})
+	writeJSON(w, http.StatusOK, userView{ID: u.ID, Username: u.Username, Version: buildinfo.Version})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +210,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	u := identityFrom(r.Context()).User
-	writeJSON(w, http.StatusOK, userView{ID: u.ID, Username: u.Username})
+	writeJSON(w, http.StatusOK, userView{ID: u.ID, Username: u.Username, Version: buildinfo.Version})
 }
 
 type passwordInput struct {

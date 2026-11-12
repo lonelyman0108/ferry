@@ -70,7 +70,7 @@ func serve(args []string) error {
 		*addr = cfg.Listen
 	}
 
-	app, err := server.New(server.Options{ConfigPath: *cfgPath, Config: cfg, Store: st})
+	app, err := server.New(server.Options{ConfigPath: *cfgPath, Config: cfg, Store: st, Listen: *addr})
 	if err != nil {
 		return err
 	}
