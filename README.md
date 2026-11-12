@@ -64,19 +64,16 @@ Ferry 只为一种场景而生：**本人账号、本人设备、本人的自动
 
 ## 快速开始
 
-> [!NOTE]
-> 预构建的镜像与二进制还在路上，目前从源码构建。需要 Go（版本见 `go.mod`）与 Node。
-
 ```bash
-git clone https://github.com/lonelyman0108/ferry.git && cd ferry
-(cd web && npm ci && npm run build)
-go build -tags embed_ui -o ferry ./cmd/ferry
-./ferry serve
+docker run -d --name ferry -p 8080:8080 -v ferry-data:/data ghcr.io/lonelyman0108/ferry:latest
+docker logs ferry        # 记下 setup_token=… 这一行
 ```
+
+镜像同时提供 amd64 与 arm64，Docker Hub 上是 `lonelyman0108/ferry`。想用 compose、PostgreSQL，或直接下载二进制，见 [部署与配置](docs/deployment.md)。
 
 然后四步走完第一条链路：
 
-1. **初始化** —— 日志里会打印一次性的初始化令牌；打开 `http://localhost:8080`，按向导选数据库、生成主密钥、创建管理员。
+1. **初始化** —— 打开 `http://localhost:8080`，填上日志里的初始化令牌，按向导选数据库、生成主密钥、创建管理员。
 2. **建来源** —— 从内置示例导入，或在编辑器里自己配置；贴一段样例请求，匹配与取值结果当场可见。
 3. **装订阅** —— 为手机上的代理客户端生成订阅，一键安装；之后正常打开 App，登录态就会回传。
 4. **配推送** —— 新建青龙或 Webhook 目的地，再加一条推送规则；新值生效后自动送达。
