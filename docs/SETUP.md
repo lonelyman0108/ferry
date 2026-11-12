@@ -10,6 +10,7 @@
 | 合并方式 | 只允许 squash，默认标题取 PR 标题、正文取 PR 描述；合并后自动删除分支 |
 | Auto-merge | 开启（`scripts/pr.sh` 用 `gh pr merge --auto`） |
 | Actions 令牌权限 | 默认只读；发布用的 workflow 自己声明 `contents: write`（推 GHCR 另加 `packages: write`） |
+| 私密漏洞报告 | 开启（`SECURITY.md` 指向它）：`gh api -X PUT repos/{owner}/{repo}/private-vulnerability-reporting` |
 | 提交邮箱 | 用 GitHub 的 noreply 地址（本仓 `git config user.email`），账号设置里勾选「Keep my email addresses private」 |
 
 合并选项（一次设好）：

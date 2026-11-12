@@ -1,10 +1,40 @@
-# 贡献规范
+# 参与开发
 
-本仓的提交、分支、PR 与发布规则都写在这里；钩子 `.githooks/commit-msg` 与 CI 按同一份规则校验。
+> 欢迎一起把 Ferry 打磨得更好。动手之前，请先读一遍 README 里的 [边界](README.md#边界)：新功能不能突破“本人账号、本人设备、每次回传都看得见”这三条线。
 
-## 初始化
+本文写清怎么在本地跑起来、怎么测试，以及提交、分支与 PR 的规矩；钩子 `.githooks/commit-msg` 与 CI 按同一份规则校验。
 
-克隆后执行一次 `scripts/bootstrap.sh`，它会启用 `.githooks`（`git config core.hooksPath` 应输出 `.githooks`）并检查工具。
+## 准备
+
+需要 Go（版本见 `go.mod`）和 Node（前端依赖由 `web/package-lock.json` 锁定）。克隆后执行一次：
+
+```bash
+scripts/bootstrap.sh      # 启用提交钩子（core.hooksPath = .githooks），检查工具
+scripts/check.sh          # 门禁：与 CI 完全一致；纯文档改动可用 --quick
+```
+
+## 本地开发
+
+前后端分开跑，改动即时生效：
+
+```bash
+go run ./cmd/ferry serve                         # 后端，默认 :8080
+cd web && npm install && npm run dev             # 前端，Vite 把 /api、/sub/、/script/ 转发给后端
+FERRY_API=http://127.0.0.1:8098 npm run dev      # 后端不在 8080 时指定地址
+```
+
+第一次启动会进入初始化向导，令牌打在后端日志里。
+
+## 测试
+
+| 范围 | 命令 | 说明 |
+|---|---|---|
+| 后端 | `go test ./...` | CI 只跑 SQLite |
+| 三种数据库 | `go test ./internal/store/` | 改了 `internal/store` 时，用专用的空 PostgreSQL、MySQL 库设好 `FERRY_TEST_POSTGRES_DSN`、`FERRY_TEST_MYSQL_DSN` 再跑；测试会删光库里的表，不要指向在用的库 |
+| 手机端脚本 | `node --test script/ferry.test.js` | `script/ferry.js` 只用 ES2015；改取值逻辑时同步改 `internal/rules`，并在 `internal/rules/testdata/extract_cases.json` 里加样例，两边共用 |
+| 前端 | `cd web && npm run typecheck && npm run lint` | `scripts/check.sh` 已包含 |
+
+文档里的截图来自本机测试实例和伪造数据，不要用真实账号的数据截图。
 
 ## 分支与 PR
 
@@ -39,7 +69,7 @@
 
 本仓扩展类型：无（启用时改 `.githooks/commit.conf` 的 `EXTRA_TYPES`）
 
-常用 scope：<!-- 列出本仓模块名 -->
+常用 scope：`server`、`web`、`ingest`、`store`、`source`、`sub`、`push`、`notify`、`script`、`plans`
 
 钩子是本地第一道检查，CI 会用同一份规则复核 PR 标题和合并进 main 的提交。
 
@@ -53,5 +83,5 @@
 
 ## 发布
 
-<!-- 按通用规范「各类项目的发布流水线」里本仓所属类型填写：谁打 tag、release.yml 做什么、怎么部署和回滚 -->
+推送 `vX.Y.Z` tag 后，`release.yml` 跑完整门禁、构建镜像推到 GHCR，并建 GitHub Release。镜像的 Dockerfile 还在准备中，在那之前不打版本 tag。
 版本号与 tag 只由维护者决定和打；CHANGELOG 定稿放在发布 PR（`🔖 release: vX.Y.Z`）里。
