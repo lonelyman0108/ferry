@@ -39,6 +39,21 @@ interface SetupStatus {
   needs_admin: boolean
 }
 
+// 配置文件或环境变量里已有的数据库与主密钥，向导据此回填；连接串里的密码已打码。
+interface Source {
+  from: '' | 'file' | 'env' | 'default'
+  env?: string
+}
+interface Preset {
+  driver: string
+  dsn: string
+  driver_from: Source
+  dsn_from: Source
+  master_key: boolean
+  master_key_from: Source
+  config_path: string
+}
+
 interface Step {
   id: 'token' | 'database' | 'admin' | 'endpoint' | 'review' | 'key'
   title: string
@@ -51,6 +66,15 @@ const status = ref<SetupStatus | null>(null)
 const step = ref(0)
 const busy = ref(false)
 const token = ref('')
+const preset = ref<Preset | null>(null)
+
+const sourceText = (src: Source) =>
+  src.from === 'env'
+    ? `环境变量 ${src.env}`
+    : src.from === 'file'
+      ? `配置文件 ${preset.value?.config_path ?? ''}`
+      : ''
+
 const db = reactive({ driver: 'sqlite', dsn: 'ferry.db' })
 const admin = reactive({ username: 'admin', password: '', confirm: '' })
 const endpoint = reactive({ name: '局域网', base_url: window.location.origin })
@@ -96,7 +120,7 @@ const steps = computed<Step[]>(() => {
     { id: 'endpoint', title: '访问地址', description: '手机访问地址', icon: GlobeIcon },
     { id: 'review', title: '确认', description: '核对配置', icon: ListChecksIcon },
   )
-  if (status.value?.needs_config) {
+  if (status.value?.needs_config && !preset.value?.master_key) {
     s.push({ id: 'key', title: '主密钥', description: '备份加密密钥', icon: ShieldCheckIcon })
   }
   return s
@@ -155,12 +179,32 @@ const keyCheck = useFormCheck(() => ({
   backedUp: !backedUp.value && '先把主密钥复制或下载下来，再勾选这一项',
 }))
 
-function next() {
+async function next() {
   const check = { token: tokenCheck, admin: adminCheck, endpoint: endpointCheck }[
     current.value.id as 'token' | 'admin' | 'endpoint'
   ]
   if (check && !check.ok()) return
+  if (current.value.id === 'token' && !(await loadPreset())) return
   step.value++
+}
+
+// 令牌这一步顺带取回填信息：令牌不对时就地报错，对了就把已有的数据库填进下一步。
+async function loadPreset() {
+  busy.value = true
+  try {
+    const p = (await setupApi().get<Preset>('/setup/preset')).data
+    preset.value = p
+    if (p.driver) {
+      db.driver = p.driver
+      db.dsn = p.dsn
+    }
+    return true
+  } catch (e) {
+    toast.error(wrap(e))
+    return false
+  } finally {
+    busy.value = false
+  }
 }
 
 function pickDriver(v: unknown) {
@@ -343,6 +387,13 @@ function downloadKey() {
             >
               <Input id="dsn" v-model="db.dsn" class="font-mono" autocomplete="off" />
             </FormField>
+            <p
+              v-if="preset?.driver && sourceText(preset.dsn_from)"
+              class="text-muted-foreground -mt-2 text-sm"
+            >
+              已按{{ sourceText(preset.dsn_from) }}回填，密码显示为 ••••，不改就沿用原值。
+              可以修改：保存后写进配置文件，以后以配置文件为准。
+            </p>
             <div class="flex flex-wrap items-center gap-3">
               <Button variant="outline" :disabled="busy || !db.dsn.trim()" @click="testDB">
                 <LoaderCircleIcon v-if="busy" class="animate-spin" />
@@ -416,6 +467,21 @@ function downloadKey() {
                   <div class="text-muted-foreground font-mono text-xs break-all">
                     {{ maskedDsn }}
                   </div>
+                </dd>
+              </div>
+              <div v-if="needsConfig" class="grid gap-1 px-4 py-3 sm:grid-cols-[7rem_1fr]">
+                <dt class="text-muted-foreground">主密钥</dt>
+                <dd class="min-w-0">
+                  <template v-if="preset?.master_key">
+                    沿用{{ sourceText(preset.master_key_from) }}里的主密钥
+                    <div
+                      v-if="preset.master_key_from.from === 'env'"
+                      class="text-muted-foreground text-xs"
+                    >
+                      不会写进配置文件；以后去掉这个环境变量，需要把主密钥写进配置文件
+                    </div>
+                  </template>
+                  <template v-else>完成后生成，只显示一次</template>
                 </dd>
               </div>
               <div class="grid gap-1 px-4 py-3 sm:grid-cols-[7rem_1fr]">
