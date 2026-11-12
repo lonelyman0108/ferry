@@ -151,7 +151,7 @@ onMounted(async () => {
         <TabsTrigger value="tokens"><KeyRoundIcon /> API 令牌</TabsTrigger>
         <TabsTrigger value="appearance"><PaletteIcon /> 外观</TabsTrigger>
       </TabsList>
-      <Button v-if="tab === 'tokens'" @click="openToken"
+      <Button v-if="tab === 'tokens'" class="max-sm:min-w-11 max-sm:px-0" @click="openToken"
         ><PlusIcon /><span class="max-sm:sr-only">新建令牌</span></Button
       >
     </div>

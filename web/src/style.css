@@ -164,6 +164,7 @@
   [data-slot='select-trigger'],
   [data-slot='input'],
   [data-slot='dropdown-menu-item'],
+  [data-slot='dropdown-menu-radio-item'],
   [data-slot='dropdown-menu-trigger'][data-size],
   [data-slot='alert-dialog-trigger'][data-size] {
     min-height: 2.75rem;

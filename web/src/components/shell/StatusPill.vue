@@ -12,7 +12,7 @@ const s = computed(() => overview.summary)
   <router-link
     v-if="s"
     :to="{ path: '/', query: { inbox: 'open' } }"
-    class="bg-card hover:bg-accent inline-flex h-10 min-w-0 md:h-8 items-center gap-2 rounded-md border px-3 text-sm transition-colors"
+    class="bg-card hover:bg-accent inline-flex h-11 min-w-0 items-center md:h-8 gap-2 rounded-md border px-3 text-sm transition-colors"
   >
     <span
       class="size-2 shrink-0 rounded-full"

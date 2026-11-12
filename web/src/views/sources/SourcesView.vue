@@ -213,7 +213,7 @@ async function importYAML() {
         }}</span>
         <button
           type="button"
-          class="text-primary relative z-10 ml-auto flex items-center gap-0.5 hover:underline"
+          class="text-primary focus-visible:ring-ring/50 relative z-10 ml-auto flex items-center gap-0.5 rounded-sm outline-none hover:underline focus-visible:ring-3 max-md:-my-3.5 max-md:-mr-2 max-md:min-h-11 max-md:px-2"
           @click.stop="router.push({ path: `/sources/${s.id}`, query: { edit: 'setup' } })"
         >
           接入清单<span class="sr-only">「{{ s.name }}」</span><ChevronRightIcon class="size-3.5" />
