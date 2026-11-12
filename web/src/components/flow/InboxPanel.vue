@@ -30,23 +30,25 @@ function dismiss(it: AttentionItem) {
     class="bg-card flex max-h-full flex-col overflow-hidden rounded-xl border shadow-lg shadow-black/5 dark:shadow-black/40"
     aria-label="待处理"
   >
-    <button
-      type="button"
-      class="hover:bg-accent/50 flex h-12 w-full shrink-0 items-center gap-2.5 px-4 text-left"
-      :aria-expanded="open"
-      @click="open = !open"
-    >
-      <InboxIcon class="text-muted-foreground size-4" />
-      <span class="font-semibold">待处理</span>
-      <span class="text-muted-foreground text-sm">
-        {{ action.length ? `${action.length} 项待处理` : '运行正常' }}
-        <template v-if="notice.length"> · {{ notice.length }} 条提醒</template>
-      </span>
-      <ChevronDownIcon
-        class="text-muted-foreground ml-auto size-4 transition-transform"
-        :class="!open && '-rotate-90'"
-      />
-    </button>
+    <h2 class="shrink-0">
+      <button
+        type="button"
+        class="hover:bg-accent/50 flex h-12 w-full items-center gap-2.5 px-4 text-left"
+        :aria-expanded="open"
+        @click="open = !open"
+      >
+        <InboxIcon class="text-muted-foreground size-4" />
+        <span class="font-semibold">待处理</span>
+        <span class="text-muted-foreground text-sm">
+          {{ action.length ? `${action.length} 项待处理` : '运行正常' }}
+          <template v-if="notice.length"> · {{ notice.length }} 条提醒</template>
+        </span>
+        <ChevronDownIcon
+          class="text-muted-foreground ml-auto size-4 transition-transform"
+          :class="!open && '-rotate-90'"
+        />
+      </button>
+    </h2>
     <div v-if="open" class="min-h-0 overflow-y-auto border-t">
       <div
         v-if="!visible.length"

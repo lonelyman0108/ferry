@@ -561,6 +561,7 @@ async function runPush() {
         </template>
         <template #actions>
           <RowActions
+            :name="d.name"
             :enabled="d.enabled"
             :toggling="toggling === `d${d.id}`"
             delete-title="删除目的地？"
@@ -637,6 +638,7 @@ async function runPush() {
           </template>
           <template #actions>
             <RowActions
+              :name="bindingLabel(b.id)"
               :enabled="b.enabled"
               :toggling="toggling === `b${b.id}`"
               delete-title="删除推送规则？"

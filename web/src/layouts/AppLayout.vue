@@ -61,17 +61,30 @@ const crumbs = computed(() => {
 })
 
 // 导航角标：来源是待审核的值，订阅是待更新的，推送是推送异常。切换页面时刷新，另外每分钟刷新一次。
+// 角标本身对读屏隐藏，label 以 sr-only 文字写进链接，读出来是「来源，1 个待审核」。
 const overview = useOverview()
-function badgeOf(path: string): { n: number; tone: string; dot: string } | null {
+interface Badge {
+  n: number
+  label: string
+  tone: string
+  dot: string
+}
+function badgeOf(path: string): Badge | null {
   const a = overview.data?.attention
   if (!a) return null
+  const warn = { tone: 'bg-warning/15 text-warning', dot: 'bg-warning' }
   if (path === '/sources' && a.pending_review)
-    return { n: a.pending_review, tone: 'bg-warning/15 text-warning', dot: 'bg-warning' }
+    return { n: a.pending_review, label: `${a.pending_review} 个待审核`, ...warn }
   if (path === '/subscriptions' && a.outdated)
-    return { n: a.outdated, tone: 'bg-warning/15 text-warning', dot: 'bg-warning' }
+    return { n: a.outdated, label: `${a.outdated} 个待更新`, ...warn }
   const push = a.push_failed + a.push_retrying
   if (path === '/destinations' && push)
-    return { n: push, tone: 'bg-destructive/12 text-destructive', dot: 'bg-destructive' }
+    return {
+      n: push,
+      label: `${push} 个推送异常`,
+      tone: 'bg-destructive/12 text-destructive',
+      dot: 'bg-destructive',
+    }
   return null
 }
 const items = computed(() => navItems.map((m) => ({ ...m, badge: badgeOf(m.path) })))
@@ -87,6 +100,11 @@ watch(
   () => void overview.load(),
 )
 
+// 跳到主要内容：焦点移到内容区，跳过侧栏和顶栏。不用 #锚点，免得改动地址栏。
+function skipToMain() {
+  document.getElementById('main-content')?.focus()
+}
+
 async function logout() {
   try {
     await auth.logout()
@@ -99,6 +117,12 @@ async function logout() {
 
 <template>
   <SidebarProvider>
+    <a
+      href="#main-content"
+      class="bg-background ring-ring/50 sr-only z-50 rounded-md border text-sm font-medium shadow-md ring-3 focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:px-3 focus:py-2"
+      @click.prevent="skipToMain"
+      >跳至主要内容</a
+    >
     <CloseOnNavigate />
     <CommandMenu />
     <!-- 宽屏可收窄成只显示图标（点顶栏按钮、拖侧栏边缘或按 Ctrl/⌘+B）；手机上用底部导航，不用侧栏 -->
@@ -130,11 +154,16 @@ async function logout() {
                       :is="m.icon"
                       :class="current.path === m.path ? 'text-primary' : 'text-muted-foreground'"
                     />
-                    <span>{{ m.label }}</span>
+                    <span
+                      >{{ m.label
+                      }}<span v-if="m.badge" class="sr-only">，{{ m.badge.label }}</span></span
+                    >
                   </router-link>
                 </SidebarMenuButton>
                 <template v-if="m.badge">
-                  <SidebarMenuBadge :class="m.badge.tone">{{ m.badge.n }}</SidebarMenuBadge>
+                  <SidebarMenuBadge aria-hidden="true" :class="m.badge.tone">{{
+                    m.badge.n
+                  }}</SidebarMenuBadge>
                   <!-- 侧栏收窄成图标时角标隐藏，改在图标右上角显示一个点 -->
                   <span
                     aria-hidden="true"
@@ -232,6 +261,9 @@ async function logout() {
       </header>
       <!-- 总览的画布铺满内容区，其余页面居中留边 -->
       <div
+        id="main-content"
+        tabindex="-1"
+        class="outline-none"
         :class="
           route.meta.fullBleed
             ? 'flex flex-1 flex-col'
@@ -257,12 +289,15 @@ async function logout() {
       >
         <component :is="m.icon" class="size-5" />
         {{ m.short }}
-        <span
-          v-if="m.badge"
-          aria-hidden="true"
-          class="absolute top-2 left-1/2 ml-2 size-2 rounded-full"
-          :class="m.badge.dot"
-        />
+        <template v-if="m.badge">
+          <span
+            aria-hidden="true"
+            class="text-background absolute top-1.5 left-1/2 ml-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold tabular-nums"
+            :class="m.badge.dot"
+            >{{ m.badge.n > 99 ? '99+' : m.badge.n }}</span
+          >
+          <span class="sr-only">，{{ m.badge.label }}</span>
+        </template>
       </router-link>
     </nav>
   </SidebarProvider>

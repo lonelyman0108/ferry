@@ -229,6 +229,7 @@ const legend = [
     <!-- 聚焦 -->
     <div v-else class="flex flex-1">
       <aside
+        aria-label="相关节点"
         class="hidden w-[304px] shrink-0 bg-[radial-gradient(var(--canvas-dot)_1px,transparent_1.2px)] [background-size:22px_22px] md:block"
       >
         <div class="sticky top-14 max-h-[calc(100svh-3.5rem)] overflow-y-auto p-4">
@@ -247,7 +248,7 @@ const legend = [
         enter-active-class="transition duration-300 ease-out motion-reduce:transition-none"
         enter-from-class="opacity-0 translate-x-4"
       >
-        <main
+        <div
           :key="focus.kind"
           class="bg-background min-w-0 flex-1 px-4 pt-4 pb-24 md:border-l md:px-8 md:pt-6 md:pb-12"
         >
@@ -280,7 +281,7 @@ const legend = [
             @focus="select"
             @title="(t) => (crumbTail = t)"
           />
-        </main>
+        </div>
       </Transition>
     </div>
   </div>

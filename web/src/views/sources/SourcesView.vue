@@ -23,6 +23,7 @@ import ListSkeleton from '@/components/ListSkeleton.vue'
 import SourceEditor from './SourceEditor.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RowActions from '@/components/RowActions.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { fmtAgo } from '@/format'
@@ -157,33 +158,38 @@ async function importYAML() {
     <Button variant="outline" @click="router.push('/sources/new')"><PlusIcon /> 新建来源</Button>
   </EmptyState>
 
+  <!-- 整张卡可点：标题链接的 ::after 铺满卡片，开关和「接入清单」按钮叠在它上面（relative z-10），
+       避免把交互元素套在另一个可点元素里 -->
   <div v-else-if="list" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
     <div
       v-for="s in list"
       :key="s.id"
-      role="link"
-      tabindex="0"
-      class="group bg-card ring-foreground/10 hover:ring-primary/40 focus-visible:ring-ring flex cursor-pointer flex-col gap-4 rounded-xl p-4 text-left ring-1 transition outline-none hover:shadow-sm"
-      @click="router.push(`/sources/${s.id}`)"
-      @keydown.enter="router.push(`/sources/${s.id}`)"
+      class="bg-card ring-foreground/10 hover:ring-primary/40 has-[[data-card-link]:focus-visible]:ring-ring/50 relative flex flex-col gap-4 rounded-xl p-4 text-left ring-1 transition hover:shadow-sm has-[[data-card-link]:focus-visible]:ring-3"
     >
       <div class="flex items-start gap-3">
         <IconTile :icon="BoxesIcon" :tone="s.enabled ? 'violet' : 'neutral'" />
-        <div class="min-w-0 flex-1" :class="s.enabled ? '' : 'opacity-60'">
-          <div class="truncate font-semibold">{{ s.name }}</div>
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 items-center gap-2">
+            <router-link
+              :to="`/sources/${s.id}`"
+              data-card-link
+              class="truncate font-semibold outline-none after:absolute after:inset-0 after:rounded-xl"
+              >{{ s.name }}</router-link
+            >
+            <StatusBadge v-if="!s.enabled" dot>已停用</StatusBadge>
+          </div>
           <div class="text-muted-foreground truncate font-mono text-xs">{{ s.key }}</div>
         </div>
         <RowActions
+          :name="s.name"
           :enabled="s.enabled"
           :editable="false"
           :toggling="toggling === s.id"
+          class="relative z-10"
           @toggle="(v) => toggle(s, v)"
         />
       </div>
-      <div
-        class="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs"
-        :class="s.enabled ? '' : 'opacity-60'"
-      >
+      <div class="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
         <span class="flex items-center gap-1"
           ><RouteIcon class="size-3.5" />{{ s.matchers }} 条匹配规则</span
         >
@@ -207,10 +213,10 @@ async function importYAML() {
         }}</span>
         <button
           type="button"
-          class="text-primary ml-auto flex items-center gap-0.5 hover:underline"
+          class="text-primary relative z-10 ml-auto flex items-center gap-0.5 hover:underline"
           @click.stop="router.push({ path: `/sources/${s.id}`, query: { edit: 'setup' } })"
         >
-          接入清单<ChevronRightIcon class="size-3.5" />
+          接入清单<span class="sr-only">「{{ s.name }}」</span><ChevronRightIcon class="size-3.5" />
         </button>
       </div>
     </div>

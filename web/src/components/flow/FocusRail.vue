@@ -96,9 +96,9 @@ watch(
     </button>
 
     <section v-if="groups.up.length" class="grid gap-2">
-      <h3 class="text-muted-foreground flex justify-between text-xs">
+      <p class="text-muted-foreground flex justify-between text-xs">
         {{ groups.upLabel }}<span>{{ groups.up.length }}</span>
-      </h3>
+      </p>
       <FlowNode
         v-for="n in groups.up"
         :key="n.key"
@@ -114,7 +114,7 @@ watch(
     </section>
 
     <section v-if="current" class="grid gap-2">
-      <h3 class="text-muted-foreground text-xs">{{ currentLabel[kind] }}</h3>
+      <p class="text-muted-foreground text-xs">{{ currentLabel[kind] }}</p>
       <FlowNode
         :data-node="current.key"
         :icon="current.icon"
@@ -129,9 +129,9 @@ watch(
     </section>
 
     <section v-if="groups.down.length" class="grid gap-2">
-      <h3 class="text-muted-foreground flex justify-between text-xs">
+      <p class="text-muted-foreground flex justify-between text-xs">
         {{ groups.downLabel }}<span>{{ groups.down.length }}</span>
-      </h3>
+      </p>
       <FlowNode
         v-for="n in groups.down"
         :key="n.key"

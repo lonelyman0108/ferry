@@ -5,7 +5,8 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import type { Tone } from '@/lib/tone'
 
 // 流向图上的一张节点卡：图标、名称、副标题、状态徽章，下面一排概要数字。
-// 左右两侧的小圆点是连线的端口；line 是窄屏上替代连线的一句去向说明。
+// 左右两侧的小圆点是连线的端口；line 是窄屏上替代连线的一句去向说明，宽屏上画了连线，只留给读屏。
+// selected 表示当前页面就是这个对象，此时不是按钮，点了也不跳转。
 defineProps<{
   icon: Component
   title: string
@@ -23,14 +24,17 @@ defineEmits<{ select: [] }>()
 </script>
 
 <template>
-  <button
-    type="button"
-    class="group/node bg-card hover:border-ring/60 focus-visible:ring-ring/50 relative block w-full rounded-lg border px-3 py-2.5 text-left transition-[border-color,box-shadow] outline-none focus-visible:ring-[3px]"
+  <component
+    :is="selected ? 'div' : 'button'"
+    v-bind="selected ? { 'aria-current': 'page' } : { type: 'button' }"
+    class="bg-card relative block w-full rounded-lg border px-3 py-2.5 text-left"
     :class="[
       muted && 'border-dashed bg-transparent',
-      selected && 'border-primary ring-primary/20 ring-[3px]',
+      selected
+        ? 'border-primary ring-primary/20 ring-[3px]'
+        : 'hover:border-ring/60 focus-visible:ring-ring/50 transition-[border-color,box-shadow] outline-none focus-visible:ring-[3px]',
     ]"
-    @click="$emit('select')"
+    @click="!selected && $emit('select')"
   >
     <span
       v-if="portLeft"
@@ -72,6 +76,6 @@ defineEmits<{ select: [] }>()
         >
       </span>
     </span>
-    <span v-if="line" class="text-muted-foreground mt-2 block text-sm md:hidden">{{ line }}</span>
-  </button>
+    <span v-if="line" class="text-muted-foreground mt-2 block text-sm md:sr-only">{{ line }}</span>
+  </component>
 </template>

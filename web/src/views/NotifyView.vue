@@ -397,6 +397,7 @@ function secretHint(key: string, fallback = '') {
         </template>
         <template #actions>
           <RowActions
+            :name="c.name"
             :enabled="c.enabled"
             :toggling="toggling === `c${c.id}`"
             delete-title="删除通知渠道？"
@@ -449,6 +450,7 @@ function secretHint(key: string, fallback = '') {
         </template>
         <template #actions>
           <RowActions
+            :name="r.name"
             :enabled="r.enabled"
             :toggling="toggling === `r${r.id}`"
             delete-title="删除通知规则？"

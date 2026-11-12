@@ -125,6 +125,7 @@ onMounted(async () => {
         </template>
         <template #actions>
           <RowActions
+            :name="e.name"
             delete-title="删除访问地址？"
             delete-description="被订阅使用的访问地址无法删除。"
             @edit="editEndpoint(e)"
