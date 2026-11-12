@@ -56,6 +56,14 @@ jobs:
             exit 0
           fi
           scripts/ci/docker-release.sh --notes .notes-hub.md "$GITHUB_REF_NAME"
+      # GHCR 页面的介绍读的是多架构索引上的注解，共享的发布脚本不加，这里补上；上面两步已经登录好
+      - name: 镜像说明
+        env:
+          HAS_HUB: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+        run: |
+          images=(ghcr.io/lonelyman0108/ferry)
+          [ "$HAS_HUB" != true ] || images+=(docker.io/lonelyman0108/ferry)
+          scripts/image-annotate.sh "$GITHUB_REF_NAME" "${images[@]}"
       - name: 二进制
         run: scripts/build-binaries.sh "${GITHUB_REF_NAME#v}" dist
       - name: Release 页

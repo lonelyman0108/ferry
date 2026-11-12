@@ -30,6 +30,13 @@ RUN commit=$(cat .build-commit 2>/dev/null || echo unknown) \
 
 # distroless：自带 CA 证书和时区数据，没有 shell；以 nonroot（65532）运行。
 FROM gcr.io/distroless/static-debian12:nonroot
+ARG VERSION=dev
+# 单个架构镜像上的说明；多架构索引上的同名注解由发布流程的 scripts/image-annotate.sh 补上，GHCR 页面读的是后者。
+LABEL org.opencontainers.image.title="Ferry" \
+      org.opencontainers.image.description="登录态的摆渡人：在本人手机上接住 App 的登录态，校验、留档，再送进青龙等自动化任务。" \
+      org.opencontainers.image.source="https://github.com/lonelyman0108/ferry" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.version="$VERSION"
 COPY --from=build /out/ferry /usr/local/bin/ferry
 COPY --from=build --chown=65532:65532 /out/data /data
 # 数据都在 /data：配置文件 /data/ferry.yaml；向导里 SQLite 填相对路径时也落在这里。
