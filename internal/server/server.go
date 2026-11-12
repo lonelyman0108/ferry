@@ -152,6 +152,7 @@ func (s *Server) Handler() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireSetupToken)
 			r.Post("/setup/database", s.handleSetupTestDatabase)
+			r.Get("/setup/preset", s.handleSetupPreset)
 			r.Post("/setup", s.handleSetup)
 		})
 

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -72,6 +73,60 @@ func (d databaseInput) config() config.Database {
 	return config.Database{Driver: strings.TrimSpace(d.Driver), DSN: strings.TrimSpace(d.DSN)}
 }
 
+// resolve 把向导回填的打码连接串换回原值：驱动没变、连接串和打码后的一模一样，说明用户没改。
+func (s *Server) resolve(d databaseInput) config.Database {
+	db := d.config()
+	s.mu.RLock()
+	pre := s.cfg.Database
+	s.mu.RUnlock()
+	if pre.DSN != "" && db.Driver == pre.Driver && db.DSN == maskDSN(pre.DSN) {
+		db.DSN = pre.DSN
+	}
+	return db
+}
+
+var (
+	// URL 写法 scheme://user:pass@host 与 go-sql-driver 写法 user:pass@tcp(host) 里的密码
+	dsnURLPassword   = regexp.MustCompile(`(://[^:/@]*):[^@/]*@`)
+	dsnMySQLPassword = regexp.MustCompile(`^([^:/@]*):[^@]*@`)
+	// key=value 写法里的 password=...
+	dsnKVPassword = regexp.MustCompile(`(?i)(password=)('[^']*'|\S+)`)
+)
+
+// maskDSN 把连接串里的密码换成 ••••，回填给向导时用，密码本身不发给浏览器。
+func maskDSN(dsn string) string {
+	if strings.Contains(dsn, "://") {
+		return dsnURLPassword.ReplaceAllString(dsn, "$1:••••@")
+	}
+	dsn = dsnMySQLPassword.ReplaceAllString(dsn, "$1:••••@")
+	return dsnKVPassword.ReplaceAllString(dsn, "${1}••••")
+}
+
+// setupPreset 是向导回填用的已有配置：来自配置文件或环境变量的数据库与主密钥。
+type setupPreset struct {
+	Driver     string        `json:"driver"`
+	DSN        string        `json:"dsn"`
+	DriverFrom config.Source `json:"driver_from"`
+	DSNFrom    config.Source `json:"dsn_from"`
+	// MasterKey 只说明有没有、从哪里来，不给值。
+	MasterKey     bool          `json:"master_key"`
+	MasterKeyFrom config.Source `json:"master_key_from"`
+	ConfigPath    string        `json:"config_path"`
+}
+
+// handleSetupPreset 返回回填信息。凭向导令牌才能看，连接串里的密码打码。
+func (s *Server) handleSetupPreset(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	c := s.cfg
+	s.mu.RUnlock()
+	writeJSON(w, http.StatusOK, setupPreset{
+		Driver: c.Database.Driver, DSN: maskDSN(c.Database.DSN),
+		DriverFrom: c.Sources.Driver, DSNFrom: c.Sources.DSN,
+		MasterKey: c.MasterKey != "", MasterKeyFrom: c.Sources.MasterKey,
+		ConfigPath: s.configPath,
+	})
+}
+
 // openAndMigrate 连接数据库、测连通并建表；失败时关闭连接。
 func openAndMigrate(db config.Database) (*store.Store, error) {
 	st, err := store.Open(db)
@@ -98,7 +153,7 @@ func (s *Server) handleSetupTestDatabase(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusConflict, "数据库已配置")
 		return
 	}
-	st, err := store.Open(in.config())
+	st, err := store.Open(s.resolve(in))
 	if err == nil {
 		err = st.Ping()
 		_ = st.Close()
@@ -171,15 +226,22 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "缺少数据库配置")
 			return
 		}
-		key, err := secret.GenerateKey()
-		if err != nil {
-			s.internalError(w, r, err)
-			return
-		}
+		// 已经由配置文件或环境变量给出主密钥时沿用它，不再生成，也不在响应里返回。
 		newCfg = &config.Config{
 			Listen:    s.cfg.Listen,
-			Database:  in.Database.config(),
-			MasterKey: base64.StdEncoding.EncodeToString(key),
+			Database:  s.resolve(*in.Database),
+			MasterKey: s.cfg.MasterKey,
+			Sources:   s.cfg.Sources,
+		}
+		generated := newCfg.MasterKey == ""
+		if generated {
+			key, err := secret.GenerateKey()
+			if err != nil {
+				s.internalError(w, r, err)
+				return
+			}
+			newCfg.MasterKey = base64.StdEncoding.EncodeToString(key)
+			newCfg.Sources.MasterKey = config.Source{From: config.SourceFile}
 		}
 		if err := newCfg.Validate(); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -196,10 +258,14 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 			s.internalError(w, r, err)
 			return
 		}
+		newCfg.Sources.Driver = config.Source{From: config.SourceFile}
+		newCfg.Sources.DSN = config.Source{From: config.SourceFile}
 		s.mu.Lock()
 		s.cfg, s.st, s.ownsStore = newCfg, st, true
 		s.mu.Unlock()
-		result.MasterKey = newCfg.MasterKey
+		if generated {
+			result.MasterKey = newCfg.MasterKey
+		}
 		result.ConfigPath = s.configPath
 	} else if in.Database != nil {
 		writeError(w, http.StatusBadRequest, "数据库已经由配置给出，不能在向导里修改")
