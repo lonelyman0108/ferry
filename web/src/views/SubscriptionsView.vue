@@ -106,6 +106,8 @@ const sealedSwitch = computed({
 })
 const endpointURL = (id: number | null) => endpoints.value.find((e) => e.id === id)?.base_url ?? ''
 const isHTTP = (id: number | null) => endpointURL(id).startsWith('http://')
+// 主地址是 http、又没有另填脚本地址时，脚本本身也走明文
+const scriptAtRisk = computed(() => isHTTP(form.endpoint_id) && !form.script_url.trim())
 
 const clientOptions = clients.map((c) => ({ ...c, brand: c.value }))
 const endpointName = (id: number | null) => endpoints.value.find((e) => e.id === id)?.name ?? '—'
@@ -125,17 +127,22 @@ async function load() {
     toast.error(errorText(e))
   }
 }
-// 从总览的收件箱带 ?install=<订阅 ID> 进来时，直接打开那个订阅的安装引导。
+// 从总览的收件箱带 ?install=<订阅 ID> 进来时，直接打开那个订阅的安装引导；
+// 从订阅详情带 ?edit=<订阅 ID> 进来时，直接打开它的编辑表单。打开后把参数从地址里去掉，刷新不会重复打开。
 const route = useRoute()
 const router = useRouter()
 onMounted(async () => {
   await load()
-  const id = Number(route.query.install)
-  const target = id ? list.value?.find((s) => s.id === id) : undefined
-  if (target) {
-    installFor.value = target
-    void router.replace({ query: { ...route.query, install: undefined } })
+  const pick = (key: 'install' | 'edit') => {
+    const id = Number(route.query[key])
+    return id ? list.value?.find((s) => s.id === id) : undefined
   }
+  const install = pick('install')
+  const edit = pick('edit')
+  if (install) installFor.value = install
+  else if (edit) openEdit(edit)
+  if (route.query.install || route.query.edit)
+    void router.replace({ query: { ...route.query, install: undefined, edit: undefined } })
 })
 
 const noEndpoints = '暂无访问地址，请在“系统设置”中添加'
@@ -329,9 +336,12 @@ async function rotateKey(s: Subscription) {
     <ListRow v-for="s in list" :key="s.id">
       <template #icon><BrandIcon :brand="s.client" /></template>
       <template #title
-        ><router-link :to="`/subscriptions/${s.id}`" class="hover:underline" title="查看链路">{{
-          s.name
-        }}</router-link></template
+        ><router-link
+          :to="`/subscriptions/${s.id}`"
+          data-row-link
+          class="outline-none after:absolute after:inset-0 after:rounded-xl"
+          >{{ s.name }}</router-link
+        ></template
       >
       <template #badges>
         <StatusBadge :tone="subscriptionStatus[s.status].tone" dot>{{
@@ -506,11 +516,7 @@ async function rotateKey(s: Subscription) {
         for="sub-script"
         optional
         full
-        :hint="
-          isHTTP(form.endpoint_id) && !form.script_url.trim()
-            ? '主地址使用 http，脚本在传输过程中可能被篡改；建议填写 https 地址（与 Ferry 版本一致的 ferry.js）'
-            : '留空时使用主地址下的 /script/ferry.js'
-        "
+        :hint="scriptAtRisk ? '' : '留空时使用主地址下的 /script/ferry.js'"
       >
         <Input
           id="sub-script"
@@ -518,6 +524,10 @@ async function rotateKey(s: Subscription) {
           placeholder="https://…/ferry.js"
           class="font-mono text-xs"
         />
+        <HintText v-if="scriptAtRisk" tone="warning">
+          主地址使用 http，脚本在传输过程中可能被篡改；建议填写 https 地址（与 Ferry 版本一致的
+          ferry.js）。
+        </HintText>
       </FormField>
     </FormSection>
 
@@ -530,13 +540,16 @@ async function rotateKey(s: Subscription) {
         ><Switch v-model="sealedSwitch" :disabled="!supportsSealed(form.client)" />
         加密回传内容（访问地址为 http 时，内容也无法被读取或篡改）</Label
       >
-      <HintText v-if="!supportsSealed(form.client)">
+      <HintText
+        v-if="!supportsSealed(form.client)"
+        :tone="isHTTP(form.endpoint_id) ? 'warning' : 'info'"
+      >
         Quantumult X 不支持模块参数，无法配置传输密钥，仅支持明文传输；建议使用 https 访问地址。
       </HintText>
       <HintText v-else-if="form.transport_mode === 'sealed'">
         保存后将打开安装引导，按步骤将传输密钥填入客户端的模块参数。
       </HintText>
-      <HintText v-else-if="isHTTP(form.endpoint_id)">
+      <HintText v-else-if="isHTTP(form.endpoint_id)" tone="warning">
         主地址使用 http，未加密时同一网络中的其他设备可读取回传的登录态。
       </HintText>
       <HintText v-if="editing && changedMode">

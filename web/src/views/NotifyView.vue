@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowRightIcon, PlusIcon, SendHorizontalIcon } from '@lucide/vue'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 
 import { api, errorText } from '@/api'
@@ -38,8 +38,14 @@ const channels = ref<Channel[]>([])
 const rules = ref<NotifyRule[]>([])
 const sources = ref<SourceSummary[]>([])
 const busy = ref(false)
-// 可以用 ?tab=rules 直接打开通知规则（总览的“下一步”会跳过来）。
-const tab = ref(useRoute().query.tab === 'rules' ? 'rules' : 'channels')
+// 当前标签页放在地址里（?tab=rules），刷新、分享链接时保留；总览的“下一步”也靠它直接打开通知规则。
+const route = useRoute()
+const router = useRouter()
+const tab = computed({
+  get: () => (route.query.tab === 'rules' ? 'rules' : 'channels'),
+  set: (v: string) =>
+    void router.replace({ query: { ...route.query, tab: v === 'rules' ? 'rules' : undefined } }),
+})
 
 const kindTone = { bark: 'amber', telegram: 'sky', webhook: 'sky' } as const
 const kindOptions = [
@@ -71,6 +77,8 @@ const channelName = (id: number) => channels.value.find((c) => c.id === id)?.nam
 // 规则里可能还留着已删除渠道的 id，显示和保存时只认现有的渠道。
 const liveChannels = (ids: number[]) => ids.filter((id) => channels.value.some((c) => c.id === id))
 const sourceName = (k: string) => sources.value.find((s) => s.key === k)?.name ?? k
+// 引用这个渠道的通知规则数；为 0 时这个渠道不会发出任何通知，和目的地的推送规则数同一种写法。
+const rulesOf = (c: Channel) => rules.value.filter((r) => r.channel_ids.includes(c.id)).length
 
 async function load() {
   try {
@@ -380,7 +388,10 @@ function secretHint(key: string, fallback = '') {
         </template>
         <template #title>{{ c.name }}</template>
         <template #badges>
+          <StatusBadge v-if="!c.enabled" dot>已停用</StatusBadge>
           <StatusBadge :tone="kindTone[c.kind]">{{ channelKinds[c.kind] }}</StatusBadge>
+          <StatusBadge v-if="rulesOf(c)" tone="neutral">{{ rulesOf(c) }} 条通知规则</StatusBadge>
+          <StatusBadge v-else tone="warning">未关联通知规则</StatusBadge>
         </template>
         <template #description>
           <span class="font-mono break-all">{{ channelSummary(c) }}</span>
@@ -424,6 +435,9 @@ function secretHint(key: string, fallback = '') {
       <ListRow v-for="r in rules" :key="r.id" :dim="!r.enabled">
         <template #icon><IconTile :icon="icons.notifyRules" /></template>
         <template #title>{{ r.name }}</template>
+        <template v-if="!r.enabled" #badges>
+          <StatusBadge dot>已停用</StatusBadge>
+        </template>
         <template #description>
           <span class="flex w-full flex-wrap gap-1">
             <StatusBadge v-for="e in r.events" :key="e" :tone="eventTone(e)" dot>{{

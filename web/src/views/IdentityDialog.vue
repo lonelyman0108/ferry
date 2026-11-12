@@ -14,14 +14,13 @@ import {
   XIcon,
 } from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { toast } from 'vue-sonner'
 
 import { api, errorText } from '@/api'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import DialogShell from '@/components/DialogShell.vue'
 import EntityIcon from '@/components/EntityIcon.vue'
-import IconTile from '@/components/IconTile.vue'
 import ListSkeleton from '@/components/ListSkeleton.vue'
 import SectionHeading from '@/components/SectionHeading.vue'
 import SourceAvatar from '@/components/SourceAvatar.vue'
@@ -36,14 +35,18 @@ import {
   type Identity,
   type IdentityPush,
   type PushJob,
+  pushErrored,
   pushStateOf,
   pushStates,
   type Version,
   versionStatus,
 } from '@/types'
 
-// 登录态的详情，是列表页上的弹窗（和来源编辑器一样），地址 /data/:id 可直接打开。
-const props = defineProps<{ id: string }>()
+// 登录态的详情，是来源详情上的弹窗（和来源编辑器一样），地址带 ?identity=<ID> 可直接打开。
+// 上面是各字段的当前值，下面的历史值只列当前值以外的版本（旧值、待审核、已驳回），不再重复当前值。
+// 字段有待审核的值时，当前值卡片上给出“前往审核”，切到这个字段的历史并定位到第一条待审核。
+// sourceEnabled 是所属来源是否启用，登录态接口不带这一项，由打开弹窗的来源详情传入，停用时头像灰显。
+const props = defineProps<{ id: string; sourceEnabled?: boolean }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
 
 const identity = ref<Identity | null>(null)
@@ -55,6 +58,7 @@ const busy = ref(false)
 const wide = useMediaQuery('(min-width: 640px)')
 
 const fieldName = (key: string) => identity.value?.fields?.find((f) => f.key === key)?.name || key
+const history = computed(() => versions.value.filter((v) => !v.current))
 const pendingTotal = computed(() =>
   (identity.value?.fields ?? []).reduce((n, f) => n + f.pending, 0),
 )
@@ -122,6 +126,17 @@ async function pickField(v: string | number) {
   }
 }
 
+// 前往审核：切到这个字段的历史，滚到第一条待审核，焦点放在它的“通过”上。
+const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+async function goReview(key: string) {
+  await pickField(key)
+  await nextTick()
+  const card = document.querySelector<HTMLElement>('[data-pending-review]')
+  if (!card) return
+  card.scrollIntoView({ block: 'center', behavior: reduceMotion.value ? 'auto' : 'smooth' })
+  card.querySelector<HTMLElement>('[data-approve]')?.focus({ preventScroll: true })
+}
+
 // 原值只在点了“显示”之后才向后端要，后端会写一条审计。
 async function toggleReveal(v: Version) {
   if (revealed[v.id] !== undefined) {
@@ -185,7 +200,11 @@ function shown(v: Version) {
     @close="emit('close')"
   >
     <template v-if="identity" #icon>
-      <SourceAvatar :name="identity.source_name" :skey="identity.source_key" />
+      <SourceAvatar
+        :name="identity.source_name"
+        :skey="identity.source_key"
+        :disabled="sourceEnabled === false"
+      />
     </template>
     <template #badges>
       <span v-if="identity" class="text-muted-foreground font-mono text-sm font-normal">{{
@@ -212,7 +231,6 @@ function shown(v: Version) {
           :class="f.current ? '' : 'border border-dashed ring-0'"
         >
           <CardHeader class="flex flex-wrap items-center gap-2">
-            <IconTile :icon="KeyRoundIcon" size="sm" />
             <CardTitle>{{ f.name || f.key }}</CardTitle>
             <span
               v-if="secondaryKey(f.name, f.key)"
@@ -240,6 +258,15 @@ function shown(v: Version) {
                 >
                   <EyeOffIcon v-if="revealed[f.current.id] !== undefined" /><EyeIcon v-else />
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  :aria-label="`复制${f.name || f.key}的原值`"
+                  title="复制原值"
+                  @click="copyValue(f.current)"
+                >
+                  <CopyIcon />
+                </Button>
               </div>
               <div class="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
                 <span class="flex items-center gap-1"
@@ -251,6 +278,11 @@ function shown(v: Version) {
               </div>
             </template>
             <span v-else class="text-muted-foreground">暂无生效值</span>
+            <div v-if="f.pending">
+              <Button variant="outline" size="sm" @click="goReview(f.key)"
+                ><ShieldAlertIcon /> 前往审核</Button
+              >
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -259,7 +291,7 @@ function shown(v: Version) {
         <template #actions>
           <router-link
             :to="{ path: '/destinations', query: { tab: 'bindings', source: identity.source_key } }"
-            class="text-primary text-sm underline-offset-2 hover:underline"
+            class="text-primary text-sm underline-offset-2 hover:underline max-md:relative max-md:-my-3 max-md:-mr-2 max-md:flex max-md:min-h-11 max-md:items-center max-md:px-2"
             >管理推送规则</router-link
           >
         </template>
@@ -289,9 +321,7 @@ function shown(v: Version) {
             <p
               v-if="p.last?.last_error"
               class="mt-1 text-xs break-all"
-              :class="
-                pushStateOf(p.last) === 'skipped' ? 'text-muted-foreground' : 'text-destructive'
-              "
+              :class="pushErrored(p.last) ? 'text-destructive' : 'text-muted-foreground'"
             >
               {{ p.last.last_error }}
             </p>
@@ -308,7 +338,7 @@ function shown(v: Version) {
       <p v-else class="text-muted-foreground mb-8 text-sm">
         该来源暂无推送规则，可在
         <router-link
-          :to="{ path: `/sources/${identity.source_id}`, query: { section: 'setup' } }"
+          :to="{ path: `/sources/${identity.source_id}`, query: { edit: 'setup' } }"
           class="text-primary underline-offset-2 hover:underline"
           >接入清单</router-link
         >
@@ -329,17 +359,21 @@ function shown(v: Version) {
       </SectionHeading>
 
       <ol class="relative ml-1.5 grid gap-3 border-l-2 pl-6">
-        <li v-for="v in versions" :key="v.id" class="relative">
+        <li
+          v-for="v in history"
+          :key="v.id"
+          class="relative scroll-mt-4"
+          :data-pending-review="v.status === 'pending_review' ? '' : undefined"
+        >
           <span
             class="ring-background absolute top-4 -left-[1.95rem] size-3 rounded-full ring-4"
-            :class="toneDot[v.current ? 'success' : (versionStatus[v.status]?.tone ?? 'neutral')]"
+            :class="toneDot[versionStatus[v.status]?.tone ?? 'neutral']"
           />
-          <Card size="sm" :class="v.current ? 'ring-primary/40 ring-2' : ''">
+          <Card size="sm">
             <CardContent class="grid gap-2 text-sm">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="font-medium">{{ fieldName(v.field) }}</span>
-                <StatusBadge v-if="v.current" tone="success" :icon="CheckIcon">生效中</StatusBadge>
-                <StatusBadge v-else :tone="versionStatus[v.status]?.tone ?? 'neutral'" dot>{{
+                <StatusBadge :tone="versionStatus[v.status]?.tone ?? 'neutral'" dot>{{
                   versionStatus[v.status]?.label ?? v.status
                 }}</StatusBadge>
                 <span class="text-muted-foreground ml-auto text-xs" :title="fmtTime(v.created_at)">
@@ -383,12 +417,17 @@ function shown(v: Version) {
                 <div class="ml-auto flex gap-1">
                   <Button variant="ghost" size="xs" @click="copyValue(v)"><CopyIcon /> 复制</Button>
                   <template v-if="v.status === 'pending_review'">
-                    <Button size="xs" :disabled="busy" @click="act(v, 'approve', '已通过')">
+                    <Button
+                      size="sm"
+                      data-approve
+                      :disabled="busy"
+                      @click="act(v, 'approve', '已通过')"
+                    >
                       <CheckIcon /> 通过
                     </Button>
                     <Button
                       variant="destructive"
-                      size="xs"
+                      size="sm"
                       :disabled="busy"
                       @click="act(v, 'reject', '已驳回')"
                     >
@@ -396,7 +435,7 @@ function shown(v: Version) {
                     </Button>
                   </template>
                   <ConfirmButton
-                    v-else-if="v.status === 'valid' && !v.current"
+                    v-else-if="v.status === 'valid'"
                     title="恢复此值？"
                     description="设为当前值，并按推送规则重新推送。"
                     confirm-text="恢复"
@@ -412,7 +451,7 @@ function shown(v: Version) {
             </CardContent>
           </Card>
         </li>
-        <li v-if="!versions.length" class="text-muted-foreground text-sm">暂无历史值</li>
+        <li v-if="!history.length" class="text-muted-foreground text-sm">暂无历史值</li>
       </ol>
       <div v-if="more" class="mt-3">
         <Button variant="outline" @click="loadVersions(true)">加载更多</Button>

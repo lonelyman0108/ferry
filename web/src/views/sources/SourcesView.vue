@@ -17,6 +17,7 @@ import DialogShell from '@/components/DialogShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import FormField from '@/components/FormField.vue'
 import FormDialog from '@/components/FormDialog.vue'
+import { type Badge, sourceAlerts } from '@/components/flow/nodes'
 import ListSkeleton from '@/components/ListSkeleton.vue'
 import SourceEditor from './SourceEditor.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -56,6 +57,15 @@ const subs = ref<Subscription[]>([])
 const subsOf = (s: SourceSummary) =>
   subs.value.filter((x) => x.all_sources || x.source_keys.includes(s.key)).length
 const statOf = (s: SourceSummary) => overview.data?.sources.find((x) => x.id === s.id)
+// 要处理的事（推送失败、待审核、已过期）和流向图节点同一口径；卡片上没有过期时间，即将过期也单独标出。
+// 侧栏“来源”的角标数的就是这些，点卡片进详情，详情顶部列出具体是哪个身份的哪个值。
+function alertsOf(s: SourceSummary): Badge[] {
+  const st = statOf(s)
+  if (!st) return []
+  const out = sourceAlerts(st)
+  if (st.expiring && !st.expired) out.push({ label: '即将过期', tone: 'warning' })
+  return out
+}
 
 async function load() {
   try {
@@ -181,6 +191,11 @@ async function importYAML() {
             <StatusBadge v-if="!s.enabled" dot>已停用</StatusBadge>
           </div>
           <div class="text-muted-foreground truncate font-mono text-xs">{{ s.key }}</div>
+          <div v-if="alertsOf(s).length" class="mt-2 flex flex-wrap gap-1.5">
+            <StatusBadge v-for="b in alertsOf(s)" :key="b.label" :tone="b.tone" dot>{{
+              b.label
+            }}</StatusBadge>
+          </div>
         </div>
         <RowActions
           :name="s.name"

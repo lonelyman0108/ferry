@@ -63,15 +63,18 @@ import {
 const route = useRoute()
 const router = useRouter()
 const overview = useOverview()
-// 可以用 ?tab= 直接打开某个标签页（总览上的推送异常会跳到推送记录）。
+// 当前标签页放在地址里（?tab=），刷新、分享链接时保留；从来源详情带着来源筛选进来时默认是推送规则。
+// 切换标签页总是写出 tab，否则带着来源筛选时切回“目的地”会又落回推送规则。
 const tabs = ['destinations', 'bindings', 'pushes']
-const tab = ref(
-  typeof route.query.tab === 'string' && tabs.includes(route.query.tab)
-    ? route.query.tab
-    : route.query.source
-      ? 'bindings'
-      : 'destinations',
-)
+const tab = computed({
+  get: () =>
+    typeof route.query.tab === 'string' && tabs.includes(route.query.tab)
+      ? route.query.tab
+      : route.query.source
+        ? 'bindings'
+        : 'destinations',
+  set: (v: string) => void router.replace({ query: { ...route.query, tab: v } }),
+})
 // 来源筛选按来源标识放在地址里，推送规则和推送记录共用；从来源、身份详情跳过来时直接带上。
 const sourceFilter = computed({
   get: () => (typeof route.query.source === 'string' ? route.query.source : ''),
@@ -129,6 +132,9 @@ const bindingLabel = (id: number) => {
   const b = bindings.value.find((x) => x.id === id)
   return b ? `${sourceName(b.source_id)} → ${destName(b.destination_id)}` : `推送规则 #${id}`
 }
+// 推到这个目的地的推送规则数；为 0 时不会有任何推送，和通知渠道的规则数同一种写法。
+const bindingsOf = (d: Destination) =>
+  bindings.value.filter((b) => b.destination_id === d.id).length
 const shownBindings = computed(() =>
   sourceFilter.value
     ? bindings.value.filter((b) => b.source_id === filteredSourceID.value)
@@ -154,25 +160,38 @@ async function load() {
     loaded.value = true
   }
 }
-onMounted(load)
+// 从目的地详情带 ?edit=<目的地 ID> 进来时，直接打开它的编辑表单，打开后把参数从地址里去掉。
+onMounted(async () => {
+  await load()
+  const id = Number(route.query.edit)
+  const target = id ? dests.value.find((d) => d.id === id) : undefined
+  if (target) editDest(target)
+  if (route.query.edit) void router.replace({ query: { ...route.query, edit: undefined } })
+})
 
-// 推送记录的筛选：状态可以从地址带过来（总览上的推送失败、等待重试会跳过来），目的地在页面上选，来源和推送规则共用。
-const pushFilter = reactive({
-  status: typeof route.query.status === 'string' ? route.query.status : '',
-  destination: 0,
+// 推送记录的筛选也放在地址里：状态（?status=）、目的地（?destination=<ID>，目的地详情的“全部记录”会带上），
+// 来源和推送规则共用。
+const statusFilter = computed({
+  get: () => (typeof route.query.status === 'string' ? route.query.status : ''),
+  set: (v: string) => void router.replace({ query: { ...route.query, status: v || undefined } }),
+})
+const destFilter = computed({
+  get: () => Number(route.query.destination) || 0,
+  set: (v: number) =>
+    void router.replace({ query: { ...route.query, destination: v ? String(v) : undefined } }),
 })
 async function loadPushes() {
   try {
     const params: Record<string, string | number> = {}
-    if (pushFilter.status) params.status = pushFilter.status
-    if (pushFilter.destination) params.destination = pushFilter.destination
+    if (statusFilter.value) params.status = statusFilter.value
+    if (destFilter.value) params.destination = destFilter.value
     if (sourceFilter.value) params.source = sourceFilter.value
     pushes.value = (await api.get<PushJob[]>('/pushes', { params })).data
   } catch (e) {
     toast.error(errorText(e))
   }
 }
-watch([pushFilter, sourceFilter], loadPushes)
+watch([statusFilter, destFilter, sourceFilter], loadPushes)
 
 // 立即重试：等待重试的马上执行，失败或跳过的重新排一次；结果直接提示。
 function toastPush(job: PushJob) {
@@ -528,17 +547,22 @@ async function runPush() {
           <EntityIcon :mark="destMark(d.kind)" />
         </template>
         <template #title
-          ><router-link :to="`/destinations/${d.id}`" class="hover:underline" title="查看链路">{{
-            d.name
-          }}</router-link></template
+          ><router-link
+            :to="`/destinations/${d.id}`"
+            data-row-link
+            class="outline-none after:absolute after:inset-0 after:rounded-xl"
+            >{{ d.name }}</router-link
+          ></template
         >
         <template #badges>
+          <StatusBadge v-if="!d.enabled" dot>已停用</StatusBadge>
           <StatusBadge :tone="d.kind === 'qinglong' ? 'emerald' : 'sky'">{{
             destinationKinds[d.kind]
           }}</StatusBadge>
-          <StatusBadge tone="neutral"
-            >{{ bindings.filter((b) => b.destination_id === d.id).length }} 条推送规则</StatusBadge
+          <StatusBadge v-if="bindingsOf(d)" tone="neutral"
+            >{{ bindingsOf(d) }} 条推送规则</StatusBadge
           >
+          <StatusBadge v-else tone="warning">未关联推送规则</StatusBadge>
           <StatusBadge v-if="d.problems" tone="danger" dot>{{ d.problems }} 个推送异常</StatusBadge>
         </template>
         <template #description>
@@ -634,6 +658,7 @@ async function runPush() {
             >
           </template>
           <template #badges>
+            <StatusBadge v-if="!b.enabled" dot>已停用</StatusBadge>
             <StatusBadge :tone="b.mode === 'joined' ? 'indigo' : 'sky'">{{
               bindingModes[b.mode]
             }}</StatusBadge>
@@ -641,7 +666,7 @@ async function runPush() {
           <template #description>
             <template v-if="Object.keys(b.rename).length">
               <span v-for="(to, from) in b.rename" :key="from" class="font-mono"
-                ><span class="opacity-70">{{ from }}</span> → {{ to }}</span
+                >{{ from }} → {{ to }}</span
               >
             </template>
             <span v-else>沿用原变量名</span>
@@ -672,7 +697,7 @@ async function runPush() {
         <HintText class="mr-auto"
           >显示最近 100 条记录。失败的任务将自动重试，也可手动立即重试。</HintText
         >
-        <NativeSelect v-model="pushFilter.status" aria-label="按状态筛选">
+        <NativeSelect v-model="statusFilter" aria-label="按状态筛选">
           <NativeSelectOption value="">全部状态</NativeSelectOption>
           <NativeSelectOption value="failed">失败</NativeSelectOption>
           <NativeSelectOption value="retrying">等待重试</NativeSelectOption>
@@ -680,7 +705,7 @@ async function runPush() {
           <NativeSelectOption value="skipped">跳过</NativeSelectOption>
           <NativeSelectOption value="queued">排队中</NativeSelectOption>
         </NativeSelect>
-        <NativeSelect v-model.number="pushFilter.destination" aria-label="按目的地筛选">
+        <NativeSelect v-model.number="destFilter" aria-label="按目的地筛选">
           <NativeSelectOption :value="0">全部目的地</NativeSelectOption>
           <NativeSelectOption v-for="d in dests" :key="d.id" :value="d.id">{{
             d.name

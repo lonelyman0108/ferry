@@ -8,13 +8,13 @@ import { api, errorText } from '@/api'
 import ActivityList from '@/components/flow/ActivityList.vue'
 import { clientName } from '@/components/flow/inbox'
 import InboxItem from '@/components/flow/InboxItem.vue'
-import { deviceBadges, destStates, isSoon } from '@/components/flow/nodes'
+import { bindingBadges, deviceBadges, destStates, isSoon } from '@/components/flow/nodes'
 import EntityIcon from '@/components/EntityIcon.vue'
 import SourceAvatar from '@/components/SourceAvatar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { fmtAgo, fmtTime, fmtUntil } from '@/format'
+import { fmtAgo, fmtTime, fmtUntil, secondaryKey } from '@/format'
 import { destMark, deviceMark, icons } from '@/lib/icons'
 import IdentityDialog from '@/views/IdentityDialog.vue'
 import SourceEditor from '@/views/sources/SourceEditor.vue'
@@ -24,6 +24,7 @@ import {
   type IdentityPush,
   type Lane,
   type PushJob,
+  pushErrored,
   pushStates,
 } from '@/types'
 
@@ -32,6 +33,7 @@ import SummaryCells from './SummaryCells.vue'
 
 // 来源详情：从手机到目的地，这个来源的整条链路。左栏是身份、当前值和推送，右栏是订阅、收集中的回传和最近记录。
 // 地址上带 ?edit=<分区> 时打开读取规则编辑器，带 ?identity=<ID> 时打开那个身份的历史与审核。
+// 左侧聚焦窄栏显示时（容器 focus 够宽），覆盖此来源的订阅已经列在栏里，详情不再重复列出。
 const props = defineProps<{ id: number }>()
 const emit = defineEmits<{ changed: []; focus: [kind: 'device', id: number]; title: [string] }>()
 
@@ -252,8 +254,13 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
                 :key="f.key"
                 class="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_auto] items-baseline gap-3"
               >
-                <dt class="text-muted-foreground truncate font-mono" :title="f.name">
-                  {{ f.key }}
+                <dt class="text-muted-foreground min-w-0">
+                  <span class="block truncate">{{ f.name || f.key }}</span>
+                  <span
+                    v-if="secondaryKey(f.name, f.key)"
+                    class="block truncate font-mono text-xs"
+                    >{{ f.key }}</span
+                  >
                 </dt>
                 <dd class="font-mono [overflow-wrap:anywhere]">
                   {{ f.current?.value ?? '—' }}
@@ -294,8 +301,8 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
                 </Button>
                 <span
                   v-if="p.last?.last_error && p.last.status !== 'success'"
-                  class="text-destructive col-span-2 truncate pl-5 text-xs"
-                  :title="p.last.last_error"
+                  class="col-span-2 pl-5 text-xs [overflow-wrap:anywhere]"
+                  :class="pushErrored(p.last) ? 'text-destructive' : 'text-muted-foreground'"
                   >{{ p.last.last_error }}</span
                 >
               </li>
@@ -307,23 +314,25 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
           <template #aside>
             <router-link
               :to="{ path: '/destinations', query: { tab: 'bindings', source: src.key } }"
-              class="text-primary text-sm underline-offset-2 hover:underline"
+              class="text-primary text-sm underline-offset-2 hover:underline max-md:relative max-md:-my-3 max-md:-mr-2 max-md:flex max-md:min-h-11 max-md:items-center max-md:px-2"
               >管理推送规则</router-link
             >
           </template>
           <p v-if="!lane.bindings.length" class="text-muted-foreground text-sm">
             暂无推送规则。登录态仅保存在 Ferry 中，不推送至任何目的地。
           </p>
-          <ul v-else class="bg-card divide-y rounded-lg border">
+          <!-- 整行可点：目的地名的 ::after 铺满一行，「立即重试」和出错原因叠在它上面（relative z-10） -->
+          <ul v-else class="bg-card divide-y overflow-hidden rounded-lg border">
             <li
               v-for="b in lane.bindings"
               :key="b.id"
-              class="flex flex-wrap items-center gap-2 p-3"
+              class="has-[[data-row-link]:hover]:bg-accent/50 has-[[data-row-link]:focus-visible]:ring-ring/50 relative flex flex-wrap items-center gap-2 p-3 has-[[data-row-link]:focus-visible]:ring-3 has-[[data-row-link]:focus-visible]:ring-inset"
             >
               <EntityIcon :mark="destMark(b.destination_kind)" size="xs" />
               <button
                 type="button"
-                class="font-medium hover:underline"
+                data-row-link
+                class="text-left font-medium outline-none after:absolute after:inset-0"
                 @click="router.push(`/destinations/${b.destination_id}`)"
               >
                 {{ b.destination_name }}
@@ -331,9 +340,8 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
               <span class="text-muted-foreground text-xs">{{
                 bindingModes[b.mode as keyof typeof bindingModes] ?? b.mode
               }}</span>
-              <StatusBadge v-if="!b.enabled" tone="neutral" dot>已停用</StatusBadge>
-              <StatusBadge v-else-if="b.state" :tone="destStates[b.state]!.tone" dot>{{
-                destStates[b.state]!.label
+              <StatusBadge v-for="x in bindingBadges(b)" :key="x.label" :tone="x.tone" dot>{{
+                x.label
               }}</StatusBadge>
               <span v-if="b.last_at" class="text-muted-foreground text-xs">{{
                 fmtAgo(b.last_at)
@@ -341,7 +349,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
               <Button
                 v-if="b.push_id && (b.state === 'failed' || b.state === 'retrying')"
                 size="sm"
-                class="ml-auto"
+                class="relative z-10 ml-auto"
                 :disabled="!!busy"
                 @click="retry(b.push_id, b.destination_name)"
               >
@@ -349,7 +357,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
               </Button>
               <p
                 v-if="b.last_error && (b.state === 'failed' || b.state === 'retrying')"
-                class="text-destructive w-full text-sm break-words"
+                class="text-destructive relative z-10 w-full text-sm break-words"
               >
                 {{ b.last_error }}
               </p>
@@ -359,7 +367,11 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
       </div>
 
       <div class="grid grid-cols-1 content-start gap-8">
-        <DetailSection title="覆盖此来源的订阅" :aside="`${lane.devices.length} 台`">
+        <DetailSection
+          title="覆盖此来源的订阅"
+          :aside="`${lane.devices.length} 台`"
+          class="@4xl/focus:hidden"
+        >
           <p v-if="!lane.devices.length" class="text-muted-foreground text-sm">
             暂无覆盖此来源的订阅。
           </p>
@@ -411,8 +423,8 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
         <DetailSection title="最近记录">
           <template #aside>
             <router-link
-              :to="{ path: '/activity', query: { source: String(src.id) } }"
-              class="text-primary text-sm underline-offset-2 hover:underline"
+              :to="{ path: '/activity', query: { source: src.key } }"
+              class="text-primary text-sm underline-offset-2 hover:underline max-md:relative max-md:-my-3 max-md:-mr-2 max-md:flex max-md:min-h-11 max-md:items-center max-md:px-2"
               >全部记录</router-link
             >
           </template>
@@ -435,6 +447,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
     v-if="identityOpen"
     :id="identityOpen"
     :key="`identity-${identityOpen}`"
+    :source-enabled="src?.enabled"
     @close="setQuery({ identity: undefined })"
     @changed="refresh"
   />

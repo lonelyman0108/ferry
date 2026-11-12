@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { QrCodeIcon, SettingsIcon } from '@lucide/vue'
+import { PencilIcon, QrCodeIcon } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -25,6 +25,8 @@ import DetailSection from './DetailSection.vue'
 import SummaryCells from './SummaryCells.vue'
 
 // 设备（订阅）详情：安装与连通状态、传输方式、覆盖的来源、手机上要放行的域名。
+// 安装状态只写在标题的徽章上，概要数字不再重复。左侧聚焦窄栏显示时，覆盖的来源已经列在栏里，详情不再列出。
+// 编辑订阅在订阅页的列表上进行，带 ?edit=<ID> 跳过去直接打开编辑表单。
 const props = defineProps<{ id: number }>()
 const emit = defineEmits<{ changed: []; focus: [kind: 'source', id: number]; title: [string] }>()
 
@@ -67,22 +69,18 @@ const items = computed(() =>
   (overview.data?.items ?? []).filter((it) => it.subscription_id === props.id),
 )
 
-const statusText = { connected: '已连通', installed: '已安装', not_installed: '未安装' }
 const summary = computed(() => {
   const s = sub.value
   if (!s) return []
   return [
+    { label: '最近连接', value: fmtAgo(s.last_seen_at) },
     {
-      label: '状态',
-      value: statusText[s.status],
+      label: '下载订阅',
+      value: fmtAgo(s.file_fetched_at),
       sub: s.outdated ? 'MITM 域名已变更，需更新订阅' : undefined,
+      tone: s.outdated ? ('warning' as const) : undefined,
     },
     { label: '传输方式', value: s.transport_mode === 'sealed' ? '加密' : '明文' },
-    {
-      label: '最近连接',
-      value: fmtAgo(s.last_seen_at),
-      sub: s.file_fetched_at ? `最近下载订阅 ${fmtAgo(s.file_fetched_at)}` : undefined,
-    },
     {
       label: '覆盖来源',
       value: s.all_sources ? `全部（${covered.value.length} 个）` : `${covered.value.length} 个`,
@@ -121,8 +119,11 @@ async function onUpdated() {
         </p>
       </div>
       <div class="flex w-full flex-wrap gap-2 sm:w-auto">
-        <Button variant="outline" size="sm" @click="router.push('/subscriptions')"
-          ><SettingsIcon /> 在订阅页管理</Button
+        <Button
+          variant="outline"
+          size="sm"
+          @click="router.push({ path: '/subscriptions', query: { edit: String(sub.id) } })"
+          ><PencilIcon /> 编辑订阅</Button
         >
         <Button size="sm" @click="installing = true"><QrCodeIcon /> 安装引导</Button>
       </div>
@@ -141,8 +142,8 @@ async function onUpdated() {
       </div>
     </section>
 
-    <div class="grid grid-cols-1 gap-8 @3xl:grid-cols-2">
-      <DetailSection title="覆盖的来源" :aside="`${covered.length} 个`">
+    <div class="grid grid-cols-1 gap-8 @3xl:grid-cols-2 @4xl/focus:grid-cols-1">
+      <DetailSection title="覆盖的来源" :aside="`${covered.length} 个`" class="@4xl/focus:hidden">
         <ul class="bg-card divide-y rounded-lg border">
           <li v-for="s in covered" :key="s.id">
             <button

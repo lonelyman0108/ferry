@@ -1,11 +1,12 @@
 import { computed } from 'vue'
 
 import { destMark, deviceMark, type Mark, sourceMark } from '@/lib/icons'
-import type { Flow } from '@/types'
+import type { Flow, FlowBinding } from '@/types'
 
 import { clientName } from './inbox'
 import {
   type Badge,
+  bindingBadges,
   bindingState,
   coverState,
   destBadges,
@@ -18,6 +19,8 @@ import {
 
 // 聚焦时和当前对象直接相关的节点：来源的上游是覆盖它的订阅、下游是它推到的目的地；
 // 设备只有下游（它覆盖的来源）；目的地只有上游（推到它的来源）。窄栏和手机上的横向链路共用。
+// 两端由推送规则相连时，相关节点的徽章写这条规则的状态，不写节点整体的状态：目的地页上某个来源
+// 推到别处失败了，不该在这里显示成推送失败（详情里这条规则是正常的）。
 export interface RailNode {
   key: string
   kind: FocusKind
@@ -46,6 +49,11 @@ export function useRelated(flow: () => Flow, kind: () => FocusKind, id: () => nu
       muted: d.status === 'not_installed',
       edge,
     }
+  }
+
+  // 经推送规则相连的来源或目的地节点，muted 即这个节点停用。
+  function viaBinding(node: RailNode | null, b: FlowBinding): RailNode | null {
+    return node && { ...node, badges: bindingBadges(b, !node.muted) }
   }
 
   function sourceNode(id: number, edge?: EdgeState): RailNode | null {
@@ -100,7 +108,7 @@ export function useRelated(flow: () => Flow, kind: () => FocusKind, id: () => nu
         .map((d) => deviceNode(d.id, coverState(f, d, id())))
       const down = f.bindings
         .filter((b) => b.source_id === id())
-        .map((b) => destNode(b.destination_id, bindingState(f, b)))
+        .map((b) => viaBinding(destNode(b.destination_id, bindingState(f, b)), b))
       return {
         up: nonNull(up),
         upLabel: '覆盖此来源的订阅',
@@ -117,7 +125,7 @@ export function useRelated(flow: () => Flow, kind: () => FocusKind, id: () => nu
     }
     const up = f.bindings
       .filter((b) => b.destination_id === id())
-      .map((b) => sourceNode(b.source_id, bindingState(f, b)))
+      .map((b) => viaBinding(sourceNode(b.source_id, bindingState(f, b)), b))
     return { up: nonNull(up), upLabel: '推送至此的来源', down: [], downLabel: '' }
   })
 

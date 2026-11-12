@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ArrowRightIcon, CheckIcon, RefreshCwIcon, XIcon } from '@lucide/vue'
 import { computed, ref } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,9 @@ import type { AttentionItem } from '@/types'
 
 import { clientName, itemLabels, useInboxActions } from './inbox'
 
-// 收件箱里的一条，带就地操作。处理成功后发 done，由外面刷新数据；「知道了」发 dismiss。
+// 收件箱里的一条，带就地操作。处理成功后发 done，由外面刷新数据；「忽略」发 dismiss。
+// 对象名（订阅、来源、目的地）链到各自的聚焦页；已经在那一页时（详情顶部的待处理事项）只显示文字。
+// 手机上链接撑到 44px 高，负 margin 抵掉多出的高度，行高不变；relative 让它盖在下一行文字上，整块都能点中。
 const props = defineProps<{ item: AttentionItem }>()
 const emit = defineEmits<{ done: []; dismiss: [] }>()
 
@@ -27,11 +30,24 @@ async function run(fn: () => Promise<boolean>) {
   }
 }
 
+const route = useRoute()
+const linkTo = (path: string) => (route.path === path ? undefined : path)
+
 const who = computed(() => {
   const it = props.item
-  if (it.subscription_id) return `${it.subscription_name} · ${clientName(it.client)}`
-  return it.source_name ?? ''
+  if (it.subscription_id)
+    return {
+      text: `${it.subscription_name} · ${clientName(it.client)}`,
+      to: linkTo(`/subscriptions/${it.subscription_id}`),
+    }
+  return {
+    text: it.source_name ?? '',
+    to: it.source_id ? linkTo(`/sources/${it.source_id}`) : undefined,
+  }
 })
+const destTo = computed(() =>
+  props.item.destination_id ? linkTo(`/destinations/${props.item.destination_id}`) : undefined,
+)
 const identity = computed(() =>
   props.item.identity_key && props.item.identity_key !== 'default' ? props.item.identity_key : '',
 )
@@ -41,10 +57,22 @@ const identity = computed(() =>
   <div class="grid gap-1.5">
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
       <StatusBadge :tone="meta.tone">{{ meta.label }}</StatusBadge>
-      <span class="font-medium">{{ who }}</span>
+      <RouterLink
+        v-if="who.to"
+        :to="who.to"
+        class="font-medium underline-offset-2 hover:underline max-md:relative max-md:-my-2.5 max-md:flex max-md:min-h-11 max-md:items-center"
+        >{{ who.text }}</RouterLink
+      >
+      <span v-else class="font-medium">{{ who.text }}</span>
       <template v-if="item.destination_name">
         <ArrowRightIcon class="text-muted-foreground size-3.5" aria-label="推送至" />
-        <span class="font-medium">{{ item.destination_name }}</span>
+        <RouterLink
+          v-if="destTo"
+          :to="destTo"
+          class="font-medium underline-offset-2 hover:underline max-md:relative max-md:-my-2.5 max-md:flex max-md:min-h-11 max-md:items-center"
+          >{{ item.destination_name }}</RouterLink
+        >
+        <span v-else class="font-medium">{{ item.destination_name }}</span>
       </template>
     </div>
 
@@ -92,7 +120,9 @@ const identity = computed(() =>
         <Button size="sm" :disabled="busy" @click="run(() => actions.retry(item))"
           ><RefreshCwIcon :class="busy && 'animate-spin'" /> 立即重试</Button
         >
-        <Button size="sm" variant="outline" @click="actions.openDestination()">查看目的地</Button>
+        <Button v-if="destTo" size="sm" variant="outline" @click="$router.push(destTo)"
+          >查看目的地</Button
+        >
       </template>
       <template v-else-if="item.kind === 'outdated'">
         <Button size="sm" variant="outline" @click="actions.openInstall(item)"

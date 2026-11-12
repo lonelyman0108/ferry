@@ -22,6 +22,8 @@ import {
 
 // 三列流向图：设备（订阅）→ 来源 → 目的地。连线画在一层 SVG 上，端点位置按节点卡实际渲染的位置量出来。
 // 线型表示通不通：实线正常，红虚线失败，琥珀虚线等待重试，灰虚线没连通或没推过。
+// 停用的来源不接设备连线。未连通的设备到各来源的灰点线平时不画（设备卡上的徽章已经写明未连通），
+// 悬停或聚焦这台设备、或它覆盖的某个来源时才画出来，免得几台设备的点线在两列之间缠成一团。
 // 图例放在图的右上角，占正常文档流，不压节点；summary 插槽接在图例末尾，放总数之类的补充说明。
 // 按图本身的宽度切换（容器变体 @flow:，即三列的最小宽度，不看视口）：不够宽时不画线、不显示图例，
 // 三列上下排，每张卡用一句话写去向（够宽时这句话留给读屏），summary 单独占图上方一行。
@@ -36,6 +38,8 @@ interface Edge {
   to: string
   state: EdgeState
   label?: string
+  // 只在悬停或聚焦到两端之一时才画
+  lazy?: boolean
 }
 
 const sources = computed(() =>
@@ -51,12 +55,14 @@ const edges = computed<Edge[]>(() => {
   const out: Edge[] = []
   for (const d of devices.value)
     for (const sid of d.source_ids) {
-      if (!sourceOn.value.has(sid)) continue
+      if (!sourceOn.value.get(sid)) continue
+      const state = coverState(props.flow, d, sid)
       out.push({
         id: `c${d.id}-${sid}`,
         from: `dev-${d.id}`,
         to: `src-${sid}`,
-        state: coverState(props.flow, d, sid),
+        state,
+        lazy: state === 'idle',
       })
     }
   for (const b of props.flow.bindings) {
@@ -131,6 +137,8 @@ function focusOn(node: string) {
 
 const paths = computed(() =>
   edges.value.flatMap((e) => {
+    const hl = focus.value === e.from || focus.value === e.to
+    if (e.lazy && !hl) return []
     const a = ports.value.get(e.from)
     const b = ports.value.get(e.to)
     if (!a || !b) return []
@@ -144,7 +152,7 @@ const paths = computed(() =>
         mid: [(x1 + x2) / 2, (y1 + y2) / 2] as [number, number],
         // 两列靠得太近时不放线上的字，红虚线和目的地上的徽章已经说明了
         label: x2 - x1 >= 96 ? e.label : undefined,
-        hl: focus.value === e.from || focus.value === e.to,
+        hl,
       },
     ]
   }),
@@ -285,13 +293,6 @@ const paths = computed(() =>
             port-left
             @select="emit('select', 'destination', d.id)"
           />
-          <p
-            v-if="d.enabled && (d.state === 'failed' || d.state === 'retrying') && d.last_error"
-            class="text-destructive mt-1 hidden truncate px-1 text-xs @flow:block"
-            :title="d.last_error"
-          >
-            {{ d.last_error }}
-          </p>
         </div>
       </section>
     </div>

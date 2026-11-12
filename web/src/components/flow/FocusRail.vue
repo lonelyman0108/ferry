@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronLeftIcon, LayoutGridIcon } from '@lucide/vue'
+import { ChevronLeftIcon } from '@lucide/vue'
 import { useResizeObserver } from '@vueuse/core'
 import { nextTick, onMounted, ref, watch } from 'vue'
 
@@ -10,7 +10,7 @@ import { type EdgeState, edgeClass, type FocusKind, sourceMeta } from './nodes'
 import { useRelated } from './related'
 
 // 聚焦时的窄栏：只留和当前对象直接相关的节点，上游在上、下游在下，连线走卡片右侧的通道，互不交叉。
-// 其余节点收成一个胶囊，点了回全图。
+// 其余节点不显示，底部只写一句数量；回全图用顶部的按钮。
 const props = defineProps<{ flow: Flow; kind: FocusKind; id: number }>()
 const emit = defineEmits<{ select: [kind: FocusKind, id: number]; back: [] }>()
 
@@ -146,14 +146,6 @@ watch(
       />
     </section>
 
-    <button
-      v-if="hidden > 0"
-      type="button"
-      class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-left text-sm"
-      @click="emit('back')"
-    >
-      <LayoutGridIcon class="size-4 shrink-0" />
-      已收起 {{ hidden }} 个节点，点击返回全图
-    </button>
+    <p v-if="hidden > 0" class="text-muted-foreground text-xs">另有 {{ hidden }} 个节点未显示</p>
   </div>
 </template>

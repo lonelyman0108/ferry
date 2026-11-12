@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { CheckCheckIcon, DownloadIcon } from '@lucide/vue'
 
+import StatusBadge from '@/components/StatusBadge.vue'
 import { fmtAgo, fmtTime } from '@/format'
 import { icons } from '@/lib/icons'
+import type { Tone } from '@/lib/tone'
 import type { ActivityItem } from '@/types'
 
-// 记录时间线：回传、审核、推送、通知按时间倒序。结果用圆点颜色和文字一起表示。
+// 记录时间线：回传、审核、推送、通知按时间倒序。图标角上的圆点表示结果；异常和失败另在标题后加徽章，
+// 不只靠颜色区分，成功不加徽章（只给读屏一句“成功”），列表保持安静。
+// 推送成功时详情是推了哪些变量（后端用逗号连接），拆开逐个显示，长变量名不会在中间断开。
 // compact 用在详情里，不显示来源名（都是同一个来源）。
 defineProps<{ items: ActivityItem[]; compact?: boolean }>()
 
@@ -15,12 +19,14 @@ const kindIcons = {
   push: icons.push,
   notify: icons.notify,
 }
-const outcome: Record<string, { dot: string; label: string }> = {
+const outcome: Record<string, { dot: string; label: string; badge?: Tone }> = {
   success: { dot: 'bg-success', label: '成功' },
-  warning: { dot: 'bg-warning', label: '异常' },
-  failure: { dot: 'bg-destructive', label: '失败' },
+  warning: { dot: 'bg-warning', label: '异常', badge: 'warning' },
+  failure: { dot: 'bg-destructive', label: '失败', badge: 'danger' },
   '': { dot: 'bg-muted-foreground/50', label: '' },
 }
+const varsOf = (it: ActivityItem) =>
+  it.kind === 'push' && it.outcome === 'success' && it.detail ? it.detail.split(',') : null
 const who = (it: ActivityItem, compact?: boolean) =>
   [
     compact ? '' : it.source_name,
@@ -55,7 +61,10 @@ const who = (it: ActivityItem, compact?: boolean) =>
       <div class="min-w-0">
         <p class="flex flex-wrap items-baseline gap-x-2 text-sm">
           <span class="font-medium">{{ it.title }}</span>
-          <span v-if="outcome[it.outcome]?.label" class="sr-only">{{
+          <StatusBadge v-if="outcome[it.outcome]?.badge" :tone="outcome[it.outcome]!.badge">{{
+            outcome[it.outcome]!.label
+          }}</StatusBadge>
+          <span v-else-if="outcome[it.outcome]?.label" class="sr-only">{{
             outcome[it.outcome]?.label
           }}</span>
           <span class="text-muted-foreground text-xs" :title="fmtTime(it.at)">{{
@@ -63,8 +72,16 @@ const who = (it: ActivityItem, compact?: boolean) =>
           }}</span>
         </p>
         <p v-if="who(it, compact)" class="text-muted-foreground text-xs">{{ who(it, compact) }}</p>
+        <div v-if="varsOf(it)" class="mt-1 flex flex-wrap gap-1 text-xs">
+          <code
+            v-for="v in varsOf(it)"
+            :key="v"
+            class="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono [overflow-wrap:anywhere]"
+            >{{ v }}</code
+          >
+        </div>
         <p
-          v-if="it.detail"
+          v-else-if="it.detail"
           class="text-sm break-words"
           :class="it.outcome === 'failure' ? 'text-destructive' : 'text-muted-foreground'"
         >
