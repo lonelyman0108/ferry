@@ -35,7 +35,16 @@ const router = createRouter({
         { path: 'subscriptions', component: () => import('./views/SubscriptionsView.vue') },
         { path: 'destinations', component: () => import('./views/DestinationsView.vue') },
         { path: 'notify', component: () => import('./views/NotifyView.vue') },
-        { path: 'settings', component: () => import('./views/SettingsView.vue') },
+        { path: 'activity', component: () => import('./views/ActivityView.vue') },
+        {
+          path: 'settings',
+          component: () => import('./views/SettingsView.vue'),
+          // 审计日志搬到了记录页
+          beforeEnter: (to) =>
+            to.query.tab === 'audit'
+              ? { path: '/activity', query: { category: to.query.category } }
+              : true,
+        },
         { path: 'account', component: () => import('./views/AccountView.vue') },
       ],
     },

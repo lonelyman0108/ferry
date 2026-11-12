@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { GlobeIcon, PlusIcon, ScrollTextIcon } from '@lucide/vue'
+import { GlobeIcon, PlusIcon } from '@lucide/vue'
 import { onMounted, reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 
 import { api, errorText } from '@/api'
@@ -17,25 +16,10 @@ import RowActions from '@/components/RowActions.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useFormCheck } from '@/lib/form'
 import type { Endpoint, Subscription } from '@/types'
-import AuditList from './settings/AuditList.vue'
 
-const route = useRoute()
-const router = useRouter()
-const tabs = ['endpoints', 'audit']
-const tab = ref(
-  typeof route.query.tab === 'string' && tabs.includes(route.query.tab)
-    ? route.query.tab
-    : 'endpoints',
-)
 const busy = ref(false)
-
-function pickTab(v: string | number) {
-  tab.value = String(v)
-  void router.replace({ query: { tab: tab.value } })
-}
 
 // ---- 访问地址 ----
 const endpoints = ref<Endpoint[] | null>(null)
@@ -107,59 +91,49 @@ onMounted(async () => {
 </script>
 
 <template>
-  <PageHeader />
-
-  <Tabs :model-value="tab" @update:model-value="pickTab">
-    <div class="mb-2 flex flex-wrap items-center gap-2">
-      <TabsList class="no-scrollbar mr-auto max-w-full overflow-x-auto">
-        <TabsTrigger value="endpoints"><GlobeIcon /> 访问地址</TabsTrigger>
-        <TabsTrigger value="audit"><ScrollTextIcon /> 审计日志</TabsTrigger>
-      </TabsList>
-      <Button v-if="tab === 'endpoints'" @click="editEndpoint()"
+  <PageHeader>
+    <template #actions>
+      <Button @click="editEndpoint()"
         ><PlusIcon /><span class="max-sm:sr-only">新建访问地址</span></Button
       >
-    </div>
+    </template>
+  </PageHeader>
 
-    <TabsContent value="endpoints" class="grid gap-3">
-      <HintText>手机拉取取值规则、回传登录态用的地址；可以有多个（如局域网、公网）。</HintText>
-      <ListSkeleton v-if="!endpoints" :rows="2" />
-      <EmptyState
-        v-else-if="!endpoints.length"
-        :icon="GlobeIcon"
-        title="还没有访问地址"
-        description="订阅靠它告诉手机去哪里拉取规则、回传登录态。"
-      >
-        <Button @click="editEndpoint()"><PlusIcon /> 新建访问地址</Button>
-      </EmptyState>
-      <template v-else>
-        <ListRow v-for="e in endpoints" :key="e.id">
-          <template #icon><IconTile :icon="GlobeIcon" tone="slate" /></template>
-          <template #title>{{ e.name }}</template>
-          <template #badges>
-            <StatusBadge tone="neutral">{{
-              usage(e) ? `${usage(e)} 个订阅在用` : '没有订阅在用'
-            }}</StatusBadge>
-          </template>
-          <template #description>
-            <span class="font-mono break-all">{{ e.base_url }}</span>
-            <span v-if="e.note">{{ e.note }}</span>
-          </template>
-          <template #actions>
-            <RowActions
-              delete-title="删除访问地址？"
-              delete-description="还有订阅用到它时不能删除。"
-              @edit="editEndpoint(e)"
-              @remove="removeEndpoint(e)"
-            />
-          </template>
-        </ListRow>
-      </template>
-    </TabsContent>
-
-    <TabsContent value="audit" class="grid gap-3">
-      <AuditList />
-    </TabsContent>
-  </Tabs>
+  <div class="grid gap-3">
+    <HintText>手机拉取取值规则、回传登录态用的地址；可以有多个（如局域网、公网）。</HintText>
+    <ListSkeleton v-if="!endpoints" :rows="2" />
+    <EmptyState
+      v-else-if="!endpoints.length"
+      :icon="GlobeIcon"
+      title="还没有访问地址"
+      description="订阅靠它告诉手机去哪里拉取规则、回传登录态。"
+    >
+      <Button @click="editEndpoint()"><PlusIcon /> 新建访问地址</Button>
+    </EmptyState>
+    <template v-else>
+      <ListRow v-for="e in endpoints" :key="e.id">
+        <template #icon><IconTile :icon="GlobeIcon" tone="slate" /></template>
+        <template #title>{{ e.name }}</template>
+        <template #badges>
+          <StatusBadge tone="neutral">{{
+            usage(e) ? `${usage(e)} 个订阅在用` : '没有订阅在用'
+          }}</StatusBadge>
+        </template>
+        <template #description>
+          <span class="font-mono break-all">{{ e.base_url }}</span>
+          <span v-if="e.note">{{ e.note }}</span>
+        </template>
+        <template #actions>
+          <RowActions
+            delete-title="删除访问地址？"
+            delete-description="还有订阅用到它时不能删除。"
+            @edit="editEndpoint(e)"
+            @remove="removeEndpoint(e)"
+          />
+        </template>
+      </ListRow>
+    </template>
+  </div>
 
   <FormDialog
     v-model:open="epForm.open"
