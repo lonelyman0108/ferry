@@ -314,7 +314,7 @@ function onInstallUpdated(s: Subscription) {
               <CheckIcon class="text-success size-4" />已收到 {{ identities.length }} 个身份 ·
               最近回传 {{ fmtAgo(lastSeen) }}
               <router-link
-                :to="{ path: '/data', query: { source: source.key } }"
+                :to="`/sources/${source.id}`"
                 class="text-primary ml-auto underline-offset-2 hover:underline"
                 >查看登录态</router-link
               >

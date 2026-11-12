@@ -46,10 +46,6 @@ export const navItems: NavItem[] = [
     icon: BoxesIcon,
     tone: 'primary',
     description: '读取规则、身份与登录态',
-    pages: [
-      { path: '/sources', label: '来源', description: '请求匹配、字段提取与输出变量' },
-      { path: '/data', label: '登录态', description: '收集中的回传，各身份的当前值与历史值' },
-    ],
   },
   {
     path: '/subscriptions',

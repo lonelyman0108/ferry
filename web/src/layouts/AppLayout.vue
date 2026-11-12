@@ -33,6 +33,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { commandOpen } from '@/lib/command'
+import { crumbTail } from '@/lib/crumb'
 import { navFor, navItems, pageFor } from '@/lib/nav'
 import { useAuth } from '@/stores/auth'
 import { useOverview } from '@/stores/overview'
@@ -53,7 +54,7 @@ const crumbs = computed(() => {
   if (page.value && page.value.label !== current.value.label)
     out.push({ label: page.value.label, to: page.value.path })
   const base = page.value?.path ?? current.value.path
-  if (base !== '/' && route.path !== base) out.push({ label: '详情' })
+  if (base !== '/' && route.path !== base) out.push({ label: crumbTail.value ?? '详情' })
   const last = out[out.length - 1]!
   if (route.path === last.to) delete last.to
   return out

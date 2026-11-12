@@ -3,6 +3,10 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import { useAuth } from '@/stores/auth'
 
+// 总览和三类聚焦详情共用一个组件：在它们之间切换时组件不重建，节点卡能从全图平滑移到窄栏。
+const FlowView = () => import('./views/FlowView.vue')
+const flow = { component: FlowView, meta: { fullBleed: true } }
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -12,11 +16,10 @@ const router = createRouter({
       path: '/',
       component: () => import('./layouts/AppLayout.vue'),
       children: [
-        {
-          path: '',
-          component: () => import('./views/OverviewView.vue'),
-          meta: { fullBleed: true },
-        },
+        { path: '', ...flow },
+        { path: 'sources/:id(\\d+)', ...flow },
+        { path: 'subscriptions/:id(\\d+)', ...flow },
+        { path: 'destinations/:id(\\d+)', ...flow },
         { path: 'sources', component: () => import('./views/sources/SourcesView.vue') },
         // 编辑器是列表页上的弹窗，地址仍可直接打开
         {
@@ -24,17 +27,21 @@ const router = createRouter({
           component: () => import('./views/sources/SourcesView.vue'),
           props: { editing: 'new' },
         },
-        {
-          path: 'sources/:id(\\d+)',
-          component: () => import('./views/sources/SourcesView.vue'),
-          props: (r) => ({ editing: r.params.id }),
-        },
-        { path: 'data', component: () => import('./views/data/DataView.vue') },
-        // 详情是列表页上的弹窗，地址仍可直接打开
+        // 登录态页并进了来源详情：旧地址跳到来源列表，身份详情跳到所属来源并打开那个身份
+        { path: 'data', redirect: '/sources' },
         {
           path: 'data/:id(\\d+)',
-          component: () => import('./views/data/DataView.vue'),
-          props: (r) => ({ viewing: r.params.id }),
+          component: FlowView,
+          beforeEnter: async (to) => {
+            try {
+              const { data } = await axios.get<{ source_id: number }>(
+                `/api/v1/identities/${to.params.id}`,
+              )
+              return { path: `/sources/${data.source_id}`, query: { identity: to.params.id } }
+            } catch {
+              return '/sources'
+            }
+          },
         },
         { path: 'subscriptions', component: () => import('./views/SubscriptionsView.vue') },
         { path: 'destinations', component: () => import('./views/DestinationsView.vue') },
