@@ -1,0 +1,45 @@
+# 镜像构建检查：改了 Dockerfile、依赖或这个 workflow 时，在 PR 上按 amd64、arm64 构建一遍镜像（不推送），
+# 并在 amd64 上跑起来做一次健康检查。不是必需检查，发布前用它确认镜像能构建。
+name: Docker
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - go.mod
+      - go.sum
+      - web/package.json
+      - web/package-lock.json
+      - .github/workflows/docker.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: 构建两种架构
+        run: docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=0.0.0-check .
+      - name: 跑起来做健康检查
+        run: |
+          docker buildx build --platform linux/amd64 --build-arg VERSION=0.0.0-check --load -t ferry:check .
+          docker run -d --name ferry-check -e FERRY_LISTEN=:8080 ferry:check
+          for _ in $(seq 1 20); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' ferry-check 2>/dev/null || true)
+            if docker exec ferry-check /usr/local/bin/ferry healthcheck; then
+              docker run --rm --entrypoint /usr/local/bin/ferry ferry:check version
+              docker logs ferry-check 2>&1 | grep -q setup_token && echo "初始化令牌已打印"
+              exit 0
+            fi
+            echo "等待启动：${status:-starting}"
+            sleep 2
+          done
+          docker logs ferry-check
+          exit 1

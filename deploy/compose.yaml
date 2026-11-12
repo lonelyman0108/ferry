@@ -1,0 +1,20 @@
+# Ferry 最简部署：SQLite，数据都在命名卷 ferry-data 里。
+# 首次启动看日志里的初始化令牌：docker compose logs ferry
+services:
+  ferry:
+    image: ghcr.io/lonelyman0108/ferry:0.1.0
+    container_name: ferry
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # 命名卷会沿用镜像里 /data 的属主（非 root 用户 65532）。改用目录挂载时先建好目录并交给它：
+      # mkdir -p data && sudo chown 65532:65532 data，再写成 ./data:/data
+      - ferry-data:/data
+    environment:
+      TZ: Asia/Shanghai
+      # 想跳过向导里的数据库这一步，可以直接给出数据库：
+      # FERRY_DATABASE_URL: sqlite:///data/ferry.db
+
+volumes:
+  ferry-data:
