@@ -129,7 +129,7 @@ func (s *Server) sealedSubscription(ctx context.Context, kid string) (store.Subs
 func (s *Server) handleSealed(w http.ResponseWriter, r *http.Request) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {
-		writeError(w, http.StatusRequestEntityTooLarge, "请求正文太大")
+		writeError(w, http.StatusRequestEntityTooLarge, "请求正文过大")
 		return
 	}
 	kid := r.Header.Get(kidHeader)
@@ -158,13 +158,13 @@ func (s *Server) handleSealed(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	sent := time.UnixMilli(req.TS)
 	if d := now.Sub(sent); d > sealedWindow || d < -sealedWindow {
-		reply(sealedReply{Status: http.StatusConflict, Time: now.UnixMilli(), Body: errorBody{Error: "手机时间和平台相差超过 5 分钟，请校准时间"}})
+		reply(sealedReply{Status: http.StatusConflict, Time: now.UnixMilli(), Body: errorBody{Error: "设备时间与服务端时间相差超过 5 分钟，请校准设备时间"}})
 		return
 	}
 	db := s.store().DB.WithContext(r.Context())
 	seen := store.TransportNonce{SubscriptionID: m.ID, Nonce: base64.RawURLEncoding.EncodeToString(nonce[:]), ExpiresAt: sent.Add(sealedWindow)}
 	if err := db.Create(&seen).Error; errors.Is(err, gorm.ErrDuplicatedKey) {
-		fail(http.StatusConflict, "重复的请求")
+		fail(http.StatusConflict, "重复请求")
 		return
 	} else if err != nil {
 		s.sealedInternal(r, err, fail)
@@ -173,7 +173,7 @@ func (s *Server) handleSealed(w http.ResponseWriter, r *http.Request) {
 	s.markSealedSeen(r.Context(), m, now)
 	if m.TransportMode != store.TransportSealed {
 		// 订阅已切回明文：告诉手机清掉“只走加密”的记录，重新安装模块后改走明文。
-		fail(http.StatusGone, "该订阅已改为不加密传输，请重新安装模块")
+		fail(http.StatusGone, "该订阅已切换为明文传输，请重新安装订阅")
 		return
 	}
 
@@ -204,7 +204,7 @@ func (s *Server) handleSealed(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(sealedReply{Status: status, Body: body})
 	default:
-		fail(http.StatusBadRequest, "未知的操作")
+		fail(http.StatusBadRequest, "未知操作")
 	}
 }
 
@@ -216,7 +216,7 @@ func strictJSON(b []byte, v any) error {
 		return err
 	}
 	if dec.Decode(&struct{}{}) != io.EOF {
-		return errors.New("只能包含一个 JSON 对象")
+		return errors.New("仅允许包含一个 JSON 对象")
 	}
 	return nil
 }
@@ -256,7 +256,7 @@ func (s *Server) sealedUnauthorized(w http.ResponseWriter, r *http.Request, m *s
 	if s.sealedFailLimiter.allow(key, s.now()) {
 		s.audit(r, actor, "transport.decrypt_failed", target, "")
 	}
-	writeError(w, http.StatusUnauthorized, "无法解开报文")
+	writeError(w, http.StatusUnauthorized, "报文解密失败")
 }
 
 // markSealedSeen 记下手机上的密钥已填对，最近通信时间按分钟更新。

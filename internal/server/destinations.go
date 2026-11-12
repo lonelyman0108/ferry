@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -239,7 +240,7 @@ func (s *Server) handleDeleteDestination(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if n > 0 {
-		writeError(w, http.StatusConflict, "还有推送规则用到这个目的地，需先删除这些推送规则")
+		writeError(w, http.StatusConflict, fmt.Sprintf("目的地仍被 %d 条推送规则引用，无法删除", n))
 		return
 	}
 	if err := db.Delete(&d).Error; err != nil {

@@ -162,7 +162,7 @@ function onInstallUpdated(s: Subscription) {
       v-if="!source.enabled"
       class="border-warning/30 bg-warning/5 text-warning flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
     >
-      <TriangleAlertIcon class="size-4 shrink-0" />来源已停用：订阅不会读取它，也不会接收回传。
+      <TriangleAlertIcon class="size-4 shrink-0" />来源已停用：订阅不读取该来源，也不接收其回传。
     </p>
 
     <ol class="grid gap-6">
@@ -174,7 +174,7 @@ function onInstallUpdated(s: Subscription) {
           <div>
             <div class="font-medium">加入订阅</div>
             <p class="text-muted-foreground text-sm">
-              选择哪些手机上的订阅读取这个来源。改动后，订阅的 MITM 域名会跟着变。
+              选择读取该来源的订阅。变更后，订阅的 MITM 域名随之更新。
             </p>
           </div>
           <div v-if="subs.length" class="divide-y rounded-lg border">
@@ -185,17 +185,17 @@ function onInstallUpdated(s: Subscription) {
               <Switch
                 :model-value="included(s)"
                 :disabled="s.all_sources || busy === s.id"
-                :aria-label="`${s.name} 读取这个来源`"
+                :aria-label="`${s.name} 读取该来源`"
                 @update:model-value="(v: boolean) => toggle(s, v)"
               />
             </div>
           </div>
           <p v-else class="text-muted-foreground text-sm">
-            还没有订阅，先到
+            暂无订阅。请前往
             <router-link to="/subscriptions" class="text-primary underline-offset-2 hover:underline"
               >订阅</router-link
             >
-            页新建一个。
+            页面新建。
           </p>
         </div>
       </li>
@@ -206,9 +206,9 @@ function onInstallUpdated(s: Subscription) {
         >
         <div class="grid min-w-0 gap-2">
           <div>
-            <div class="font-medium">在客户端里安装或更新</div>
+            <div class="font-medium">在客户端中安装或更新</div>
             <p class="text-muted-foreground text-sm">
-              订阅要装在手机上，MITM 域名变了以后还要在客户端里更新一次。
+              订阅需安装到设备上的代理客户端；MITM 域名变更后，需在客户端中更新订阅。
             </p>
           </div>
           <div v-if="pending.length" class="divide-y rounded-lg border">
@@ -225,9 +225,9 @@ function onInstallUpdated(s: Subscription) {
             </div>
           </div>
           <p v-else-if="usedBy.length" class="text-success flex items-center gap-1.5 text-sm">
-            <CheckIcon class="size-4" />加入的订阅都已装好，是最新的。
+            <CheckIcon class="size-4" />已加入的订阅均已安装，且为最新版本。
           </p>
-          <p v-else class="text-muted-foreground text-sm">先完成上一步。</p>
+          <p v-else class="text-muted-foreground text-sm">请完成上一步。</p>
         </div>
       </li>
 
@@ -238,7 +238,7 @@ function onInstallUpdated(s: Subscription) {
         <div class="grid min-w-0 gap-2">
           <div>
             <div class="font-medium">推送到目的地</div>
-            <p class="text-muted-foreground text-sm">新值生效后推到哪里，例如青龙。</p>
+            <p class="text-muted-foreground text-sm">新值生效后推送至目的地，如青龙。</p>
           </div>
           <div v-if="bindings.length" class="divide-y rounded-lg border">
             <div
@@ -250,7 +250,7 @@ function onInstallUpdated(s: Subscription) {
               <StatusBadge :tone="b.mode === 'joined' ? 'indigo' : 'sky'">{{
                 bindingModes[b.mode]
               }}</StatusBadge>
-              <StatusBadge v-if="!b.enabled" tone="neutral" dot>停用</StatusBadge>
+              <StatusBadge v-if="!b.enabled" tone="neutral" dot>已停用</StatusBadge>
             </div>
           </div>
           <div v-if="unbound.length" class="flex flex-wrap items-center gap-2">
@@ -277,20 +277,20 @@ function onInstallUpdated(s: Subscription) {
             >
           </div>
           <p v-else-if="!dests.length" class="text-muted-foreground text-sm">
-            还没有目的地，先到
+            暂无目的地。请前往
             <router-link to="/destinations" class="text-primary underline-offset-2 hover:underline"
               >推送</router-link
             >
-            页新建一个。
+            页面新建。
           </p>
           <p class="text-muted-foreground text-xs">
-            变量改名等设置在
+            变量重命名等设置请在
             <router-link
               :to="{ path: '/destinations', query: { tab: 'bindings', source: source.key } }"
               class="text-primary underline-offset-2 hover:underline"
               >推送规则</router-link
             >
-            里改。
+            中配置。
           </p>
         </div>
       </li>
@@ -301,9 +301,9 @@ function onInstallUpdated(s: Subscription) {
         >
         <div class="grid min-w-0 gap-2">
           <div>
-            <div class="font-medium">等待第一次回传</div>
+            <div class="font-medium">等待首次回传</div>
             <p class="text-muted-foreground text-sm">
-              在手机上打开“{{ source.name }}”对应的 App，触发一次匹配的请求。
+              在设备上打开“{{ source.name }}”对应的 App，发起符合匹配规则的请求。
             </p>
           </div>
           <div
@@ -320,10 +320,10 @@ function onInstallUpdated(s: Subscription) {
               >
             </template>
             <template v-else-if="batches.length">
-              <LoaderCircleIcon class="text-info size-4 animate-spin" />收到回传，正在收集中…
+              <LoaderCircleIcon class="text-info size-4 animate-spin" />已收到回传，正在收集…
             </template>
             <template v-else>
-              <LoaderCircleIcon class="text-muted-foreground size-4 animate-spin" />还没收到回传
+              <LoaderCircleIcon class="text-muted-foreground size-4 animate-spin" />暂未收到回传
             </template>
           </div>
         </div>

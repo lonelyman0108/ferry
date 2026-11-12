@@ -136,7 +136,7 @@ const chCheck = useFormCheck(() => {
             !c.url?.trim() &&
             !c.device_key?.trim() &&
             !kept('device_key') &&
-            '请填写 Device Key，或者在上面填完整的推送 URL',
+            '请填写 Device Key，或填写完整的推送 URL',
         }
       : chForm.kind === 'telegram'
         ? {
@@ -254,12 +254,12 @@ const ruleForm = reactive({
   enabled: true,
 })
 
-const noChannels = '还没有通知渠道，先在“通知渠道”标签页新建一个'
+const noChannels = '暂无通知渠道，请在“通知渠道”标签页新建'
 const ruleCheck = useFormCheck(() => ({
   name: !ruleForm.name.trim() && '请填写名称',
-  events: !ruleForm.events.length && '至少选一个事件',
+  events: !ruleForm.events.length && '请至少选择一个事件',
   channel_ids:
-    !ruleForm.channel_ids.length && (channels.value.length ? '至少选一个通知渠道' : noChannels),
+    !ruleForm.channel_ids.length && (channels.value.length ? '请至少选择一个通知渠道' : noChannels),
 }))
 
 function newRule() {
@@ -373,13 +373,13 @@ function secretHint(key: string, fallback = '') {
     </div>
 
     <TabsContent value="channels" class="grid gap-3">
-      <HintText>通知内容仅含来源、身份与字段名，不含值。</HintText>
+      <HintText>通知内容仅包含来源、身份与字段名，不包含字段值。</HintText>
       <ListSkeleton v-if="!loaded" :rows="2" />
       <EmptyState
         v-else-if="!channels.length"
         :icon="BellRingIcon"
-        title="还没有通知渠道"
-        description="推送失败、登录态快过期时，Ferry 通过渠道提醒你：Bark、Telegram 或 Webhook。"
+        title="暂无通知渠道"
+        description="推送失败或登录态即将过期时，Ferry 通过通知渠道发送提醒，支持 Bark、Telegram 与 Webhook。"
       >
         <Button @click="newChannel"><PlusIcon /> 新建通知渠道</Button>
       </EmptyState>
@@ -400,7 +400,7 @@ function secretHint(key: string, fallback = '') {
             :enabled="c.enabled"
             :toggling="toggling === `c${c.id}`"
             delete-title="删除通知渠道？"
-            delete-description="同时从引用它的通知规则中移除；移除后没有渠道的通知规则会停用。"
+            delete-description="该渠道将同时从引用该渠道的通知规则中移除；移除后无可用渠道的通知规则将停用。"
             @toggle="(v) => toggleChannel(c, v)"
             @edit="editChannel(c)"
             @remove="removeChannel(c)"
@@ -419,16 +419,16 @@ function secretHint(key: string, fallback = '') {
     </TabsContent>
 
     <TabsContent value="rules" class="grid gap-3">
-      <HintText>通知规则 = 事件 + 来源 → 通知渠道；不选来源即全部来源。</HintText>
+      <HintText>通知规则 = 事件 + 来源 → 通知渠道；未选择来源时适用于全部来源。</HintText>
       <ListSkeleton v-if="!loaded" :rows="2" />
       <EmptyState
         v-else-if="!rules.length"
         :icon="ListChecksIcon"
-        title="还没有通知规则"
-        description="通知规则决定哪些事件发到哪个渠道；没有规则时什么都不会通知。"
+        title="暂无通知规则"
+        description="通知规则定义各类事件发送至哪些通知渠道；未配置规则时不发送任何通知。"
       >
         <Button v-if="channels.length" @click="newRule"><PlusIcon /> 新建通知规则</Button>
-        <Button v-else @click="startChannel"><PlusIcon /> 先新建通知渠道</Button>
+        <Button v-else @click="startChannel"><PlusIcon /> 新建通知渠道</Button>
       </EmptyState>
       <ListRow v-for="r in rules" :key="r.id" :dim="!r.enabled">
         <template #icon><IconTile :icon="ListChecksIcon" tone="amber" /></template>
@@ -491,7 +491,7 @@ function secretHint(key: string, fallback = '') {
         label="推送 URL"
         for="c-bark-url"
         full
-        hint="完整推送地址，自动解析服务器与 Key（支持子路径）；与下方两项二选一"
+        hint="完整的推送地址，将自动解析服务器与 Key（支持子路径）；与下方两项任选其一"
         :error="chCheck.errors.url"
       >
         <Input
@@ -598,7 +598,9 @@ function secretHint(key: string, fallback = '') {
     <FormSection
       title="来源"
       :description="
-        ruleForm.source_keys.length ? `已选 ${ruleForm.source_keys.length} 项` : '未选择即全部来源'
+        ruleForm.source_keys.length
+          ? `已选 ${ruleForm.source_keys.length} 项`
+          : '未选择时适用于全部来源'
       "
       :cols="1"
     >

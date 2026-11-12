@@ -28,12 +28,12 @@ type webhook struct {
 func validateWebhook(c Config) error {
 	u, err := url.Parse(c.URL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return errors.New("Webhook 地址需以 http:// 或 https:// 开头")
+		return errors.New("Webhook 地址须以 http:// 或 https:// 开头")
 	}
 	switch strings.ToUpper(c.Method) {
 	case "", "POST", "PUT", "PATCH":
 	default:
-		return fmt.Errorf("Webhook 的 method 只能是 POST、PUT 或 PATCH")
+		return fmt.Errorf("Webhook 的 method 仅允许 POST、PUT 或 PATCH")
 	}
 	if c.Body != "" {
 		if _, err := parseBody(c.Body); err != nil {
@@ -77,7 +77,7 @@ func (w *webhook) send(ctx context.Context, p Push) error {
 		var buf bytes.Buffer
 		if err := t.Execute(&buf, data); err != nil {
 			// 不带原始错误：text/template 的执行错误可能带出变量值。
-			return errors.New("渲染 Webhook 正文失败，检查模板里引用的字段")
+			return errors.New("渲染 Webhook 正文失败，请检查模板中引用的字段")
 		}
 		body = buf.Bytes()
 	}

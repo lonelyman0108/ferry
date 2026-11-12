@@ -91,7 +91,7 @@ async function pushNow(p: IdentityPush) {
     const state = pushStateOf(job)
     if (state === 'success') toast.success('推送成功')
     else if (state === 'failed' || state === 'retrying')
-      toast.error(`推送失败：${job.last_error ?? ''}`)
+      toast.error(job.last_error ? `推送失败：${job.last_error}` : '推送失败')
     else toast.info(`推送状态：${pushStates[state].label}`)
     await loadPushes()
     emit('changed')
@@ -246,7 +246,7 @@ function shown(v: Version) {
                 }}</StatusBadge>
               </div>
             </template>
-            <span v-else class="text-muted-foreground">无生效值</span>
+            <span v-else class="text-muted-foreground">暂无生效值</span>
           </CardContent>
         </Card>
       </div>
@@ -271,7 +271,7 @@ function shown(v: Version) {
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2 text-sm font-medium">
               {{ p.destination_name }}
-              <StatusBadge v-if="!p.enabled" tone="neutral" dot>停用</StatusBadge>
+              <StatusBadge v-if="!p.enabled" tone="neutral" dot>已停用</StatusBadge>
               <StatusBadge v-else-if="p.last" :tone="pushStates[pushStateOf(p.last)].tone" dot>{{
                 pushStates[pushStateOf(p.last)].label
               }}</StatusBadge>
@@ -303,13 +303,13 @@ function shown(v: Version) {
         </div>
       </div>
       <p v-else class="text-muted-foreground mb-8 text-sm">
-        这个来源还没有推送规则，可以在
+        该来源暂无推送规则，可在
         <router-link
           :to="{ path: `/sources/${identity.source_id}`, query: { section: 'setup' } }"
           class="text-primary underline-offset-2 hover:underline"
           >接入清单</router-link
         >
-        里添加。
+        中添加。
       </p>
 
       <SectionHeading title="历史值" :icon="HistoryIcon">

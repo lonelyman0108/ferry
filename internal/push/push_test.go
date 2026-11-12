@@ -277,7 +277,7 @@ func TestSkipAndStuck(t *testing.T) {
 	e.run()
 	var last store.PushJob
 	e.db.DB.Last(&last)
-	if last.Status != store.PushSkipped || last.LastError != "来源没有输出变量" {
+	if last.Status != store.PushSkipped || last.LastError != "来源未配置输出变量" {
 		t.Errorf("来源没有输出变量时应跳过并说明：%+v", last)
 	}
 }

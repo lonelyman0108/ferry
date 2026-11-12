@@ -51,10 +51,10 @@ func FileName(client string) string { return fileNames[client] }
 func NormalizeBaseURL(raw string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return "", errors.New("访问地址需以 http:// 或 https:// 开头并包含主机名")
+		return "", errors.New("访问地址须以 http:// 或 https:// 开头并包含主机名")
 	}
 	if u.RawQuery != "" || u.Fragment != "" || u.User != nil {
-		return "", errors.New("访问地址不能带 query、# 或用户名密码")
+		return "", errors.New("访问地址不能包含查询参数、# 或用户名密码")
 	}
 	return strings.TrimRight(u.String(), "/"), nil
 }
@@ -80,10 +80,10 @@ func NormalizeScriptURL(raw string) (string, error) {
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.Fragment != "" || strings.Contains(raw, "#") || u.User != nil {
-		return "", errors.New("脚本地址需以 https:// 开头，且不能带 # 或用户名密码")
+		return "", errors.New("脚本地址须以 https:// 开头，且不能包含 # 或用户名密码")
 	}
 	if strings.ContainsAny(raw, "\",\n ") {
-		return "", errors.New("脚本地址不能含逗号、引号或空白")
+		return "", errors.New("脚本地址不能包含逗号、引号或空白字符")
 	}
 	return raw, nil
 }

@@ -421,7 +421,7 @@ func TestProbe(t *testing.T) {
 	e.sync("svc", map[string]string{"token": "slow-token-1234567890"})
 	var slow store.Version
 	e.svc.DB.Where("status = ?", store.VersionPendingReview).First(&slow)
-	if slow.ID == 0 || !strings.Contains(slow.Reason, "检测出错") {
+	if slow.ID == 0 || !strings.Contains(slow.Reason, "检测失败") {
 		t.Errorf("探测超时应转人工审核：%+v", slow)
 	}
 }

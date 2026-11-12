@@ -147,7 +147,7 @@ func URLPattern(host, path string) string {
 }
 
 // keyHelp 是模块参数里传输密钥的说明。
-const keyHelp = "传输密钥：在 Ferry 后台的订阅详情里复制，粘贴到这里。填好之前不回传。"
+const keyHelp = "传输密钥：从 Ferry 后台的订阅详情中复制后粘贴至此处。未填写时不回传登录态。"
 
 // surge 生成模块。max-size 设为 -1：Surge 的请求正文超过上限时会直接拒绝连接，会弄坏 App 本身的请求。
 func surge(title, desc, script, arg string, ts []trigger, hosts []string, sealed bool) []byte {
@@ -187,12 +187,12 @@ func loonSealed(title, desc, script string, p Params, ts []trigger, hosts []stri
 	fmt.Fprintf(&b, "#!name = %s\n#!desc = %s\n#!author = Ferry\n#!loon_version = 3.2.1(733)\n\n[Argument]\n", title, desc)
 	fmt.Fprintf(&b, "key = input,\"\",tag=传输密钥,desc=%s\n", keyHelp)
 	for _, a := range [][3]string{
-		{"base", p.BaseURL, "平台地址"},
+		{"base", p.BaseURL, "访问地址"},
 		{"fallback", p.FallbackURL, "备用地址"},
 		{"kid", p.KID, "密钥编号"},
 		{"mode", "sealed", "传输方式"},
 	} {
-		fmt.Fprintf(&b, "%s = input,\"%s\",tag=%s,desc=由 Ferry 生成，不要修改\n", a[0], a[1], a[2])
+		fmt.Fprintf(&b, "%s = input,\"%s\",tag=%s,desc=由 Ferry 生成，请勿修改\n", a[0], a[1], a[2])
 	}
 	b.WriteString("\n[Script]\n")
 	for _, t := range ts {

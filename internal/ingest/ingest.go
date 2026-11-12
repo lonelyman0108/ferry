@@ -368,7 +368,7 @@ func (s *Service) ProcessDue(ctx context.Context) (int, error) {
 	for _, id := range ids {
 		done, err := s.processBatch(ctx, id)
 		if err != nil {
-			return n, fmt.Errorf("处理批次 %d：%w", id, err)
+			return n, fmt.Errorf("处理批次 %d 失败：%w", id, err)
 		}
 		if done {
 			n++
@@ -444,7 +444,7 @@ func (s *Service) processBatch(ctx context.Context, batchID uint) (bool, error) 
 		switch {
 		case r.Err != nil:
 			// 网络抖动不该丢掉可能有效的值，转人工审核。
-			verdict.review, verdict.reason = true, truncate("检测出错："+r.Err.Error(), 255)
+			verdict.review, verdict.reason = true, truncate("有效性检测失败："+r.Err.Error(), 255)
 		case !r.OK:
 			verdict.reject, verdict.reason = true, truncate(r.Detail, 255)
 		case r.Identity != "":

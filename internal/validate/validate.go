@@ -36,10 +36,10 @@ func Check(f source.FieldDoc, value string, now time.Time) Result {
 	}
 	n := utf8.RuneCountInString(value)
 	if f.MinLen > 0 && n < f.MinLen {
-		return Result{Err: fmt.Errorf("长度 %d，少于 %d", n, f.MinLen)}
+		return Result{Err: fmt.Errorf("长度 %d，少于最小长度 %d", n, f.MinLen)}
 	}
 	if f.MaxLen > 0 && n > f.MaxLen {
-		return Result{Err: fmt.Errorf("长度 %d，超过 %d", n, f.MaxLen)}
+		return Result{Err: fmt.Errorf("长度 %d，超过最大长度 %d", n, f.MaxLen)}
 	}
 	if f.Pattern != "" {
 		re, err := regexp.Compile(f.Pattern)

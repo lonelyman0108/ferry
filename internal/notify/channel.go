@@ -90,21 +90,21 @@ func Validate(kind string, c Config) error {
 			return errors.New("缺少 Bark device key")
 		}
 		if c.Server != "" && !httpURL(c.Server) {
-			return errors.New("Bark 服务器地址需以 http:// 或 https:// 开头")
+			return errors.New("Bark 服务器地址须以 http:// 或 https:// 开头")
 		}
 	case KindTelegram:
 		if c.BotToken == "" || c.ChatID == "" {
 			return errors.New("缺少 Telegram bot token 或 chat id")
 		}
 		if c.APIBase != "" && !httpURL(c.APIBase) {
-			return errors.New("Telegram API 地址需以 http:// 或 https:// 开头")
+			return errors.New("Telegram API 地址须以 http:// 或 https:// 开头")
 		}
 	case KindWebhook:
 		if !httpURL(c.URL) {
-			return errors.New("Webhook 地址需以 http:// 或 https:// 开头")
+			return errors.New("Webhook 地址须以 http:// 或 https:// 开头")
 		}
 	default:
-		return fmt.Errorf("不支持的渠道类型 %q", kind)
+		return fmt.Errorf("不支持的通知渠道类型 %q", kind)
 	}
 	return nil
 }
@@ -139,7 +139,7 @@ func Send(ctx context.Context, client *http.Client, kind string, c Config, m Mes
 				Message string `json:"message"`
 			}
 			if json.Unmarshal(raw, &r) == nil && r.Code != 0 && r.Code != 200 {
-				return fmt.Errorf("Bark 返回 %d：%s", r.Code, r.Message)
+				return fmt.Errorf("Bark 返回错误 %d：%s", r.Code, r.Message)
 			}
 			return nil
 		})
@@ -176,7 +176,7 @@ func Send(ctx context.Context, client *http.Client, kind string, c Config, m Mes
 		}
 		return post(ctx, client, c.URL, raw, headers, nil)
 	}
-	return fmt.Errorf("不支持的渠道类型 %q", kind)
+	return fmt.Errorf("不支持的通知渠道类型 %q", kind)
 }
 
 func postJSON(ctx context.Context, client *http.Client, u string, body any, headers map[string]string, check func([]byte) error) error {
@@ -214,7 +214,7 @@ func post(ctx context.Context, client *http.Client, u string, raw []byte, header
 		}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("对方返回 HTTP %d", resp.StatusCode)
+		return fmt.Errorf("通知服务返回 HTTP %d", resp.StatusCode)
 	}
 	return nil
 }

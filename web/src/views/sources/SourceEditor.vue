@@ -100,18 +100,18 @@ const inOptions = [
     placeholder: 'Authorization',
   },
   { value: 'cookie', label: 'Cookie', hint: 'Cookie 名称', placeholder: 'session_id' },
-  { value: 'query', label: 'URL 参数', hint: 'URL 中 ? 后面的参数名', placeholder: 'token' },
+  { value: 'query', label: 'URL 参数', hint: 'URL 中 ? 之后的参数名', placeholder: 'token' },
   {
     value: 'body_json',
     label: 'JSON 正文',
-    hint: '用点分隔层级，数组写下标，如 data.token、list.0.id',
+    hint: '以点号分隔层级，数组使用下标，如 data.token、list.0.id',
     placeholder: 'data.token',
   },
   { value: 'body_form', label: '表单正文', hint: '表单字段名', placeholder: 'token' },
   {
     value: 'regex',
     label: '正则',
-    hint: '取第一个括号（捕获组）内的内容',
+    hint: '读取第一个捕获组（括号）中的内容',
     placeholder: 'token=([^&]+)',
   },
 ]
@@ -281,7 +281,7 @@ async function save() {
     fill(res.data)
     if (hostsChanged)
       toast.success('已保存', {
-        description: 'MITM 域名有变化，读取它的订阅需要在客户端里更新',
+        description: 'MITM 域名已变更，读取该来源的订阅需在客户端中更新',
         action: { label: '接入清单', onClick: () => (section.value = 'setup') },
       })
     else toast.success('已保存')
@@ -453,7 +453,7 @@ const fieldsHit = computed(() =>
         <div class="grid gap-0.5">
           <span class="text-sm font-semibold">样例请求</span>
           <span class="text-muted-foreground text-xs"
-            >各分区实时显示匹配与提取结果；只存在这个标签页里，关掉就清除</span
+            >各分区实时显示匹配与读取结果；仅保存在当前标签页，关闭后清除</span
           >
         </div>
         <Button
@@ -478,7 +478,7 @@ const fieldsHit = computed(() =>
           placeholder="https://api.example.com/user?id=1"
         />
       </div>
-      <FormField label="请求头" for="s-headers" hint="每行一条，格式 名称: 值">
+      <FormField label="请求头" for="s-headers" hint="每行一条，格式为「名称: 值」">
         <Textarea
           id="s-headers"
           v-model="sample.headers"
@@ -510,7 +510,7 @@ const fieldsHit = computed(() =>
           <div class="flex items-center gap-2">
             <KeyRoundIcon class="text-muted-foreground size-4" />
             <span :class="fieldsHit ? 'text-success' : 'text-muted-foreground'"
-              >取到 {{ fieldsHit }} / {{ Object.keys(tr.fields).length }} 个字段</span
+              >已读取 {{ fieldsHit }} / {{ Object.keys(tr.fields).length }} 个字段</span
             >
           </div>
           <div
@@ -548,7 +548,7 @@ const fieldsHit = computed(() =>
       <StatusBadge v-if="dirty" tone="warning" dot>未保存</StatusBadge>
     </template>
     <template #description>
-      <template v-if="isNew">请求匹配、字段提取与输出变量</template>
+      <template v-if="isNew">请求匹配、字段读取与输出变量</template>
       <template v-else
         ><span class="font-mono">{{ doc.key }}</span> · {{ doc.matchers.length }} 条匹配规则 ·
         {{ doc.fields.length }} 个字段 · {{ doc.outputs?.length ?? 0 }} 个输出变量</template
@@ -615,7 +615,7 @@ const fieldsHit = computed(() =>
                   for="src-key"
                   :hint="
                     isNew
-                      ? '小写字母开头，可含数字、-、_；用于变量备注 ferry:<标识>；创建后不可修改'
+                      ? '以小写字母开头，可包含小写字母、数字、- 和 _；用于变量备注 ferry:<标识>；创建后不可修改'
                       : '创建后不可修改'
                   "
                 >
@@ -643,11 +643,11 @@ const fieldsHit = computed(() =>
 
             <section class="grid gap-4">
               <div class="border-b pb-2">
-                <h3 class="text-sm font-semibold">手机端</h3>
+                <h3 class="text-sm font-semibold">客户端脚本</h3>
                 <p class="text-muted-foreground text-xs">通知策略与回传频率</p>
               </div>
               <div class="grid gap-4 sm:grid-cols-2">
-                <FormField label="手机通知" for="src-notify">
+                <FormField label="设备通知" for="src-notify">
                   <NativeSelect id="src-notify" v-model="doc.notify" class="w-full">
                     <NativeSelectOption value="always">每次回传</NativeSelectOption>
                     <NativeSelectOption value="changed">值变化时</NativeSelectOption>
@@ -667,7 +667,7 @@ const fieldsHit = computed(() =>
                     max="86400"
                   />
                 </FormField>
-                <FormField full hint="客户端脚本日志输出匹配与提取过程">
+                <FormField full hint="在客户端脚本日志中输出匹配与读取过程">
                   <Label class="font-normal"><Switch v-model="doc.debug" /> 调试日志</Label>
                 </FormField>
               </div>
@@ -688,7 +688,7 @@ const fieldsHit = computed(() =>
                 <FormField
                   label="合并窗口（秒）"
                   for="src-merge"
-                  hint="首个回传起计时，窗口内的回传合并为一批；字段齐全时提前处理；0 为立即处理"
+                  hint="自首次回传起计时，窗口内的回传合并为一批；字段齐全时提前处理；0 表示立即处理"
                 >
                   <Input
                     id="src-merge"
@@ -702,7 +702,7 @@ const fieldsHit = computed(() =>
                   label="身份字段"
                   for="src-identity"
                   full
-                  hint="区分多个身份（如多账号）的字段；留空为单一身份"
+                  hint="用于区分多个身份（如多账号）的字段；留空表示单一身份"
                 >
                   <NativeSelect id="src-identity" v-model="doc.identity_field" class="w-full">
                     <NativeSelectOption value="">无（单一身份）</NativeSelectOption>
@@ -722,7 +722,7 @@ const fieldsHit = computed(() =>
           <!-- 请求匹配 -->
           <template v-else-if="section === 'matchers'">
             <HintText>
-              命中任一匹配规则的请求会进入取值；匹配规则的域名会写进订阅的 MITM 列表。
+              命中任一匹配规则的请求进入字段读取；匹配规则的域名写入订阅的 MITM 列表。
             </HintText>
             <div v-for="(m, i) in doc.matchers" :key="i" class="grid gap-4 rounded-xl border p-4">
               <div class="flex flex-wrap items-center gap-2">
@@ -748,13 +748,17 @@ const fieldsHit = computed(() =>
                 </Button>
               </div>
               <div class="grid gap-4 sm:grid-cols-[1fr_2fr]">
-                <FormField label="名称" :for="`m-name-${i}`" hint="字段用它指定取自哪条匹配规则">
+                <FormField
+                  label="名称"
+                  :for="`m-name-${i}`"
+                  hint="字段通过该名称指定所属的匹配规则"
+                >
                   <Input :id="`m-name-${i}`" v-model="m.name" class="font-mono" />
                 </FormField>
                 <FormField
                   label="域名"
                   :for="`m-host-${i}`"
-                  hint="精确域名，或 *.example.com 通配子域"
+                  hint="精确域名，或以 *.example.com 形式通配子域名"
                 >
                   <Input
                     :id="`m-host-${i}`"
@@ -774,7 +778,7 @@ const fieldsHit = computed(() =>
                   label="路径"
                   :for="`m-path-${i}`"
                   optional
-                  hint="正则，仅匹配路径（不含查询参数）；留空匹配全部路径"
+                  hint="正则表达式，仅匹配路径（不含查询参数）；留空表示匹配全部路径"
                 >
                   <Input
                     :id="`m-path-${i}`"
@@ -804,7 +808,7 @@ const fieldsHit = computed(() =>
 
           <!-- 字段 -->
           <template v-else-if="section === 'fields'">
-            <HintText> 客户端只回传声明过的字段；服务端用同样的取值规则复核。 </HintText>
+            <HintText> 客户端仅回传已声明的字段；服务端按相同的读取规则复核。 </HintText>
             <div v-for="(f, i) in doc.fields" :key="i" class="grid gap-4 rounded-xl border p-4">
               <div class="flex flex-wrap items-center gap-2">
                 <IconTile :icon="KeyRoundIcon" :tone="typeOf(f).tone" size="sm" />
@@ -824,7 +828,11 @@ const fieldsHit = computed(() =>
               </div>
 
               <div class="grid gap-4 sm:grid-cols-2">
-                <FormField label="字段标识" :for="`f-key-${i}`" hint="英文标识，输出变量中的引用名">
+                <FormField
+                  label="字段标识"
+                  :for="`f-key-${i}`"
+                  hint="以小写字母开头，可包含小写字母、数字和 _；作为输出变量中的引用名"
+                >
                   <Input
                     :id="`f-key-${i}`"
                     v-model="f.key"
@@ -839,7 +847,7 @@ const fieldsHit = computed(() =>
                   label="匹配规则"
                   :for="`f-matcher-${i}`"
                   full
-                  hint="只从命中这条匹配规则的请求里取值"
+                  hint="仅从命中该匹配规则的请求中读取"
                 >
                   <NativeSelect :id="`f-matcher-${i}`" v-model="f.matcher" class="w-full">
                     <NativeSelectOption value="">任一匹配规则</NativeSelectOption>
@@ -851,7 +859,7 @@ const fieldsHit = computed(() =>
                     >
                   </NativeSelect>
                 </FormField>
-                <FormField label="取值位置" :for="`f-in-${i}`">
+                <FormField label="读取位置" :for="`f-in-${i}`">
                   <NativeSelect :id="`f-in-${i}`" v-model="f.in" class="w-full">
                     <NativeSelectOption v-for="o in inOptions" :key="o.value" :value="o.value">{{
                       o.label
@@ -882,7 +890,11 @@ const fieldsHit = computed(() =>
                 <FormField
                   label="类型"
                   :for="`f-type-${i}`"
-                  :hint="f.type === 'jwt' ? '解析 exp：到期前提醒，过期值驳回' : '类型不符的值驳回'"
+                  :hint="
+                    f.type === 'jwt'
+                      ? '解析 exp：到期前提醒，已过期的值自动驳回'
+                      : '类型不符的值自动驳回'
+                  "
                 >
                   <NativeSelect :id="`f-type-${i}`" v-model="f.type" class="w-full">
                     <NativeSelectOption v-for="o in typeOptions" :key="o.value" :value="o.value">{{
@@ -915,7 +927,7 @@ const fieldsHit = computed(() =>
                   :for="`f-pattern-${i}`"
                   optional
                   full
-                  hint="不匹配的值驳回"
+                  hint="不匹配的值自动驳回"
                 >
                   <Input
                     :id="`f-pattern-${i}`"
@@ -924,7 +936,7 @@ const fieldsHit = computed(() =>
                     placeholder="如 ^[A-Za-z0-9._-]+$"
                   />
                 </FormField>
-                <FormField full hint="加密存储；界面打码，查看原值记入审计；通知不含值">
+                <FormField full hint="加密存储；界面中脱敏显示，查看原值记入审计；通知中不含字段值">
                   <Label class="font-normal"><Switch v-model="f.sensitive" /> 敏感字段</Label>
                 </FormField>
               </div>
@@ -966,7 +978,7 @@ const fieldsHit = computed(() =>
           <!-- 输出变量 -->
           <template v-else-if="section === 'outputs'">
             <HintText>
-              推送到目的地的环境变量；值由字段与固定文本组成，字段写作
+              推送至目的地的环境变量；值由字段与固定文本组成，字段引用格式为
               <code class="bg-muted rounded px-1 font-mono">{{ examples.ref }}</code
               >，例如
               <code class="bg-muted rounded px-1 font-mono">{{ examples.output }}</code>
@@ -979,7 +991,7 @@ const fieldsHit = computed(() =>
                   variant="ghost"
                   size="icon-sm"
                   class="ml-auto"
-                  aria-label="删除变量"
+                  aria-label="删除输出变量"
                   @click="doc.outputs!.splice(i, 1)"
                 >
                   <Trash2Icon />
@@ -1046,14 +1058,14 @@ const fieldsHit = computed(() =>
               <div class="mr-auto grid gap-0.5">
                 <span class="text-sm font-medium">有效性检测</span>
                 <span class="text-muted-foreground text-xs"
-                  >以新值请求校验接口，判定通过后生效；用于过滤失效登录态</span
+                  >使用新值请求校验接口，判定通过后生效，用于过滤已失效的登录态</span
                 >
               </div>
               <Label class="shrink-0 font-normal"><Switch v-model="probeOn" /> 启用</Label>
             </div>
             <template v-if="probeOn">
               <div class="grid gap-4 sm:grid-cols-[8rem_1fr]">
-                <FormField label="方法" for="p-method">
+                <FormField label="请求方法" for="p-method">
                   <NativeSelect id="p-method" v-model="probe.method" class="w-full">
                     <NativeSelectOption
                       v-for="x in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']"
@@ -1113,7 +1125,7 @@ const fieldsHit = computed(() =>
                   label="身份表达式"
                   for="p-identity"
                   optional
-                  hint="从响应中提取身份标识，如 json.data.userId"
+                  hint="从响应中读取身份标识，如 json.data.userId"
                 >
                   <Input
                     id="p-identity"
@@ -1141,12 +1153,14 @@ const fieldsHit = computed(() =>
                     @click="runProbe"
                   >
                     <LoaderCircleIcon v-if="probing" class="animate-spin" /><PlayIcon v-else />
-                    用样例测试
+                    使用样例测试
                   </Button>
                   <span v-if="!sample.url.trim()" class="text-muted-foreground text-xs"
-                    >需样例请求</span
+                    >需填写样例请求</span
                   >
-                  <span v-else class="text-muted-foreground text-xs">以样例取值发起真实请求</span>
+                  <span v-else class="text-muted-foreground text-xs"
+                    >使用样例读取的值发起真实请求</span
+                  >
                 </div>
                 <div
                   v-if="probeResult"
@@ -1156,7 +1170,7 @@ const fieldsHit = computed(() =>
                   <CircleCheckIcon v-if="probeResult.ok" class="mt-0.5 size-4 shrink-0" />
                   <CircleXIcon v-else class="mt-0.5 size-4 shrink-0" />
                   <span>
-                    <template v-if="probeResult.error">检测出错：{{ probeResult.error }}</template>
+                    <template v-if="probeResult.error">检测失败：{{ probeResult.error }}</template>
                     <template v-else
                       >{{ probeResult.ok ? '检测通过' : '检测未通过' }}（{{
                         probeResult.detail
@@ -1174,7 +1188,7 @@ const fieldsHit = computed(() =>
           <!-- 窄屏时样例请求作为一个分区 -->
           <!-- 接入清单：加入订阅、在客户端里安装、推送到目的地、等第一次回传 -->
           <template v-else-if="section === 'setup'">
-            <HintText v-if="isNew">保存来源后，在这里把它加入订阅、推送到目的地。</HintText>
+            <HintText v-if="isNew">保存来源后，可在此处将其加入订阅并配置推送规则。</HintText>
             <SourceSetup
               v-else
               :source="{ id: Number(id), key: doc.key, name: doc.name, enabled: !!doc.enabled }"
@@ -1198,7 +1212,7 @@ const fieldsHit = computed(() =>
         </Button>
         <ConfirmButton
           title="删除来源？"
-          description="同时删除它的登录态和推送规则，订阅的 MITM 列表随之更新。不可撤销。"
+          description="将同时删除该来源的登录态与推送规则，订阅的 MITM 列表随之更新。此操作不可撤销。"
           confirm-text="删除"
           variant="outline"
           class="text-destructive hover:bg-destructive/10 hover:text-destructive"

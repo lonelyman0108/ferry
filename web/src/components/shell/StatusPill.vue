@@ -19,7 +19,7 @@ const s = computed(() => overview.summary)
       :class="s.action ? 'bg-warning' : 'bg-success'"
       aria-hidden="true"
     />
-    <span class="truncate font-medium">{{ s.action ? `${s.action} 件事要处理` : '全部通着' }}</span>
+    <span class="truncate font-medium">{{ s.action ? `${s.action} 项待处理` : '运行正常' }}</span>
     <span v-if="s.notice" class="text-muted-foreground hidden truncate lg:inline"
       >另有 {{ s.notice }} 条提醒</span
     >

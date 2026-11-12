@@ -60,10 +60,10 @@ func (s Spec) Validate(fields []string) error {
 	switch strings.ToUpper(s.Method) {
 	case "", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD":
 	default:
-		return fmt.Errorf("有效性检测的 method %q 不支持", s.Method)
+		return fmt.Errorf("有效性检测不支持 method %q", s.Method)
 	}
 	if !strings.HasPrefix(s.URL, "http://") && !strings.HasPrefix(s.URL, "https://") {
-		return errors.New("有效性检测的 url 需以 http:// 或 https:// 开头")
+		return errors.New("有效性检测的 url 须以 http:// 或 https:// 开头")
 	}
 	templates := map[string]string{"url": s.URL, "body": s.Body}
 	for k, v := range s.Headers {
@@ -85,11 +85,11 @@ func (s Spec) Validate(fields []string) error {
 		return errors.New("有效性检测缺少成功条件 expect")
 	}
 	if _, err := expr.Compile(s.Expect, expr.Env(sampleEnv()), expr.AsBool()); err != nil {
-		return fmt.Errorf("判定表达式有误：%w", err)
+		return fmt.Errorf("成功条件表达式错误：%w", err)
 	}
 	if s.Identity != "" {
 		if _, err := expr.Compile(s.Identity, expr.Env(sampleEnv())); err != nil {
-			return fmt.Errorf("取身份表达式有误：%w", err)
+			return fmt.Errorf("身份表达式错误：%w", err)
 		}
 	}
 	if s.Timeout < 0 || time.Duration(s.Timeout)*time.Second > maxTimeout {
@@ -180,11 +180,11 @@ func Run(ctx context.Context, client *http.Client, s Spec, values map[string]str
 
 	out, err := expr.Eval(s.Expect, env)
 	if err != nil {
-		return Result{Err: fmt.Errorf("判定表达式执行出错：%w", err)}
+		return Result{Err: fmt.Errorf("成功条件执行失败：%w", err)}
 	}
 	ok, isBool := out.(bool)
 	if !isBool {
-		return Result{Err: errors.New("判定表达式的结果不是布尔值")}
+		return Result{Err: errors.New("成功条件的结果不是布尔值")}
 	}
 	res := Result{OK: ok, Detail: fmt.Sprintf("HTTP %d", resp.StatusCode)}
 	if !ok {
@@ -199,7 +199,7 @@ func Run(ctx context.Context, client *http.Client, s Spec, values map[string]str
 			}
 		}
 		if err != nil {
-			res.Detail += "；取身份表达式出错，沿用原身份"
+			res.Detail += "；身份表达式执行失败，沿用原身份"
 		}
 	}
 	return res

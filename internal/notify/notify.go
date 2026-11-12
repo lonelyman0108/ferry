@@ -50,11 +50,11 @@ func Format(e events.Event) Message {
 	case events.ValueExpiring:
 		m.Title, m.Body = "Ferry：登录态即将过期", who+"："+fields
 		if e.ExpiresAt != nil {
-			m.Body += "\n将于 " + e.ExpiresAt.Local().Format("01-02 15:04") + " 过期，需在 App 中刷新"
+			m.Body += "\n将于 " + e.ExpiresAt.Local().Format("01-02 15:04") + " 过期，请在 App 中刷新登录态"
 		}
 	case events.MitmChanged:
 		m.Title = "Ferry：订阅待更新"
-		m.Body = "订阅「" + e.Subject + "」的 MITM 域名有变化，点开通知在客户端里更新"
+		m.Body = "订阅「" + e.Subject + "」的 MITM 域名已变更，点击此通知可在客户端中更新订阅"
 	default:
 		m.Title, m.Body = "Ferry："+e.Type, who
 	}
@@ -146,7 +146,7 @@ func (s *Service) Dispatch(ctx context.Context, e events.Event) int {
 func (s *Service) SendTo(ctx context.Context, ch store.Channel, m Message) error {
 	c, err := s.Decrypt(ch)
 	if err != nil {
-		return fmt.Errorf("解密渠道配置：%w", err)
+		return fmt.Errorf("解密通知渠道配置失败：%w", err)
 	}
 	return Send(ctx, s.HTTP, ch.Kind, c, m)
 }

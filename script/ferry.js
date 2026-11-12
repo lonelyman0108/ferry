@@ -67,7 +67,7 @@ function makeEnv(g) {
         var req = { url: opts.url, method: opts.method, headers: opts.headers, body: opts.body };
         g.$task.fetch(req).then(
           function (r) { once(null, { status: r.statusCode, headers: r.headers || {}, body: r.body }); },
-          function (r) { once(new Error((r && r.error) || 'request failed')); }
+          function (r) { once(new Error((r && r.error) || '请求失败')); }
         );
         return;
       }
@@ -991,7 +991,7 @@ function withTimeout(g, env, opts, cb) {
   var timer = g.setTimeout(function () {
     if (!called) {
       called = true;
-      cb(new Error('timeout'));
+      cb(new Error('请求超时'));
     }
   }, HTTP_TIMEOUT_MS);
   env.request(opts, function (err, res) {
@@ -1049,7 +1049,7 @@ function openChannel(g, env, args) {
   if (key) env.write('1', SEALED_KEY);
   var keys = key ? transportKeys(key) : null;
   if (!keys) {
-    warnOnce(env, 'nokey', '尚未填写传输密钥', '在代理客户端的模块参数里填入 Ferry 后台显示的传输密钥；填好之前不回传。');
+    warnOnce(env, 'nokey', '尚未填写传输密钥', '请在代理客户端的模块参数中填写 Ferry 后台显示的传输密钥，填写前不回传登录态。');
     return null;
   }
   return sealedChannel(g, env, args, keys, fnv1a(args.kid + ':' + key));
@@ -1101,8 +1101,8 @@ function sealedChannel(g, env, args, keys, fp) {
     requestWithFallback(g, env, args, '/api/v1/sealed', { method: 'POST', headers: headers, body: msg }, function (err, res) {
       if (err) return cb(err);
       if (res.status === 401) {
-        warnOnce(env, 'badkey', '传输密钥不对', '平台解不开请求：密钥填错了或已在后台更换，请在模块参数里填入后台显示的密钥。');
-        return cb(null, { status: 401, etag: '', body: { error: '传输密钥不对或已更换' }, warned: true });
+        warnOnce(env, 'badkey', '传输密钥错误', '服务端无法解密请求：密钥填写错误或已在后台更换，请在模块参数中填写后台显示的密钥。');
+        return cb(null, { status: 401, etag: '', body: { error: '传输密钥错误或已更换' }, warned: true });
       }
       if (res.status !== 200) return cb(null, { status: res.status, etag: '', body: null });
       var opened = openMessage(keys.down, res.body);
@@ -1112,16 +1112,16 @@ function sealedChannel(g, env, args, keys, fp) {
       } catch (e) {
         rep = null;
       }
-      if (!rep || rep.re !== b64urlEncode(nonce)) return cb(new Error('回复校验失败'));
+      if (!rep || rep.re !== b64urlEncode(nonce)) return cb(new Error('响应校验失败'));
       var out = { status: rep.status, etag: rep.etag || '', body: rep.body === undefined ? null : rep.body };
       if (rep.status === 409 && rep.time) {
         out.warned = true;
-        warnOnce(env, 'clock', '手机时间不准', '手机时间和平台相差超过 5 分钟，请打开自动设置时间。');
+        warnOnce(env, 'clock', '设备时间不准确', '设备时间与服务端时间相差超过 5 分钟，请开启自动设置时间。');
       } else if (rep.status === 410) {
         out.warned = true;
         env.write('', SEALED_KEY);
         env.write('', KEY_FP_KEY);
-        warnOnce(env, 'gone', '订阅已改为不加密', '请在代理客户端里重新安装 Ferry 模块。');
+        warnOnce(env, 'gone', '订阅已切换为明文传输', '请在代理客户端中重新安装 Ferry 订阅。');
       }
       cb(null, out);
     });
@@ -1133,7 +1133,7 @@ function sealedChannel(g, env, args, keys, fp) {
       call('ping', undefined, '', function (err, res) {
         if (!err && res.status === 200) {
           env.write(fp, KEY_FP_KEY);
-          env.notify('Ferry', '传输已加密', '已用模块参数里的密钥连上平台，之后的回传都会加密。');
+          env.notify('Ferry', '传输已加密', '已使用模块参数中的密钥连接服务端，后续回传均加密传输。');
         } else if (err) {
           env.notify('Ferry', '加密连接失败', err.message);
         }

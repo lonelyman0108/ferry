@@ -11,7 +11,7 @@ defineProps<{ items: ActivityItem[]; compact?: boolean }>()
 const icons = { sync: DownloadIcon, review: CheckCheckIcon, push: SendIcon, notify: BellIcon }
 const outcome: Record<string, { dot: string; label: string }> = {
   success: { dot: 'bg-success', label: '成功' },
-  warning: { dot: 'bg-warning', label: '有问题' },
+  warning: { dot: 'bg-warning', label: '异常' },
   failure: { dot: 'bg-destructive', label: '失败' },
   '': { dot: 'bg-muted-foreground/50', label: '' },
 }

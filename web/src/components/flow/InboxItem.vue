@@ -42,7 +42,7 @@ const identity = computed(() =>
       <StatusBadge :tone="meta.tone">{{ meta.label }}</StatusBadge>
       <span class="font-medium">{{ who }}</span>
       <template v-if="item.destination_name">
-        <ArrowRightIcon class="text-muted-foreground size-3.5" aria-label="推到" />
+        <ArrowRightIcon class="text-muted-foreground size-3.5" aria-label="推送至" />
         <span class="font-medium">{{ item.destination_name }}</span>
       </template>
     </div>
@@ -55,17 +55,15 @@ const identity = computed(() =>
       </template>
       <template v-else-if="item.kind === 'push_failed' || item.kind === 'push_retrying'">
         {{ item.error || '推送失败' }}
-        <template v-if="item.attempts"> · 已试 {{ item.attempts }} 次</template>
+        <template v-if="item.attempts"> · 已尝试 {{ item.attempts }} 次</template>
       </template>
       <template v-else-if="item.kind === 'expiring' || item.kind === 'expired'">
         <span class="text-foreground font-mono">{{ item.field }}</span>
         <template v-if="identity"> · {{ identity }}</template>
         · {{ item.kind === 'expired' ? '已过期' : fmtUntil(item.at) + '过期' }}
       </template>
-      <template v-else-if="item.kind === 'outdated'">
-        平台上的读取域名变了，手机里那份订阅要更新一次
-      </template>
-      <template v-else>创建于 {{ fmtAgo(item.at) }}，手机上还没连上过</template>
+      <template v-else-if="item.kind === 'outdated'">MITM 域名已变更，需更新订阅</template>
+      <template v-else>创建于 {{ fmtAgo(item.at) }}，从未连接</template>
     </p>
 
     <p
@@ -73,7 +71,7 @@ const identity = computed(() =>
       class="text-muted-foreground flex items-start gap-1.5 text-sm"
     >
       <SmartphoneIcon class="mt-0.5 size-3.5 shrink-0" />
-      在手机上打开{{ item.source_name }}的 App，新的登录态会自动回传
+      在设备上打开{{ item.source_name }}的 App 后，新的登录态将自动回传
     </p>
 
     <div class="mt-1 flex flex-wrap gap-2">
@@ -102,9 +100,9 @@ const identity = computed(() =>
       </template>
       <template v-else-if="item.kind === 'never_connected'">
         <Button size="sm" variant="outline" @click="actions.openInstall(item)">安装引导</Button>
-        <Button size="sm" variant="ghost" @click="emit('dismiss')">知道了</Button>
+        <Button size="sm" variant="ghost" @click="emit('dismiss')">忽略</Button>
       </template>
-      <Button v-else size="sm" variant="outline" @click="emit('dismiss')">知道了</Button>
+      <Button v-else size="sm" variant="outline" @click="emit('dismiss')">忽略</Button>
     </div>
   </div>
 </template>

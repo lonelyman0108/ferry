@@ -28,7 +28,7 @@ func (e *StateError) Error() string { return e.Msg }
 func (s *Service) Approve(ctx context.Context, versionID uint) error {
 	return s.changeVersion(ctx, versionID, func(v store.Version) (string, error) {
 		if v.Status != store.VersionPendingReview {
-			return "", &StateError{"只有待审核的版本能通过"}
+			return "", &StateError{"仅待审核的版本可审核通过"}
 		}
 		return events.ValueUpdated, nil
 	}, events.CauseApprove, "审核通过")
@@ -38,7 +38,7 @@ func (s *Service) Approve(ctx context.Context, versionID uint) error {
 func (s *Service) Reject(ctx context.Context, versionID uint) error {
 	return s.changeVersion(ctx, versionID, func(v store.Version) (string, error) {
 		if v.Status != store.VersionPendingReview {
-			return "", &StateError{"只有待审核的版本能驳回"}
+			return "", &StateError{"仅待审核的版本可驳回"}
 		}
 		return events.ValueRejected, nil
 	}, "", "人工驳回")
@@ -48,7 +48,7 @@ func (s *Service) Reject(ctx context.Context, versionID uint) error {
 func (s *Service) Activate(ctx context.Context, versionID uint) error {
 	return s.changeVersion(ctx, versionID, func(v store.Version) (string, error) {
 		if v.Status != store.VersionValid {
-			return "", &StateError{"只有校验通过的版本能设为当前值"}
+			return "", &StateError{"仅校验通过的版本可设为当前值"}
 		}
 		if v.Current {
 			return "", &StateError{"该版本已是当前值"}
@@ -70,7 +70,7 @@ func (s *Service) changeVersion(ctx context.Context, versionID uint, check func(
 			return err
 		}
 		if v.IdentityID == nil {
-			return &StateError{"版本尚未归属身份，需待批次处理完成"}
+			return &StateError{"版本尚未关联身份，请等待批次处理完成"}
 		}
 		typ, err := check(v)
 		if err != nil {

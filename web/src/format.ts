@@ -43,7 +43,7 @@ export async function copyText(text: string) {
   ta.select()
   const ok = document.execCommand('copy')
   ta.remove()
-  if (!ok) throw new Error('浏览器禁止复制，需手动复制')
+  if (!ok) throw new Error('复制失败：浏览器不允许访问剪贴板，请手动复制')
 }
 
 // 当前值在这个时长内到期算即将过期，和后端总览的口径一致。

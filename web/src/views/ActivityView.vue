@@ -90,17 +90,19 @@ onMounted(async () => {
           }}</NativeSelectOption>
         </NativeSelect>
         <label class="flex items-center gap-2 text-sm">
-          <Switch v-model="problems" /> 只看失败和警告
+          <Switch v-model="problems" /> 仅显示失败与警告
         </label>
-        <span class="text-muted-foreground text-xs">按来源筛选时不含通知；通知不属于某个来源</span>
+        <span class="text-muted-foreground text-xs"
+          >按来源筛选时不包含通知（通知不归属于特定来源）</span
+        >
       </div>
 
       <ListSkeleton v-if="!items" :rows="5" />
       <EmptyState
         v-else-if="!items.length"
         :icon="ActivityIcon"
-        :title="problems ? '没有失败或警告' : '还没有记录'"
-        description="手机回传、审核、推送和通知都会记在这里。"
+        :title="problems ? '暂无失败或警告' : '暂无记录'"
+        description="此处记录回传、审核、推送与通知事件。"
       />
       <div v-else class="bg-card rounded-lg border p-4">
         <ActivityList :items="items" />

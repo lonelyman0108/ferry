@@ -122,7 +122,7 @@ async function retry(pushID: number) {
   try {
     const { data } = await api.post<PushJob>(`/pushes/${pushID}/retry`, {})
     if (data.status === 'success') toast.success('已推送')
-    else toast.error(`仍然没推出去：${data.last_error || '稍后自动重试'}`)
+    else toast.error(`推送失败：${data.last_error || '等待自动重试'}`)
     await refresh()
   } catch (e) {
     toast.error(errorText(e))
@@ -181,9 +181,9 @@ const jobState = (j: PushJob) =>
     <section
       v-if="items.length"
       class="bg-card grid grid-cols-1 gap-3 rounded-lg border p-4"
-      aria-label="和它有关的待处理"
+      aria-label="相关待处理事项"
     >
-      <h2 class="text-muted-foreground text-xs">和它有关的待处理</h2>
+      <h2 class="text-muted-foreground text-xs">相关待处理事项</h2>
       <div
         v-for="it in items"
         :key="`${it.kind}-${it.push_id}`"
@@ -194,10 +194,8 @@ const jobState = (j: PushJob) =>
     </section>
 
     <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
-      <DetailSection title="推到这里的来源" :aside="`${bindings.length} 条推送规则`">
-        <p v-if="!bindings.length" class="text-muted-foreground text-sm">
-          还没有推送规则指向这里。
-        </p>
+      <DetailSection title="推送至此的来源" :aside="`${bindings.length} 条推送规则`">
+        <p v-if="!bindings.length" class="text-muted-foreground text-sm">暂无关联的推送规则。</p>
         <ul v-else class="bg-card divide-y rounded-lg border">
           <li v-for="b in bindings" :key="b.id" class="flex flex-wrap items-center gap-2 p-3">
             <BoxesIcon class="text-muted-foreground size-4" />
@@ -229,7 +227,7 @@ const jobState = (j: PushJob) =>
       </DetailSection>
 
       <DetailSection title="最近推送" :aside="pushes.length ? `最近 ${pushes.length} 次` : ''">
-        <p v-if="!pushes.length" class="text-muted-foreground text-sm">还没推过。</p>
+        <p v-if="!pushes.length" class="text-muted-foreground text-sm">暂无推送记录。</p>
         <ul v-else class="bg-card divide-y rounded-lg border text-sm">
           <li v-for="j in pushes" :key="j.id" class="grid grid-cols-1 gap-0.5 p-3">
             <div class="flex flex-wrap items-center gap-2">

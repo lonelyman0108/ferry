@@ -87,11 +87,11 @@ const adminInsecure = (() => {
 })()
 
 const keyWhere: Record<string, string> = {
-  surge: '在 Surge 的模块列表里找到这个模块，编辑参数，把 key 填成下面的密钥。',
-  shadowrocket: '在 Shadowrocket 的模块列表里找到这个模块，编辑参数，把 key 填成下面的密钥。',
-  loon: '在 Loon 的插件列表里打开这个插件，在参数里填“传输密钥”，其余几项保持不变。',
-  stash: '在 Stash 的覆写列表里打开这个覆写，在“参数”里填“传输密钥”。',
-  egern: '在 Egern 的配置里，给这个模块的引用加上 compat_arguments，把 key 填成下面的密钥。',
+  surge: '在 Surge 的模块列表中找到该模块，编辑参数，将 key 设为下方的密钥。',
+  shadowrocket: '在 Shadowrocket 的模块列表中找到该模块，编辑参数，将 key 设为下方的密钥。',
+  loon: '在 Loon 的插件列表中打开该插件，在参数中填写“传输密钥”，其余参数保持不变。',
+  stash: '在 Stash 的覆写列表中打开该覆写，在“参数”中填写“传输密钥”。',
+  egern: '在 Egern 的配置中，为该模块的引用添加 compat_arguments，将 key 设为下方的密钥。',
 }
 
 // 每一步是否已经完成：装好了、连通了、密钥验证过了。开 MITM 这一步看不到，连通了就算完成。
@@ -114,7 +114,7 @@ const stepClass = (ok: boolean) =>
 <template>
   <DialogShell
     :open="!!sub"
-    :title="`在 ${client?.label ?? ''} 里安装`"
+    :title="`在 ${client?.label ?? ''} 中安装`"
     :description="sub?.name"
     :brand="sub?.client"
     size="lg"
@@ -129,7 +129,7 @@ const stepClass = (ok: boolean) =>
           <div>
             <div class="font-medium">安装{{ term }}</div>
             <p class="text-muted-foreground text-sm">
-              在装有 {{ client.label }} 的手机上打开下面的链接，或者用相机扫码。
+              在已安装 {{ client.label }} 的设备上打开以下链接，或使用相机扫描二维码。
             </p>
           </div>
           <div class="flex flex-wrap items-start gap-4">
@@ -138,19 +138,19 @@ const stepClass = (ok: boolean) =>
               <CopyField :value="sub.links.install_url" label="安装链接" />
               <div class="md:hidden">
                 <Button as="a" :href="sub.links.install_url" size="sm"
-                  ><DownloadIcon /> 在这台手机上打开</Button
+                  ><DownloadIcon /> 在本机打开</Button
                 >
               </div>
               <p v-if="sub.outdated" class="text-warning flex gap-1.5 text-sm">
                 <TriangleAlertIcon class="mt-0.5 size-4 shrink-0" />
-                MITM 域名有变化，手机上的{{ term }}需要更新：重新打开上面的链接，或者在
-                {{ client.label }} 里更新这个{{ term }}。
+                MITM 域名已变更，需更新设备上的{{ term }}：重新打开上方链接，或在
+                {{ client.label }} 中更新该{{ term }}。
               </p>
               <p
                 v-else-if="sub.file_fetched_at"
                 class="text-success flex items-center gap-1.5 text-sm"
               >
-                <CheckIcon class="size-4 shrink-0" />{{ client.label }} 已下载过订阅（{{
+                <CheckIcon class="size-4 shrink-0" />{{ client.label }} 已下载订阅（{{
                   fmtAgo(sub.file_fetched_at)
                 }}）
               </p>
@@ -166,8 +166,8 @@ const stepClass = (ok: boolean) =>
         <div class="grid min-w-0 gap-2">
           <div class="font-medium">开启 MITM 并信任证书</div>
           <p class="text-muted-foreground text-sm">
-            在 {{ client.label }} 里开启 MITM，生成并安装 CA 证书，再到 iOS 的“设置 → 通用 →
-            关于本机 → 证书信任设置”里信任它。{{ term }}会自动加上下面这些域名：
+            在 {{ client.label }} 中开启 MITM，生成并安装 CA 证书，然后在 iOS 的“设置 → 通用 →
+            关于本机 → 证书信任设置”中启用对该证书的完全信任。{{ term }}将自动添加以下域名：
           </p>
           <div v-if="sub.hostnames.length" class="flex flex-wrap gap-1.5">
             <code
@@ -177,7 +177,7 @@ const stepClass = (ok: boolean) =>
               >{{ h }}</code
             >
           </div>
-          <p v-else class="text-warning text-sm">这个订阅现在没有包含任何启用的来源。</p>
+          <p v-else class="text-warning text-sm">该订阅未包含任何已启用的来源。</p>
         </div>
       </li>
 
@@ -188,20 +188,21 @@ const stepClass = (ok: boolean) =>
         <div class="grid min-w-0 gap-2">
           <div class="font-medium">填写传输密钥</div>
           <p class="text-muted-foreground text-sm">
-            {{ keyWhere[sub.client] }}密钥不在订阅文件里，填好之前不会回传。
+            {{ keyWhere[sub.client] }}密钥不包含在订阅文件中，填写前不回传登录态。
           </p>
           <CopyField v-if="key" :value="key" label="传输密钥" />
           <Button v-else variant="outline" size="sm" class="justify-self-start" @click="revealKey"
             ><EyeIcon /> 显示密钥</Button
           >
           <p v-if="key && adminInsecure" class="text-warning text-xs">
-            当前通过 http 打开管理界面，密钥在网络上可被看到；建议改用 https 或在局域网内操作。
+            当前通过 http 访问管理界面，密钥在网络传输中可能被截获；建议改用 https
+            或在局域网内操作。
           </p>
           <p
             v-if="sub.transport.verified_at"
             class="text-success flex items-center gap-1.5 text-sm"
           >
-            <CheckIcon class="size-4 shrink-0" />已收到用这个密钥加密的请求（{{
+            <CheckIcon class="size-4 shrink-0" />已收到使用该密钥加密的请求（{{
               fmtAgo(sub.transport.verified_at)
             }}）
           </p>
@@ -217,8 +218,8 @@ const stepClass = (ok: boolean) =>
         <div class="grid min-w-0 gap-2">
           <div class="font-medium">打开 App 验证</div>
           <p class="text-muted-foreground text-sm">
-            在手机上打开{{ sourceNames ? `“${sourceNames}”对应的` : '对应的' }} App。脚本第一次连上
-            Ferry 后，这里会变成“已连通”。
+            在设备上打开{{ sourceNames ? `“${sourceNames}”对应的` : '对应的' }} App。脚本首次连接
+            Ferry 后，状态将变为“已连通”。
           </p>
           <div
             class="flex items-center gap-2 rounded-lg border p-3 text-sm"
@@ -229,7 +230,7 @@ const stepClass = (ok: boolean) =>
               {{ fmtAgo(sub.last_seen_at) }}
             </template>
             <template v-else>
-              <LoaderCircleIcon class="text-muted-foreground size-4 animate-spin" />等待手机连上…
+              <LoaderCircleIcon class="text-muted-foreground size-4 animate-spin" />等待设备连接…
             </template>
           </div>
         </div>

@@ -165,7 +165,7 @@ func (l *rateLimiter) allow(key string, now time.Time) bool {
 func (s *Server) limitByIP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.phoneLimiter.allow(clientIP(r), s.now()) {
-			writeError(w, http.StatusTooManyRequests, "请求太频繁")
+			writeError(w, http.StatusTooManyRequests, "请求过于频繁")
 			return
 		}
 		next.ServeHTTP(w, r)

@@ -95,7 +95,7 @@ const kindOptions = [
   {
     value: 'qinglong' as const,
     label: '青龙',
-    description: 'OpenAPI 写入环境变量',
+    description: '通过 OpenAPI 写入环境变量',
     brand: 'qinglong',
   },
   {
@@ -356,8 +356,8 @@ const bindForm = reactive({
   enabled: true,
 })
 const outputs = ref<string[]>([])
-const noSources = '还没有来源，先到“来源”页新建一个'
-const noDests = '还没有目的地，先在“目的地”标签页新建一个'
+const noSources = '暂无来源，请在“来源”页面新建'
+const noDests = '暂无目的地，请在“目的地”标签页新建'
 const bindCheck = useFormCheck(() => ({
   source_id: !bindForm.source_id && (sources.value.length ? '请选择来源' : noSources),
   destination_id: !bindForm.destination_id && (dests.value.length ? '请选择目的地' : noDests),
@@ -446,7 +446,7 @@ const pushCheck = useFormCheck(() => ({
   identity_id:
     pushForm.binding?.mode === 'per_identity' &&
     !pushForm.identity_id &&
-    (pushIdentities.value.length ? '请选择身份' : '这个来源还没有登录态，回传以后才能推送'),
+    (pushIdentities.value.length ? '请选择身份' : '该来源暂无登录态，回传后方可推送'),
 }))
 
 function openPush(b: Binding) {
@@ -518,8 +518,8 @@ async function runPush() {
       <EmptyState
         v-else-if="!dests.length"
         :icon="SendIcon"
-        title="还没有目的地"
-        description="登录态最终写去的地方，比如青龙的环境变量，或者你自己的 Webhook。"
+        title="暂无目的地"
+        description="目的地是登录态的最终写入位置，例如青龙环境变量或自定义 Webhook。"
       >
         <Button @click="newDest"><PlusIcon /> 新建目的地</Button>
       </EmptyState>
@@ -564,7 +564,7 @@ async function runPush() {
             :enabled="d.enabled"
             :toggling="toggling === `d${d.id}`"
             delete-title="删除目的地？"
-            delete-description="还有推送规则用到它时不能删除；已写入目的地的变量会保留。"
+            delete-description="存在引用该目的地的推送规则时无法删除；已写入目的地的变量将保留。"
             @toggle="(v) => toggleDest(d, v)"
             @edit="editDest(d)"
             @remove="removeDest(d)"
@@ -595,20 +595,16 @@ async function runPush() {
       <EmptyState
         v-else-if="!bindings.length"
         :icon="SplitIcon"
-        title="还没有推送规则"
-        description="推送规则决定哪个来源的登录态推到哪个目的地。"
+        title="暂无推送规则"
+        description="推送规则定义各来源的登录态推送至哪个目的地。"
       >
-        <Button v-if="!dests.length" @click="startDest"><PlusIcon /> 先新建目的地</Button>
+        <Button v-if="!dests.length" @click="startDest"><PlusIcon /> 新建目的地</Button>
         <Button v-else-if="!sources.length" as-child
-          ><RouterLink to="/sources"><PlusIcon /> 先新建来源</RouterLink></Button
+          ><RouterLink to="/sources"><PlusIcon /> 新建来源</RouterLink></Button
         >
         <Button v-else @click="newBinding"><PlusIcon /> 新建推送规则</Button>
       </EmptyState>
-      <EmptyState
-        v-else-if="!shownBindings.length"
-        :icon="SplitIcon"
-        title="这个来源还没有推送规则"
-      >
+      <EmptyState v-else-if="!shownBindings.length" :icon="SplitIcon" title="该来源暂无推送规则">
         <Button @click="newBinding"><PlusIcon /> 新建推送规则</Button>
       </EmptyState>
       <template v-else>
@@ -637,14 +633,14 @@ async function runPush() {
                 ><span class="opacity-70">{{ from }}</span> → {{ to }}</span
               >
             </template>
-            <span v-else>变量名不改</span>
+            <span v-else>沿用原变量名</span>
           </template>
           <template #actions>
             <RowActions
               :enabled="b.enabled"
               :toggling="toggling === `b${b.id}`"
               delete-title="删除推送规则？"
-              delete-description="停止推送；已写入目的地的变量保留。"
+              delete-description="删除后停止推送，已写入目的地的变量将保留。"
               @toggle="(v) => toggleBinding(b, v)"
               @edit="editBinding(b)"
               @remove="removeBinding(b)"
@@ -661,7 +657,9 @@ async function runPush() {
     <!-- 推送记录 -->
     <TabsContent value="pushes" class="grid gap-3">
       <div class="flex flex-wrap items-center gap-2">
-        <HintText class="mr-auto">最近 100 条；失败的任务会自动重试，也可以立即重试。</HintText>
+        <HintText class="mr-auto"
+          >显示最近 100 条记录。失败的任务将自动重试，也可手动立即重试。</HintText
+        >
         <NativeSelect v-model="pushFilter.status" aria-label="按状态筛选">
           <NativeSelectOption value="">全部状态</NativeSelectOption>
           <NativeSelectOption value="failed">失败</NativeSelectOption>
@@ -779,7 +777,7 @@ async function runPush() {
     v-model:open="destForm.open"
     v-model:enabled="destForm.enabled"
     :title="destForm.id ? '编辑目的地' : '新建目的地'"
-    :description="destForm.id ? destForm.name : '新值生效后的推送目标'"
+    :description="destForm.id ? destForm.name : '登录态更新后的推送目标'"
     :brand="destForm.kind === 'qinglong' ? 'qinglong' : undefined"
     :icon="WebhookIcon"
     :tone="destForm.kind === 'qinglong' ? 'emerald' : 'sky'"
@@ -803,7 +801,7 @@ async function runPush() {
     <FormSection
       v-if="destForm.kind === 'qinglong'"
       title="连接"
-      description="系统设置 → 应用设置，授权范围：环境变量"
+      description="在青龙“系统设置 → 应用设置”中创建应用，授权范围选择“环境变量”"
     >
       <FormField label="地址" for="d-base" full :error="destCheck.errors.base_url">
         <Input
@@ -852,7 +850,7 @@ async function runPush() {
         <FormField label="请求体模板" for="d-body" optional full>
           <Textarea id="d-body" v-model="destForm.config.body" rows="4" class="font-mono text-xs" />
           <template #hint>
-            Go 模板；留空发送默认 JSON（source、identity、vars）。引用变量：<code
+            Go 模板；留空时发送默认 JSON（source、identity、vars）。变量引用示例：<code
               class="font-mono"
               >{{ bodyExample }}</code
             >
@@ -886,7 +884,7 @@ async function runPush() {
     :description="
       bindForm.id
         ? `${sourceName(bindForm.source_id)} → ${destName(bindForm.destination_id)}`
-        : '把来源的输出变量推送到目的地'
+        : '将来源的输出变量推送至目的地'
     "
     :icon="SplitIcon"
     tone="emerald"
@@ -935,13 +933,13 @@ async function runPush() {
       <ChoiceCards v-model="bindForm.mode" :options="modeOptions" label="写入方式" />
     </FormSection>
 
-    <FormSection title="变量改名" description="留空沿用原名" :cols="1">
+    <FormSection title="变量重命名" description="留空则沿用原变量名" :cols="1">
       <div v-for="o in outputs" :key="o" class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <code class="bg-muted truncate rounded px-2 py-1.5 font-mono text-xs">{{ o }}</code>
         <ArrowRightIcon class="text-muted-foreground size-4" />
         <Input
           v-model="bindForm.rename[o]"
-          :aria-label="`${o} 改名为`"
+          :aria-label="`${o} 重命名为`"
           class="font-mono text-xs"
           :placeholder="o"
         />
@@ -958,7 +956,7 @@ async function runPush() {
     :icon="SendIcon"
     tone="emerald"
     size="sm"
-    submit-text="推送"
+    submit-text="立即推送"
     :busy="busy"
     @submit="runPush"
   >
@@ -973,10 +971,8 @@ async function runPush() {
           a.key === 'default' ? '默认' : a.key
         }}</NativeSelectOption>
       </NativeSelect>
-      <template v-if="!pushIdentities.length" #hint
-        >这个来源还没有登录态，回传以后才能推送</template
-      >
+      <template v-if="!pushIdentities.length" #hint>该来源暂无登录态，回传后方可推送</template>
     </FormField>
-    <p v-else class="text-muted-foreground text-sm">按当前值把全部身份合并推送一次。</p>
+    <p v-else class="text-muted-foreground text-sm">将全部身份的当前值合并后推送一次。</p>
   </FormDialog>
 </template>

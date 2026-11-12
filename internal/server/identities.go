@@ -232,7 +232,7 @@ func (s *Server) handleListVersions(w http.ResponseWriter, r *http.Request) {
 	}
 	// 字段写错时报错，不退回成列出全部字段。
 	if field != "" && !matched {
-		writeError(w, http.StatusBadRequest, "来源没有这个字段："+field)
+		writeError(w, http.StatusBadRequest, "来源中不存在该字段："+field)
 		return
 	}
 	if v := r.URL.Query().Get("before"); v != "" {

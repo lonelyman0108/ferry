@@ -62,7 +62,7 @@ type Field struct {
 func (m Matcher) Validate() error {
 	h := strings.TrimPrefix(m.Host, "*.")
 	if h == "" || strings.ContainsAny(h, "*/: ") || strings.HasPrefix(h, ".") || strings.HasSuffix(h, ".") {
-		return fmt.Errorf("域名 %q 不合法，只能是精确域名或 *.example.com", m.Host)
+		return fmt.Errorf("域名 %q 不合法，仅支持精确域名或 *.example.com 形式", m.Host)
 	}
 	if m.PathRegex != "" {
 		if _, err := regexp.Compile(m.PathRegex); err != nil {
@@ -70,7 +70,7 @@ func (m Matcher) Validate() error {
 		}
 		// 订阅里 Surge 用逗号、Loon 用空格分隔参数，正则里出现它们会让订阅解析出错。
 		if strings.ContainsAny(m.PathRegex, ", \t") {
-			return fmt.Errorf(`路径正则不能含逗号或空白（订阅格式的分隔符）；逗号写作 \x2C，空格写作 \x20`)
+			return fmt.Errorf(`路径正则不能包含逗号或空白字符（订阅格式的分隔符）；逗号请写作 \x2C，空格请写作 \x20`)
 		}
 	}
 	return nil
@@ -81,21 +81,21 @@ func (f Field) Validate() error {
 	switch f.In {
 	case InHeader, InCookie, InQuery, InBodyJSON, InBodyForm:
 		if strings.TrimSpace(f.Path) == "" {
-			return fmt.Errorf("取值位置 %s 缺少 path", f.In)
+			return fmt.Errorf("读取位置 %s 缺少 path", f.In)
 		}
 	case InRegex:
 		re, err := regexp.Compile(f.Path)
 		if err != nil {
-			return fmt.Errorf("取值正则不合法：%w", err)
+			return fmt.Errorf("读取正则不合法：%w", err)
 		}
 		if re.NumSubexp() < 1 {
-			return fmt.Errorf("取值正则至少需一个捕获组")
+			return fmt.Errorf("读取正则至少需要一个捕获组")
 		}
 		if f.RegexOn != RegexOnURL && f.RegexOn != RegexOnBody {
-			return fmt.Errorf("regex 取值需指定 regex_on 为 url 或 body")
+			return fmt.Errorf("regex 读取须指定 regex_on 为 url 或 body")
 		}
 	default:
-		return fmt.Errorf("不支持的取值位置 %q", f.In)
+		return fmt.Errorf("不支持的读取位置 %q", f.In)
 	}
 	return nil
 }
@@ -198,7 +198,7 @@ func (f Field) Extract(r Request) (value string, ok bool, err error) {
 		}
 		return m[1], true, nil
 	}
-	return "", false, fmt.Errorf("不支持的取值位置 %q", f.In)
+	return "", false, fmt.Errorf("不支持的读取位置 %q", f.In)
 }
 
 // jsonPath 按点路径取 JSON 里的值，数组用数字下标（如 data.list.0.id）。

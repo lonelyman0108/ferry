@@ -51,7 +51,7 @@ func TestValidateCollectsAllProblems(t *testing.T) {
 	if !errors.As(err, &ve) {
 		t.Fatalf("err = %v，期望 ValidationError", err)
 	}
-	for _, want := range []string{"key 只能", "name 不能为空", "重复", "matchers[1]", "fields[0].key", "matcher \"missing\" 不存在", "不支持的取值位置", "type \"date\"", "min_len", "pattern", "identity_field", "outputs[0].name", "未声明的字段"} {
+	for _, want := range []string{"key 仅允许", "name 不能为空", "重复", "matchers[1]", "fields[0].key", "matcher \"missing\" 不存在", "不支持的读取位置", "type \"date\"", "min_len", "pattern", "identity_field", "outputs[0].name", "未声明的字段"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("缺少问题 %q：%v", want, err)
 		}

@@ -128,7 +128,7 @@ async function pushNow(p: IdentityPush, identityID: number) {
     if (data.status === 'success') toast.success(`已推送到 ${p.destination_name}`)
     else
       toast.error(
-        `没推出去：${data.last_error || pushStates[data.status === 'queued' ? 'retrying' : 'failed'].label}`,
+        `推送失败：${data.last_error || pushStates[data.status === 'queued' ? 'retrying' : 'failed'].label}`,
       )
     await refresh()
   } catch (e) {
@@ -143,7 +143,7 @@ async function retry(pushID: number, dest: string) {
   try {
     const { data } = await api.post<PushJob>(`/pushes/${pushID}/retry`, {})
     if (data.status === 'success') toast.success(`已推送到 ${dest}`)
-    else toast.error(`仍然没推出去：${data.last_error || '稍后自动重试'}`)
+    else toast.error(`推送失败：${data.last_error || '等待自动重试'}`)
     await refresh()
   } catch (e) {
     toast.error(errorText(e))
@@ -198,7 +198,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
           {{ src.name }}
           <StatusBadge v-if="!src.enabled" tone="neutral" dot>已停用</StatusBadge>
           <StatusBadge v-if="lane.review === 'manual'" tone="warning" dot>人工审核</StatusBadge>
-          <StatusBadge v-if="lane.probe" tone="info" dot>主动检测</StatusBadge>
+          <StatusBadge v-if="lane.probe" tone="info" dot>有效性检测</StatusBadge>
         </h1>
         <p class="text-muted-foreground font-mono text-sm">{{ src.key }}</p>
       </div>
@@ -215,9 +215,9 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
     <section
       v-if="lane.items.length"
       class="bg-card grid grid-cols-1 gap-3 rounded-lg border p-4"
-      aria-label="和它有关的待处理"
+      aria-label="相关待处理事项"
     >
-      <h2 class="text-muted-foreground text-xs">和它有关的待处理</h2>
+      <h2 class="text-muted-foreground text-xs">相关待处理事项</h2>
       <div
         v-for="it in lane.items"
         :key="`${it.kind}-${it.version_id ?? it.push_id}`"
@@ -229,9 +229,9 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
 
     <div class="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
       <div class="grid grid-cols-1 content-start gap-8">
-        <DetailSection title="身份与当前值" aside="敏感值只显示开头和结尾">
+        <DetailSection title="身份与当前值" aside="敏感值仅显示首尾字符">
           <p v-if="!lane.identities.length" class="text-muted-foreground text-sm">
-            还没收到回传。在手机上装好订阅，打开对应的 App 就会出现。
+            暂无回传。设备安装订阅并打开对应 App 后，登录态将自动回传。
           </p>
           <article
             v-for="a in lane.identities"
@@ -320,7 +320,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
             >
           </template>
           <p v-if="!lane.bindings.length" class="text-muted-foreground text-sm">
-            还没有推送规则：登录态只存在 Ferry 里，不会推到任何地方。
+            暂无推送规则。登录态仅保存在 Ferry 中，不推送至任何目的地。
           </p>
           <ul v-else class="bg-card divide-y rounded-lg border">
             <li
@@ -367,9 +367,9 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
       </div>
 
       <div class="grid grid-cols-1 content-start gap-8">
-        <DetailSection title="覆盖它的订阅" :aside="`${lane.devices.length} 台`">
+        <DetailSection title="覆盖此来源的订阅" :aside="`${lane.devices.length} 台`">
           <p v-if="!lane.devices.length" class="text-muted-foreground text-sm">
-            还没有订阅包含这个来源。
+            暂无覆盖此来源的订阅。
           </p>
           <ul v-else class="bg-card divide-y rounded-lg border">
             <li v-for="d in lane.devices" :key="d.id">
@@ -392,7 +392,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
           </ul>
         </DetailSection>
 
-        <DetailSection v-if="batches.length" title="收集中的回传" aside="等其余字段到齐后一起处理">
+        <DetailSection v-if="batches.length" title="收集中的回传" aside="待其余字段到齐后统一处理">
           <ul class="bg-card divide-y rounded-lg border">
             <li
               v-for="b in batches"
@@ -402,7 +402,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
               <span>来自 {{ b.subscription_name }}</span>
               <span class="text-muted-foreground text-xs">{{ fmtAgo(b.created_at) }}</span>
               <span v-if="b.missing.length" class="text-muted-foreground w-full text-xs"
-                >还差 {{ b.missing.join('、') }}</span
+                >缺少 {{ b.missing.join('、') }}</span
               >
               <Button
                 variant="outline"
@@ -424,7 +424,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
               >全部记录</router-link
             >
           </template>
-          <p v-if="!lane.recent.length" class="text-muted-foreground text-sm">还没有记录。</p>
+          <p v-if="!lane.recent.length" class="text-muted-foreground text-sm">暂无记录。</p>
           <ActivityList v-else :items="lane.recent" compact />
         </DetailSection>
       </div>

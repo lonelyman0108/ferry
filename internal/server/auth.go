@@ -63,7 +63,7 @@ func (s *Server) authenticate(allowToken bool) func(http.Handler) http.Handler {
 			} else if c, cerr := r.Cookie(sessionCookie); cerr == nil {
 				// 借用 Cookie 的跨站请求发不出 JSON 正文，所以写操作必须是 JSON。
 				if r.Method == http.MethodPost && !isJSON(r) {
-					writeError(w, http.StatusUnsupportedMediaType, "请求正文必须是 application/json")
+					writeError(w, http.StatusUnsupportedMediaType, "请求正文须为 application/json")
 					return
 				}
 				id, err = s.lookupSession(r.Context(), c.Value)
@@ -154,7 +154,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := clientIP(r)
 	if !s.limiter.allow(ip, s.now()) {
-		writeError(w, http.StatusTooManyRequests, "登录失败次数过多，稍后重试")
+		writeError(w, http.StatusTooManyRequests, "登录失败次数过多，请稍后重试")
 		return
 	}
 	db := s.store().DB.WithContext(r.Context())

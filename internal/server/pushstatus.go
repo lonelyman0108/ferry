@@ -175,7 +175,7 @@ func (s *Server) handleRetryPush(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		writeError(w, http.StatusConflict, "任务正在执行或已经成功，不用重试")
+		writeError(w, http.StatusConflict, "推送任务正在执行或已成功，无需重试")
 		return
 	}
 	if _, err := p.Run(r.Context(), job.ID); err != nil {

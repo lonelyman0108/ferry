@@ -187,13 +187,13 @@ func (s *Server) latestRelease(ctx context.Context) (tag, url string, err error)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", errors.New("连不上 GitHub")
+		return "", "", errors.New("连接 GitHub 失败")
 	}
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
 	case http.StatusNotFound:
-		return "", "", errors.New("还没有发布过版本")
+		return "", "", errors.New("暂无已发布版本")
 	default:
 		return "", "", errors.New("GitHub 返回 " + resp.Status)
 	}
@@ -202,7 +202,7 @@ func (s *Server) latestRelease(ctx context.Context) (tag, url string, err error)
 		HTMLURL string `json:"html_url"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return "", "", errors.New("GitHub 的回复看不懂")
+		return "", "", errors.New("无法解析 GitHub 的响应")
 	}
 	return body.TagName, body.HTMLURL, nil
 }
