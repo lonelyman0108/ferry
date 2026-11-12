@@ -482,8 +482,11 @@ async function runPush() {
   <PageHeader />
 
   <Tabs v-model="tab">
-    <div class="mb-2 flex flex-wrap items-center gap-2">
-      <TabsList class="mr-auto">
+    <!-- 手机上标签栏和右侧按钮保持同一行：标签去掉图标，仍放不下时横向滚动 -->
+    <div class="mb-2 flex flex-wrap items-center gap-2 max-sm:flex-nowrap">
+      <TabsList
+        class="no-scrollbar mr-auto max-sm:min-w-0 max-sm:overflow-x-auto max-sm:[&_svg]:hidden"
+      >
         <TabsTrigger value="destinations"
           ><ServerIcon /> 目的地
           <span
@@ -500,13 +503,13 @@ async function runPush() {
         >
         <TabsTrigger value="pushes" @click="loadPushes"><HistoryIcon /> 推送记录</TabsTrigger>
       </TabsList>
-      <Button v-if="tab === 'destinations'" @click="newDest"
+      <Button v-if="tab === 'destinations'" class="max-sm:min-w-11 max-sm:px-0" @click="newDest"
         ><PlusIcon /><span class="max-sm:sr-only">新建目的地</span></Button
       >
-      <Button v-else-if="tab === 'bindings'" @click="newBinding"
+      <Button v-else-if="tab === 'bindings'" class="max-sm:min-w-11 max-sm:px-0" @click="newBinding"
         ><PlusIcon /><span class="max-sm:sr-only">新建推送规则</span></Button
       >
-      <Button v-else variant="outline" @click="loadPushes"
+      <Button v-else variant="outline" class="max-sm:min-w-11 max-sm:px-0" @click="loadPushes"
         ><RefreshCwIcon /><span class="max-sm:sr-only">刷新</span></Button
       >
     </div>

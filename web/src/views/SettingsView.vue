@@ -93,9 +93,8 @@ onMounted(async () => {
 <template>
   <PageHeader>
     <template #actions>
-      <Button @click="editEndpoint()"
-        ><PlusIcon /><span class="max-sm:sr-only">新建访问地址</span></Button
-      >
+      <!-- 窄屏时操作区单独占一行，保留文字，不只显示图标 -->
+      <Button @click="editEndpoint()"><PlusIcon /> 新建访问地址</Button>
     </template>
   </PageHeader>
 

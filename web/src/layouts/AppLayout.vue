@@ -1,21 +1,14 @@
 <script setup lang="ts">
-import { ChevronsUpDownIcon, LogOutIcon, SearchIcon, UserRoundIcon } from '@lucide/vue'
+import { ChevronsUpDownIcon, SearchIcon } from '@lucide/vue'
 import { computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { toast } from 'vue-sonner'
+import { useRoute } from 'vue-router'
 
-import { errorText } from '@/api'
 import BrandMark from '@/components/BrandMark.vue'
 import CommandMenu from '@/components/shell/CommandMenu.vue'
 import StatusPill from '@/components/shell/StatusPill.vue'
 import ThemeSwitch from '@/components/shell/ThemeSwitch.vue'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import UserMenuContent from '@/components/shell/UserMenuContent.vue'
+import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import {
   Sidebar,
   SidebarContent,
@@ -42,7 +35,6 @@ import CloseOnNavigate from './closeOnNavigate'
 
 const auth = useAuth()
 const route = useRoute()
-const router = useRouter()
 
 const current = computed(() => navFor(route.path))
 const page = computed(() => pageFor(route.path))
@@ -88,6 +80,9 @@ function badgeOf(path: string): Badge | null {
   return null
 }
 const items = computed(() => navItems.map((m) => ({ ...m, badge: badgeOf(m.path) })))
+// 手机底部导航只放 5 项，「设置」放进顶栏的用户菜单。
+const tabItems = computed(() => items.value.filter((m) => m.path !== '/settings'))
+const inSettings = computed(() => current.value.path === '/settings')
 
 let timer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
@@ -104,15 +99,6 @@ watch(
 function skipToMain() {
   document.getElementById('main-content')?.focus()
 }
-
-async function logout() {
-  try {
-    await auth.logout()
-    await router.push('/login')
-  } catch (e) {
-    toast.error(errorText(e))
-  }
-}
 </script>
 
 <template>
@@ -127,103 +113,98 @@ async function logout() {
     <CommandMenu />
     <!-- 宽屏可收窄成只显示图标（点顶栏按钮、拖侧栏边缘或按 Ctrl/⌘+B）；手机上用底部导航，不用侧栏 -->
     <Sidebar collapsible="icon">
-      <SidebarHeader>
-        <router-link
-          to="/"
-          class="flex items-center gap-2.5 px-2 py-1.5 group-data-[collapsible=icon]:px-0"
-        >
-          <BrandMark class="shrink-0" />
-          <span class="font-semibold tracking-wide group-data-[collapsible=icon]:hidden"
-            >Ferry</span
-          >
-        </router-link>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup class="py-1">
-          <SidebarGroupContent>
-            <SidebarMenu class="gap-0.5">
-              <SidebarMenuItem v-for="m in items" :key="m.path">
-                <SidebarMenuButton
-                  as-child
-                  :is-active="current.path === m.path"
-                  :tooltip="m.label"
-                  class="h-9"
-                >
-                  <router-link :to="m.path">
-                    <component
-                      :is="m.icon"
-                      :class="current.path === m.path ? 'text-primary' : 'text-muted-foreground'"
-                    />
-                    <span
-                      >{{ m.label
-                      }}<span v-if="m.badge" class="sr-only">，{{ m.badge.label }}</span></span
-                    >
-                  </router-link>
-                </SidebarMenuButton>
-                <template v-if="m.badge">
-                  <SidebarMenuBadge aria-hidden="true" :class="m.badge.tone">{{
-                    m.badge.n
-                  }}</SidebarMenuBadge>
-                  <!-- 侧栏收窄成图标时角标隐藏，改在图标右上角显示一个点 -->
-                  <span
-                    aria-hidden="true"
-                    class="pointer-events-none absolute top-1 right-1 hidden size-2 rounded-full group-data-[collapsible=icon]:block"
-                    :class="m.badge.dot"
-                  />
-                </template>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter class="gap-2">
-        <div
-          class="flex items-center justify-between gap-2 px-2 group-data-[collapsible=icon]:hidden"
-        >
-          <ThemeSwitch />
+      <!-- 侧栏里的品牌、导航、深浅色与用户菜单整体作为主导航地标；手机上的底部导航另用「底部导航」，两者不会同时显示 -->
+      <nav aria-label="主导航" class="flex min-h-0 flex-1 flex-col">
+        <SidebarHeader>
           <router-link
-            v-if="auth.user?.version"
-            to="/settings/system"
-            class="text-muted-foreground hover:text-foreground truncate font-mono text-xs"
-            title="系统信息"
-            >{{
-              /^\d/.test(auth.user.version) ? 'v' + auth.user.version : auth.user.version
-            }}</router-link
+            to="/"
+            class="flex items-center gap-2.5 px-2 py-1.5 group-data-[collapsible=icon]:px-0"
           >
-        </div>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger as-child>
-                <SidebarMenuButton :tooltip="auth.user?.username">
-                  <span
-                    class="bg-muted text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase"
-                    >{{ auth.user?.username?.slice(0, 1) }}</span
+            <BrandMark class="shrink-0" />
+            <span class="font-semibold tracking-wide group-data-[collapsible=icon]:hidden"
+              >Ferry</span
+            >
+          </router-link>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup class="py-1">
+            <SidebarGroupContent>
+              <SidebarMenu class="gap-0.5">
+                <SidebarMenuItem v-for="m in items" :key="m.path">
+                  <SidebarMenuButton
+                    as-child
+                    :is-active="current.path === m.path"
+                    :tooltip="m.label"
+                    class="h-9"
                   >
-                  <span class="text-sm font-medium">{{ auth.user?.username }}</span>
-                  <ChevronsUpDownIcon class="text-muted-foreground ml-auto" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align="start" class="w-48">
-                <DropdownMenuItem @click="router.push('/account')">
-                  <UserRoundIcon /> 账户
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" @click="logout"
-                  ><LogOutIcon /> 退出登录</DropdownMenuItem
-                >
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
+                    <router-link :to="m.path">
+                      <component
+                        :is="m.icon"
+                        :class="current.path === m.path ? 'text-primary' : 'text-muted-foreground'"
+                      />
+                      <span
+                        >{{ m.label
+                        }}<span v-if="m.badge" class="sr-only">，{{ m.badge.label }}</span></span
+                      >
+                    </router-link>
+                  </SidebarMenuButton>
+                  <template v-if="m.badge">
+                    <SidebarMenuBadge aria-hidden="true" :class="m.badge.tone">{{
+                      m.badge.n
+                    }}</SidebarMenuBadge>
+                    <!-- 侧栏收窄成图标时角标隐藏，改在图标右上角显示一个点 -->
+                    <span
+                      aria-hidden="true"
+                      class="pointer-events-none absolute top-1 right-1 hidden size-2 rounded-full group-data-[collapsible=icon]:block"
+                      :class="m.badge.dot"
+                    />
+                  </template>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter class="gap-2">
+          <div
+            class="flex items-center justify-between gap-2 px-2 group-data-[collapsible=icon]:hidden"
+          >
+            <ThemeSwitch />
+            <router-link
+              v-if="auth.user?.version"
+              to="/settings/system"
+              class="text-muted-foreground hover:text-foreground truncate py-1 font-mono text-xs"
+              title="系统信息"
+              >{{
+                /^\d/.test(auth.user.version) ? 'v' + auth.user.version : auth.user.version
+              }}</router-link
+            >
+          </div>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger as-child>
+                  <SidebarMenuButton :tooltip="auth.user?.username">
+                    <span
+                      class="bg-muted text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase"
+                      >{{ auth.user?.username?.slice(0, 1) }}</span
+                    >
+                    <span class="text-sm font-medium">{{ auth.user?.username }}</span>
+                    <ChevronsUpDownIcon class="text-muted-foreground ml-auto" />
+                  </SidebarMenuButton>
+                </DropdownMenuTrigger>
+                <UserMenuContent side="top" align="start" />
+              </DropdownMenu>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      </nav>
       <SidebarRail />
     </Sidebar>
     <SidebarInset class="min-w-0">
       <header
         class="bg-background/85 sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b px-4 backdrop-blur"
       >
-        <router-link to="/" class="flex items-center gap-2 md:hidden" aria-label="总览">
+        <router-link to="/" class="flex min-h-11 items-center gap-2 md:hidden" aria-label="总览">
           <BrandMark class="size-7" />
           <span class="font-semibold">Ferry</span>
         </router-link>
@@ -252,12 +233,33 @@ async function logout() {
         </button>
         <button
           type="button"
-          class="hover:bg-accent inline-flex size-10 items-center justify-center rounded-md border md:hidden"
+          class="hover:bg-accent inline-flex size-11 shrink-0 items-center justify-center rounded-md border md:hidden"
           aria-label="搜索"
           @click="commandOpen = true"
         >
           <SearchIcon class="size-4" />
         </button>
+        <!-- 手机上没有侧栏，用户菜单（账户、设置、深浅色、退出登录）放在顶栏右侧 -->
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <button
+              type="button"
+              class="hover:bg-accent focus-visible:ring-ring/50 -mr-1.5 inline-flex size-11 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-3 md:hidden"
+              :aria-label="`用户菜单：${auth.user?.username ?? ''}`"
+            >
+              <span
+                class="flex size-8 items-center justify-center rounded-full text-sm font-semibold uppercase"
+                :class="
+                  inSettings
+                    ? 'bg-primary/15 text-primary ring-primary/40 ring-1'
+                    : 'bg-muted text-muted-foreground'
+                "
+                >{{ auth.user?.username?.slice(0, 1) }}</span
+              >
+            </button>
+          </DropdownMenuTrigger>
+          <UserMenuContent side="bottom" align="end" mobile />
+        </DropdownMenu>
       </header>
       <!-- 总览的画布铺满内容区，其余页面居中留边 -->
       <div
@@ -276,11 +278,11 @@ async function logout() {
 
     <!-- 手机底部导航 -->
     <nav
-      class="bg-background/95 fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      class="bg-background/95 fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       aria-label="主导航"
     >
       <router-link
-        v-for="m in items"
+        v-for="m in tabItems"
         :key="m.path"
         :to="m.path"
         class="relative flex min-h-14 flex-col items-center justify-center gap-1 text-xs"

@@ -28,7 +28,7 @@ const page = computed(() => pageFor(route.path))
       v-for="p in nav.pages"
       :key="p.path"
       :to="p.path"
-      class="text-muted-foreground hover:text-foreground flex items-center rounded-md border border-transparent px-3 py-1.5 transition-colors max-md:min-h-10"
+      class="text-muted-foreground hover:text-foreground flex items-center rounded-md border border-transparent px-3 py-1.5 transition-colors max-md:min-h-11"
       :class="
         page?.path === p.path &&
         'bg-card text-foreground dark:bg-accent dark:border-input shadow-xs'

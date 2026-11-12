@@ -19,8 +19,8 @@ import {
   TriangleAlertIcon,
   VariableIcon,
 } from '@lucide/vue'
-import { createReusableTemplate, useMediaQuery } from '@vueuse/core'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { createReusableTemplate, useMediaQuery, useScroll } from '@vueuse/core'
+import { computed, nextTick, onMounted, reactive, ref, useTemplateRef, watch } from 'vue'
 import { toast } from 'vue-sonner'
 
 import { api, ApiError, errorText } from '@/api'
@@ -66,6 +66,25 @@ const problems = ref<string[]>([])
 const section = ref(props.initialSection || 'basic')
 const confirmClose = ref(false)
 const wide = useMediaQuery('(min-width: 1280px)')
+// 窄屏时分区导航是一行横向滚动的标签：切换分区或刚打开时把当前项滚到中间，
+// 两端还有未显示的分区时用渐隐提示可以继续滑动。
+const vertical = useMediaQuery('(min-width: 1024px)')
+const navEl = useTemplateRef<HTMLElement>('nav')
+const { arrivedState } = useScroll(navEl)
+const navMask = computed(() => {
+  if (vertical.value) return undefined
+  const l = arrivedState.left ? 'black' : 'transparent'
+  const r = arrivedState.right ? 'black' : 'transparent'
+  const g = `linear-gradient(to right, ${l}, black 2rem, black calc(100% - 2rem), ${r})`
+  return { maskImage: g, webkitMaskImage: g }
+})
+watch([section, () => loaded.value], async () => {
+  if (vertical.value || !loaded.value) return
+  await nextTick()
+  navEl.value
+    ?.querySelector('[aria-current]')
+    ?.scrollIntoView({ inline: 'center', block: 'nearest' })
+})
 // 样例请求面板在宽屏放右栏，窄屏作为一个分区，两处共用同一份模板。
 const [DefineSample, ReuseSample] = createReusableTemplate()
 
@@ -562,18 +581,22 @@ const fieldsHit = computed(() =>
     >
       <!-- 分区导航 -->
       <nav
+        ref="nav"
+        aria-label="编辑分区"
         class="no-scrollbar flex gap-1 overflow-x-auto border-b p-2 lg:flex-col lg:border-r lg:border-b-0 lg:p-3"
+        :style="navMask"
       >
         <button
           v-for="s in sections"
           :key="s.value"
           type="button"
-          class="flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition"
+          class="focus-visible:ring-ring/50 flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition outline-none focus-visible:ring-3 max-md:min-h-11"
           :class="
             section === s.value
               ? 'bg-primary/10 text-primary font-medium'
               : 'text-muted-foreground hover:bg-muted hover:text-foreground'
           "
+          :aria-current="section === s.value ? 'true' : undefined"
           @click="section = s.value"
         >
           <component :is="s.icon" class="size-4" />
@@ -583,11 +606,14 @@ const fieldsHit = computed(() =>
             class="bg-muted-foreground/15 min-w-5 rounded-full px-1.5 text-center text-xs tabular-nums"
             >{{ s.count }}</span
           >
-          <span
-            v-if="s.on !== undefined"
-            class="size-1.5 rounded-full"
-            :class="s.on ? 'bg-success' : 'bg-muted-foreground/40'"
-          />
+          <template v-if="s.on !== undefined">
+            <span
+              aria-hidden="true"
+              class="size-1.5 rounded-full"
+              :class="s.on ? 'bg-success' : 'bg-muted-foreground/40'"
+            />
+            <span class="sr-only">{{ s.on ? '已开启' : '未开启' }}</span>
+          </template>
         </button>
       </nav>
 

@@ -22,7 +22,7 @@ function toggle(v: T) {
       :aria-pressed="model.includes(o.value)"
       :class="
         cn(
-          'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm transition',
+          'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm transition max-md:h-11',
           model.includes(o.value)
             ? 'border-primary bg-primary/10 text-foreground'
             : 'text-muted-foreground hover:border-foreground/25 hover:text-foreground',

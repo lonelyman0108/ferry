@@ -364,10 +364,10 @@ function secretHint(key: string, fallback = '') {
           ></TabsTrigger
         >
       </TabsList>
-      <Button v-if="tab === 'channels'" @click="newChannel"
+      <Button v-if="tab === 'channels'" class="max-sm:min-w-11 max-sm:px-0" @click="newChannel"
         ><PlusIcon /><span class="max-sm:sr-only">新建通知渠道</span></Button
       >
-      <Button v-else @click="newRule"
+      <Button v-else class="max-sm:min-w-11 max-sm:px-0" @click="newRule"
         ><PlusIcon /><span class="max-sm:sr-only">新建通知规则</span></Button
       >
     </div>
