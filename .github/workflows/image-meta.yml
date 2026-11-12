@@ -1,0 +1,41 @@
+# 给已发布的镜像补上或刷新说明（GHCR 包页面的介绍、许可证、关联仓库）。只改镜像索引上的注解，不重新构建。
+# 手动触发：gh workflow run image-meta.yml -f tag=v0.1.0
+name: Image meta
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 已发布的版本 tag，如 v0.1.0
+        required: true
+permissions:
+  contents: read
+  packages: write
+defaults:
+  run:
+    shell: bash
+jobs:
+  annotate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: 登录镜像仓库
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          HUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          HUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          if [ -n "$HUB_TOKEN" ]; then
+            printf '%s' "$HUB_TOKEN" | docker login -u "$HUB_USER" --password-stdin
+          fi
+      - name: 补说明
+        env:
+          TAG: ${{ inputs.tag }}
+          HAS_HUB: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+        run: |
+          case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "tag 应为 vX.Y.Z：$TAG" >&2; exit 2 ;; esac
+          images=(ghcr.io/lonelyman0108/ferry)
+          [ "$HAS_HUB" != true ] || images+=(docker.io/lonelyman0108/ferry)
+          scripts/image-annotate.sh "$TAG" "${images[@]}"
