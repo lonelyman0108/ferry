@@ -161,13 +161,6 @@ function play() {
 
 watch(focusKey, () => (before = snapshot()), { flush: 'pre' })
 watch(focusKey, () => void nextTick(() => requestAnimationFrame(play)), { flush: 'post' })
-
-const legend = [
-  { label: '正常', cls: 'border-(--edge)' },
-  { label: '失败', cls: 'border-(--edge-failed) border-dashed' },
-  { label: '等待重试', cls: 'border-warning border-dashed' },
-  { label: '未连通或未推送', cls: 'border-(--edge-idle) border-dotted' },
-]
 </script>
 
 <template>
@@ -175,13 +168,13 @@ const legend = [
     <!-- 总览 -->
     <div
       v-if="!focus"
-      class="@container/overview relative flex flex-1 flex-col bg-[radial-gradient(var(--canvas-dot)_1px,transparent_1.2px)] [background-size:22px_22px] px-4 pt-4 pb-24 md:px-8 md:pb-4"
+      class="relative flex-1 bg-[radial-gradient(var(--canvas-dot)_1px,transparent_1.2px)] [background-size:22px_22px] px-4 pt-4 pb-24 md:px-8 md:pb-10"
     >
       <h1 class="sr-only">总览</h1>
 
       <!-- 窄于 1280 时自上而下：引导条、收件箱、流向图；宽屏上收件箱浮在左上角（相对外层定位），引导条和图让出左侧位置 -->
       <div
-        class="transition-[padding] duration-300 md:pb-6 xl:pt-10"
+        class="transition-[padding] duration-300 xl:pt-10"
         :class="inboxOpen ? 'xl:pl-[372px]' : 'xl:pt-20 xl:pl-8'"
       >
         <div
@@ -208,28 +201,18 @@ const legend = [
           :flow="flow.data"
           class="mx-auto max-w-5xl"
           @select="select"
-        />
+        >
+          <template v-if="overview.data" #summary>
+            {{ overview.data.counts.identities }} 个身份 ·
+            {{ overview.data.counts.bindings }} 条推送规则
+          </template>
+        </FlowCanvas>
         <div v-else-if="!flow.data" class="@container mx-auto max-w-5xl">
-          <div class="grid gap-10 @xl:grid-cols-3">
+          <div class="grid gap-10 @flow:grid-cols-3">
             <Skeleton v-for="i in 3" :key="i" class="h-64 rounded-xl" />
           </div>
         </div>
       </div>
-
-      <!-- 图例贴在视口右下角：图比一屏长时随滚动停在底部，图较短时落在内容区底部。
-           内容区窄到流向图改成上下排、不画连线时，图例也不显示（与流向图用同一个容器断点） -->
-      <footer
-        v-if="flow.data?.sources.length"
-        class="bg-card/90 text-muted-foreground sticky bottom-4 z-10 mt-auto hidden flex-wrap items-center gap-x-4 gap-y-1 self-end rounded-lg border px-3 py-1.5 text-xs backdrop-blur @xl/overview:flex"
-      >
-        <span v-for="l in legend" :key="l.label" class="flex items-center gap-1.5">
-          <span class="w-5 border-t-2" :class="l.cls" />{{ l.label }}
-        </span>
-        <span v-if="overview.data" class="border-l pl-4">
-          {{ overview.data.counts.identities }} 个身份 ·
-          {{ overview.data.counts.bindings }} 条推送规则
-        </span>
-      </footer>
     </div>
 
     <!-- 聚焦 -->

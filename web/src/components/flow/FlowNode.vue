@@ -39,12 +39,12 @@ defineEmits<{ select: [] }>()
   >
     <span
       v-if="portLeft"
-      class="bg-background absolute top-1/2 -left-[5px] hidden size-[9px] -translate-y-1/2 rounded-full border-[1.5px] border-(--edge) @xl:block"
+      class="bg-background absolute top-1/2 -left-[5px] hidden size-[9px] -translate-y-1/2 rounded-full border-[1.5px] border-(--edge) @flow:block"
       :class="selected && 'border-primary'"
     />
     <span
       v-if="portRight"
-      class="bg-background absolute top-1/2 -right-[5px] hidden size-[9px] -translate-y-1/2 rounded-full border-[1.5px] border-(--edge) @xl:block"
+      class="bg-background absolute top-1/2 -right-[5px] hidden size-[9px] -translate-y-1/2 rounded-full border-[1.5px] border-(--edge) @flow:block"
       :class="selected && 'border-primary'"
     />
     <span class="flex min-w-0 items-center gap-2.5">
@@ -74,6 +74,8 @@ defineEmits<{ select: [] }>()
         >
       </span>
     </span>
-    <span v-if="line" class="text-muted-foreground mt-2 block text-sm @xl:sr-only">{{ line }}</span>
+    <span v-if="line" class="text-muted-foreground mt-2 block text-sm @flow:sr-only">{{
+      line
+    }}</span>
   </component>
 </template>

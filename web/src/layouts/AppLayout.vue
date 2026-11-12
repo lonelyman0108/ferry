@@ -261,11 +261,12 @@ function skipToMain() {
           <UserMenuContent side="bottom" align="end" mobile />
         </DropdownMenu>
       </header>
-      <!-- 总览的画布铺满内容区，其余页面居中留边 -->
+      <!-- 总览的画布铺满内容区，其余页面居中留边。内容区用 isolate 自成一层，页面里的 z-index 只在内容区内比较，
+           滚动时不会盖到顶栏上 -->
       <div
         id="main-content"
         tabindex="-1"
-        class="outline-none"
+        class="isolate outline-none"
         :class="
           route.meta.fullBleed
             ? 'flex flex-1 flex-col'

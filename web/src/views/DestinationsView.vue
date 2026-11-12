@@ -488,10 +488,10 @@ async function runPush() {
   </PageHeader>
 
   <Tabs v-model="tab">
-    <!-- 手机上标签去掉图标，仍放不下时横向滚动 -->
+    <!-- 手机上标签去掉图标，仍放不下时横向滚动。靠左排：TabsList 默认居中，溢出时左侧那部分滚不回来，首个标签会被裁掉 -->
     <div class="mb-2 flex">
       <TabsList
-        class="no-scrollbar max-w-full max-sm:min-w-0 max-sm:overflow-x-auto max-sm:[&_svg]:hidden"
+        class="no-scrollbar max-w-full justify-start scroll-px-0.75 max-sm:min-w-0 max-sm:overflow-x-auto max-sm:[&_svg]:hidden"
       >
         <TabsTrigger value="destinations"
           ><component :is="icons.destination" /> 目的地

@@ -318,7 +318,7 @@ function shown(v: Version) {
       <SectionHeading title="历史值" :icon="HistoryIcon">
         <template #actions>
           <Tabs :model-value="field" @update:model-value="pickField">
-            <TabsList class="no-scrollbar max-w-full overflow-x-auto">
+            <TabsList class="no-scrollbar max-w-full justify-start scroll-px-0.75 overflow-x-auto">
               <TabsTrigger value="">全部字段</TabsTrigger>
               <TabsTrigger v-for="f in identity.fields" :key="f.key" :value="f.key">{{
                 f.name || f.key

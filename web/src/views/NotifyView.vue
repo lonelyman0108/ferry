@@ -345,7 +345,7 @@ function secretHint(key: string, fallback = '') {
 
   <Tabs v-model="tab">
     <div class="mb-2 flex">
-      <TabsList class="no-scrollbar max-w-full overflow-x-auto">
+      <TabsList class="no-scrollbar max-w-full justify-start scroll-px-0.75 overflow-x-auto">
         <TabsTrigger value="channels"
           ><component :is="icons.channel" /> 通知渠道
           <span
