@@ -98,11 +98,11 @@
   --sidebar-accent-foreground: oklch(0.2 0.012 285);
   --sidebar-border: oklch(0.91 0.006 285);
   --sidebar-ring: oklch(0.5 0.15 285 / 55%);
-  /* 流向画布：点网格、连线（正常 / 失败 / 未连通）、选中 */
+  /* 流向画布：点网格、连线（正常 / 失败 / 未连通）、选中。连线属于非文字图形，深浅两套对页面背景和卡片背景都不低于 3:1 */
   --canvas-dot: oklch(0.86 0.008 285);
   --edge: oklch(0.62 0.02 285);
   --edge-failed: oklch(0.58 0.2 25);
-  --edge-idle: oklch(0.8 0.01 285);
+  --edge-idle: oklch(0.65 0.01 285);
   --edge-active: oklch(0.55 0.17 285);
 }
 
@@ -144,7 +144,7 @@
   --canvas-dot: oklch(0.3 0.012 285);
   --edge: oklch(0.55 0.02 285);
   --edge-failed: oklch(0.68 0.18 22);
-  --edge-idle: oklch(0.38 0.012 285);
+  --edge-idle: oklch(0.51 0.012 285);
   --edge-active: oklch(0.7 0.13 285);
 }
 

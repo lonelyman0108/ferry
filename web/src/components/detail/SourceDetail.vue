@@ -258,7 +258,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
                   <span class="block truncate">{{ f.name || f.key }}</span>
                   <span
                     v-if="secondaryKey(f.name, f.key)"
-                    class="block truncate font-mono text-xs opacity-80"
+                    class="block truncate font-mono text-xs"
                     >{{ f.key }}</span
                   >
                 </dt>
@@ -314,7 +314,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
           <template #aside>
             <router-link
               :to="{ path: '/destinations', query: { tab: 'bindings', source: src.key } }"
-              class="text-primary text-sm underline-offset-2 hover:underline"
+              class="text-primary text-sm underline-offset-2 hover:underline max-md:relative max-md:-my-3 max-md:-mr-2 max-md:flex max-md:min-h-11 max-md:items-center max-md:px-2"
               >管理推送规则</router-link
             >
           </template>
@@ -424,7 +424,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
           <template #aside>
             <router-link
               :to="{ path: '/activity', query: { source: src.key } }"
-              class="text-primary text-sm underline-offset-2 hover:underline"
+              class="text-primary text-sm underline-offset-2 hover:underline max-md:relative max-md:-my-3 max-md:-mr-2 max-md:flex max-md:min-h-11 max-md:items-center max-md:px-2"
               >全部记录</router-link
             >
           </template>
@@ -447,6 +447,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
     v-if="identityOpen"
     :id="identityOpen"
     :key="`identity-${identityOpen}`"
+    :source-enabled="src?.enabled"
     @close="setQuery({ identity: undefined })"
     @changed="refresh"
   />

@@ -250,7 +250,7 @@ const jobTime = (j: PushJob) => j.finished_at ?? j.created_at
         <template #aside>
           <router-link
             :to="{ path: '/destinations', query: { tab: 'pushes', destination: String(dest.id) } }"
-            class="text-primary text-sm underline-offset-2 hover:underline"
+            class="text-primary text-sm underline-offset-2 hover:underline max-md:relative max-md:-my-3 max-md:-mr-2 max-md:flex max-md:min-h-11 max-md:items-center max-md:px-2"
             >全部记录</router-link
           >
         </template>
@@ -262,7 +262,7 @@ const jobTime = (j: PushJob) => j.finished_at ?? j.created_at
               <button
                 v-if="sourceOf(bindingSourceID(j.binding_id))"
                 type="button"
-                class="underline-offset-2 hover:underline"
+                class="text-left underline-offset-2 hover:underline max-md:relative max-md:-my-3 max-md:min-h-11"
                 @click="emit('focus', 'source', bindingSourceID(j.binding_id))"
               >
                 {{ sourceName(bindingSourceID(j.binding_id)) }}

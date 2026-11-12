@@ -555,6 +555,7 @@ async function runPush() {
           ></template
         >
         <template #badges>
+          <StatusBadge v-if="!d.enabled" dot>已停用</StatusBadge>
           <StatusBadge :tone="d.kind === 'qinglong' ? 'emerald' : 'sky'">{{
             destinationKinds[d.kind]
           }}</StatusBadge>
@@ -657,6 +658,7 @@ async function runPush() {
             >
           </template>
           <template #badges>
+            <StatusBadge v-if="!b.enabled" dot>已停用</StatusBadge>
             <StatusBadge :tone="b.mode === 'joined' ? 'indigo' : 'sky'">{{
               bindingModes[b.mode]
             }}</StatusBadge>
@@ -664,7 +666,7 @@ async function runPush() {
           <template #description>
             <template v-if="Object.keys(b.rename).length">
               <span v-for="(to, from) in b.rename" :key="from" class="font-mono"
-                ><span class="opacity-70">{{ from }}</span> → {{ to }}</span
+                >{{ from }} → {{ to }}</span
               >
             </template>
             <span v-else>沿用原变量名</span>

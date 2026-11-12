@@ -388,6 +388,7 @@ function secretHint(key: string, fallback = '') {
         </template>
         <template #title>{{ c.name }}</template>
         <template #badges>
+          <StatusBadge v-if="!c.enabled" dot>已停用</StatusBadge>
           <StatusBadge :tone="kindTone[c.kind]">{{ channelKinds[c.kind] }}</StatusBadge>
           <StatusBadge v-if="rulesOf(c)" tone="neutral">{{ rulesOf(c) }} 条通知规则</StatusBadge>
           <StatusBadge v-else tone="warning">未关联通知规则</StatusBadge>
@@ -434,6 +435,9 @@ function secretHint(key: string, fallback = '') {
       <ListRow v-for="r in rules" :key="r.id" :dim="!r.enabled">
         <template #icon><IconTile :icon="icons.notifyRules" /></template>
         <template #title>{{ r.name }}</template>
+        <template v-if="!r.enabled" #badges>
+          <StatusBadge dot>已停用</StatusBadge>
+        </template>
         <template #description>
           <span class="flex w-full flex-wrap gap-1">
             <StatusBadge v-for="e in r.events" :key="e" :tone="eventTone(e)" dot>{{

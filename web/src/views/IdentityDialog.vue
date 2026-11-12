@@ -45,7 +45,8 @@ import {
 // 登录态的详情，是来源详情上的弹窗（和来源编辑器一样），地址带 ?identity=<ID> 可直接打开。
 // 上面是各字段的当前值，下面的历史值只列当前值以外的版本（旧值、待审核、已驳回），不再重复当前值。
 // 字段有待审核的值时，当前值卡片上给出“前往审核”，切到这个字段的历史并定位到第一条待审核。
-const props = defineProps<{ id: string }>()
+// sourceEnabled 是所属来源是否启用，登录态接口不带这一项，由打开弹窗的来源详情传入，停用时头像灰显。
+const props = defineProps<{ id: string; sourceEnabled?: boolean }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
 
 const identity = ref<Identity | null>(null)
@@ -199,7 +200,11 @@ function shown(v: Version) {
     @close="emit('close')"
   >
     <template v-if="identity" #icon>
-      <SourceAvatar :name="identity.source_name" :skey="identity.source_key" />
+      <SourceAvatar
+        :name="identity.source_name"
+        :skey="identity.source_key"
+        :disabled="sourceEnabled === false"
+      />
     </template>
     <template #badges>
       <span v-if="identity" class="text-muted-foreground font-mono text-sm font-normal">{{
@@ -286,7 +291,7 @@ function shown(v: Version) {
         <template #actions>
           <router-link
             :to="{ path: '/destinations', query: { tab: 'bindings', source: identity.source_key } }"
-            class="text-primary text-sm underline-offset-2 hover:underline"
+            class="text-primary text-sm underline-offset-2 hover:underline max-md:relative max-md:-my-3 max-md:-mr-2 max-md:flex max-md:min-h-11 max-md:items-center max-md:px-2"
             >管理推送规则</router-link
           >
         </template>

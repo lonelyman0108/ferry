@@ -13,6 +13,7 @@ import { clientName, itemLabels, useInboxActions } from './inbox'
 
 // 收件箱里的一条，带就地操作。处理成功后发 done，由外面刷新数据；「忽略」发 dismiss。
 // 对象名（订阅、来源、目的地）链到各自的聚焦页；已经在那一页时（详情顶部的待处理事项）只显示文字。
+// 手机上链接撑到 44px 高，负 margin 抵掉多出的高度，行高不变；relative 让它盖在下一行文字上，整块都能点中。
 const props = defineProps<{ item: AttentionItem }>()
 const emit = defineEmits<{ done: []; dismiss: [] }>()
 
@@ -59,7 +60,7 @@ const identity = computed(() =>
       <RouterLink
         v-if="who.to"
         :to="who.to"
-        class="font-medium underline-offset-2 hover:underline"
+        class="font-medium underline-offset-2 hover:underline max-md:relative max-md:-my-2.5 max-md:flex max-md:min-h-11 max-md:items-center"
         >{{ who.text }}</RouterLink
       >
       <span v-else class="font-medium">{{ who.text }}</span>
@@ -68,7 +69,7 @@ const identity = computed(() =>
         <RouterLink
           v-if="destTo"
           :to="destTo"
-          class="font-medium underline-offset-2 hover:underline"
+          class="font-medium underline-offset-2 hover:underline max-md:relative max-md:-my-2.5 max-md:flex max-md:min-h-11 max-md:items-center"
           >{{ item.destination_name }}</RouterLink
         >
         <span v-else class="font-medium">{{ item.destination_name }}</span>
