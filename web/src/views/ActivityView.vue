@@ -18,7 +18,9 @@ import type { ActivityItem, ActivityPage, SourceSummary } from '@/types'
 import AuditList from './settings/AuditList.vue'
 
 // 记录：时间线把一次回传、审核、推送、通知按时间串起来，可按来源、只看问题筛选；审计日志是另一个标签页。
-// 筛选条件放在地址里（?tab=audit、?source=<ID>、?result=problem），刷新时保留，详情页的“全部记录”也靠它带过来。
+// 筛选条件放在地址里（?tab=audit、?source=<来源标识>、?result=problem），刷新时保留，详情页的“全部记录”也靠它带过来。
+// 来源在地址里用标识，和推送页的 ?source= 一致；接口按来源 ID 筛选，查询前换算。纯数字的值是早先按 ID 写的链接
+// （来源标识必须以字母开头，不会是纯数字），直接当 ID 用。
 const route = useRoute()
 const router = useRouter()
 
@@ -36,6 +38,18 @@ const problems = computed({
 })
 
 const sources = ref<SourceSummary[]>([])
+const sourcesLoaded = api
+  .get<SourceSummary[]>('/sources')
+  .then((r) => (sources.value = r.data))
+  .catch(() => {
+    // 拿不到来源列表时只是没有筛选项
+  })
+async function sourceID(v: string) {
+  if (/^\d+$/.test(v)) return v
+  await sourcesLoaded
+  const id = sources.value.find((s) => s.key === v)?.id
+  return id ? String(id) : ''
+}
 const items = ref<ActivityItem[] | null>(null)
 const next = ref<string | null>(null)
 const loading = ref(false)
@@ -44,7 +58,11 @@ async function load(append = false) {
   loading.value = true
   try {
     const params: Record<string, string> = {}
-    if (source.value) params.source = source.value
+    if (source.value) {
+      const id = await sourceID(source.value)
+      // 地址里的来源不存在（已删除或写错）时不筛选
+      if (id) params.source = id
+    }
     if (problems.value) params.result = 'problem'
     if (append && next.value) params.before = next.value
     const { data } = await api.get<ActivityPage>('/activity', { params })
@@ -62,14 +80,7 @@ watch([source, problems], () => {
   void load()
 })
 
-onMounted(async () => {
-  void load()
-  try {
-    sources.value = (await api.get<SourceSummary[]>('/sources')).data
-  } catch {
-    // 拿不到来源列表时只是没有筛选项
-  }
-})
+onMounted(() => void load())
 </script>
 
 <template>
@@ -85,7 +96,7 @@ onMounted(async () => {
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
         <NativeSelect v-model="source" class="w-48" aria-label="按来源筛选">
           <NativeSelectOption value="">全部来源</NativeSelectOption>
-          <NativeSelectOption v-for="s in sources" :key="s.id" :value="String(s.id)">{{
+          <NativeSelectOption v-for="s in sources" :key="s.id" :value="s.key">{{
             s.name
           }}</NativeSelectOption>
         </NativeSelect>

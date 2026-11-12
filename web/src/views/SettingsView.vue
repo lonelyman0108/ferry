@@ -99,7 +99,7 @@ onMounted(async () => {
   </PageHeader>
 
   <div class="grid gap-3">
-    <HintText>设备拉取读取规则、回传登录态所用的地址，支持配置多个（如局域网、公网）。</HintText>
+    <HintText>可配置多个访问地址，如局域网地址与公网地址。</HintText>
     <ListSkeleton v-if="!endpoints" :rows="2" />
     <EmptyState
       v-else-if="!endpoints.length"
@@ -126,7 +126,7 @@ onMounted(async () => {
           <RowActions
             :name="e.name"
             delete-title="删除访问地址？"
-            delete-description="被订阅使用的访问地址无法删除。"
+            :delete-blocked="usage(e) ? '被订阅使用的访问地址无法删除' : ''"
             @edit="editEndpoint(e)"
             @remove="removeEndpoint(e)"
           />

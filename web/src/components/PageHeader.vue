@@ -8,36 +8,21 @@ import { navFor, pageFor } from '@/lib/nav'
 
 // 每个页面顶部的标题区：标题 + 一句话说明，右侧放操作按钮。
 // 不传 title / description 时取导航里这一页的名称和说明；传了 back 就显示返回按钮。
-// 导航项下有几页时，标题上方用一排链接切换；选中项在深色下用更亮的底色加描边，
-// 只用 bg-card 会比容器（muted 叠在背景上）还暗。窄屏时标题独占一行，操作区换到下一行。
+// 导航项下有几页时（推送、设置），标题写导航项的名称，说明写当前这一页的，标题下面一排下划线链接切换各页；
+// 页面里自己的标签页是带底色的分段样式，两层一眼能分开，标题也不会和选中的那一页、第一个标签页重复。
+// 下划线链接所在的横条可以横向滚动，底线用内阴影画（滚动容器会裁掉负外边距压上去的边框）。
+// 窄屏时标题独占一行，操作区换到下一行。
 const props = defineProps<{ title?: string; description?: string; back?: string }>()
 
 const route = useRoute()
 const router = useRouter()
 const nav = computed(() => navFor(route.path))
 const page = computed(() => pageFor(route.path))
+const subnav = computed(() => (nav.value.pages && !props.back ? nav.value.pages : null))
 </script>
 
 <template>
-  <nav
-    v-if="nav.pages && !props.back"
-    class="bg-muted/60 mb-4 inline-flex rounded-lg border p-0.5 text-sm"
-    :aria-label="nav.label"
-  >
-    <router-link
-      v-for="p in nav.pages"
-      :key="p.path"
-      :to="p.path"
-      class="text-muted-foreground hover:text-foreground flex items-center rounded-md border border-transparent px-3 py-1.5 transition-colors max-md:min-h-11"
-      :class="
-        page?.path === p.path &&
-        'bg-card text-foreground dark:bg-accent dark:border-input shadow-xs'
-      "
-      :aria-current="page?.path === p.path ? 'page' : undefined"
-      >{{ p.label }}</router-link
-    >
-  </nav>
-  <div class="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3">
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-3" :class="subnav ? 'mb-4' : 'mb-6'">
     <div class="flex min-w-0 basis-full items-center gap-3 sm:basis-0 sm:flex-1">
       <Button
         v-if="props.back"
@@ -50,7 +35,9 @@ const page = computed(() => pageFor(route.path))
       /></Button>
       <div class="min-w-0">
         <h1 class="flex flex-wrap items-center gap-2 text-xl leading-tight font-semibold">
-          <span class="truncate">{{ props.title ?? page?.label ?? nav.label }}</span>
+          <span class="truncate">{{
+            props.title ?? (subnav ? nav.label : (page?.label ?? nav.label))
+          }}</span>
           <slot name="badges" />
         </h1>
         <p class="text-muted-foreground mt-0.5 text-sm">
@@ -64,4 +51,23 @@ const page = computed(() => pageFor(route.path))
       <slot name="actions" />
     </div>
   </div>
+  <nav
+    v-if="subnav"
+    class="no-scrollbar mb-6 flex overflow-x-auto text-sm shadow-[inset_0_-1px_0_var(--color-border)]"
+    :aria-label="nav.label"
+  >
+    <router-link
+      v-for="p in subnav"
+      :key="p.path"
+      :to="p.path"
+      class="flex shrink-0 items-center border-b-2 px-3 py-2 transition-colors max-md:min-h-11"
+      :class="
+        page?.path === p.path
+          ? 'border-primary text-foreground font-medium'
+          : 'text-muted-foreground hover:text-foreground hover:border-border border-transparent'
+      "
+      :aria-current="page?.path === p.path ? 'page' : undefined"
+      >{{ p.label }}</router-link
+    >
+  </nav>
 </template>

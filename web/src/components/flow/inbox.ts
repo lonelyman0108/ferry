@@ -88,7 +88,6 @@ export function useInboxActions() {
 
   const openInstall = (it: AttentionItem) =>
     router.push({ path: '/subscriptions', query: { install: it.subscription_id } })
-  const openDestination = () => router.push('/destinations')
 
-  return { review, retry, retryAll, openInstall, openDestination }
+  return { review, retry, retryAll, openInstall }
 }

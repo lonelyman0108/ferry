@@ -119,12 +119,12 @@ export interface SubscriptionInput {
 // plain：订阅令牌认证、正文明文；sealed：用传输密钥加密整个报文。
 export type TransportMode = 'plain' | 'sealed'
 
-// 安装状态：没下载过订阅文件、也没连上过；下载过订阅文件；手机上的脚本连上过平台。
+// 安装状态：没下载过订阅文件、也没连上过；下载过订阅文件、但脚本还没连上过平台；手机上的脚本连上过平台。
 export type SubscriptionStatus = 'not_installed' | 'installed' | 'connected'
 
 export const subscriptionStatus: Record<SubscriptionStatus, { label: string; tone: Tone }> = {
   not_installed: { label: '未安装', tone: 'neutral' },
-  installed: { label: '已安装', tone: 'info' },
+  installed: { label: '已安装 · 未连通', tone: 'info' },
   connected: { label: '已连通', tone: 'success' },
 }
 
@@ -281,6 +281,12 @@ export function pushStateOf(j: PushJob): PushState {
   if (j.status === 'queued' && j.last_error) return 'retrying'
   if (j.status === 'running') return 'queued'
   return j.status
+}
+
+// 推送出错：失败或等待重试。跳过、排队中也可能带着原因（last_error），但不算出错，原因用中性色显示。
+export function pushErrored(j: PushJob): boolean {
+  const st = pushStateOf(j)
+  return st === 'failed' || st === 'retrying'
 }
 
 // 身份所属来源的一条推送规则，以及推给这个身份的最近一次任务。
