@@ -4,7 +4,7 @@ defineProps<{ title: string; aside?: string }>()
 </script>
 
 <template>
-  <section class="grid min-w-0 content-start gap-3">
+  <section class="grid grid-cols-1 min-w-0 content-start gap-3">
     <div class="flex items-baseline justify-between gap-3">
       <h2 class="font-semibold">{{ title }}</h2>
       <span v-if="aside" class="text-muted-foreground text-xs">{{ aside }}</span>

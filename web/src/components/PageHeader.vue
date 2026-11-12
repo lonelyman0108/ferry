@@ -27,7 +27,7 @@ const page = computed(() => pageFor(route.path))
       v-for="p in nav.pages"
       :key="p.path"
       :to="p.path"
-      class="text-muted-foreground hover:text-foreground rounded-md px-3 py-1.5 transition-colors"
+      class="text-muted-foreground hover:text-foreground flex items-center rounded-md px-3 py-1.5 transition-colors max-md:min-h-10"
       :class="page?.path === p.path && 'bg-card text-foreground shadow-xs'"
       :aria-current="page?.path === p.path ? 'page' : undefined"
       >{{ p.label }}</router-link

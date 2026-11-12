@@ -92,12 +92,12 @@ async function onUpdated() {
 </script>
 
 <template>
-  <div v-if="!sub" class="grid gap-4">
+  <div v-if="!sub" class="grid grid-cols-1 gap-4">
     <Skeleton class="h-16" />
     <Skeleton class="h-20" />
     <Skeleton class="h-48" />
   </div>
-  <div v-else class="grid gap-6">
+  <div v-else class="grid grid-cols-1 gap-6">
     <header class="flex flex-wrap items-start gap-x-4 gap-y-3">
       <span
         class="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg border"
@@ -130,7 +130,7 @@ async function onUpdated() {
 
     <section
       v-if="items.length"
-      class="bg-card grid gap-3 rounded-lg border p-4"
+      class="bg-card grid grid-cols-1 gap-3 rounded-lg border p-4"
       aria-label="和它有关的待处理"
     >
       <h2 class="text-muted-foreground text-xs">和它有关的待处理</h2>
@@ -139,7 +139,7 @@ async function onUpdated() {
       </div>
     </section>
 
-    <div class="grid gap-8 lg:grid-cols-2">
+    <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
       <DetailSection title="它覆盖的来源" :aside="`${covered.length} 个`">
         <ul class="bg-card divide-y rounded-lg border">
           <li v-for="s in covered" :key="s.id">
@@ -160,7 +160,7 @@ async function onUpdated() {
       </DetailSection>
 
       <DetailSection title="要放行的域名" aside="客户端里 MITM 需要包含这些">
-        <ul class="bg-card grid gap-1 rounded-lg border p-3 font-mono text-sm">
+        <ul class="bg-card grid grid-cols-1 gap-1 rounded-lg border p-3 font-mono text-sm">
           <li v-for="h in sub.hostnames" :key="h">{{ h }}</li>
           <li v-if="!sub.hostnames.length" class="text-muted-foreground font-sans">
             覆盖的来源里还没有配置请求匹配

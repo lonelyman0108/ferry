@@ -182,12 +182,12 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
 </script>
 
 <template>
-  <div v-if="!lane || !src" class="grid gap-4">
+  <div v-if="!lane || !src" class="grid grid-cols-1 gap-4">
     <Skeleton class="h-16" />
     <Skeleton class="h-20" />
     <Skeleton class="h-64" />
   </div>
-  <div v-else class="grid gap-6">
+  <div v-else class="grid grid-cols-1 gap-6">
     <header class="flex flex-wrap items-start gap-x-4 gap-y-3">
       <span
         class="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg border"
@@ -214,7 +214,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
 
     <section
       v-if="lane.items.length"
-      class="bg-card grid gap-3 rounded-lg border p-4"
+      class="bg-card grid grid-cols-1 gap-3 rounded-lg border p-4"
       aria-label="和它有关的待处理"
     >
       <h2 class="text-muted-foreground text-xs">和它有关的待处理</h2>
@@ -227,8 +227,8 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
       </div>
     </section>
 
-    <div class="grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-      <div class="grid content-start gap-8">
+    <div class="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+      <div class="grid grid-cols-1 content-start gap-8">
         <DetailSection title="身份与当前值" aside="敏感值只显示开头和结尾">
           <p v-if="!lane.identities.length" class="text-muted-foreground text-sm">
             还没收到回传。在手机上装好订阅，打开对应的 App 就会出现。
@@ -236,7 +236,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
           <article
             v-for="a in lane.identities"
             :key="a.id"
-            class="bg-card grid gap-3 rounded-lg border p-4"
+            class="bg-card grid grid-cols-1 gap-3 rounded-lg border p-4"
           >
             <div class="flex flex-wrap items-center gap-2">
               <h3 class="font-medium" :class="a.key !== 'default' && 'font-mono'">
@@ -256,11 +256,11 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
                 ><HistoryIcon /> 历史与审核</Button
               >
             </div>
-            <dl class="grid gap-1.5 text-sm">
+            <dl class="grid grid-cols-1 gap-1.5 text-sm">
               <div
                 v-for="f in a.fields"
                 :key="f.key"
-                class="grid grid-cols-[minmax(0,8rem)_1fr_auto] items-baseline gap-3"
+                class="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_auto] items-baseline gap-3"
               >
                 <dt class="text-muted-foreground truncate font-mono" :title="f.name">
                   {{ f.key }}
@@ -274,7 +274,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
                 </dd>
               </div>
             </dl>
-            <ul v-if="a.pushes.length" class="grid gap-1.5 border-t pt-3">
+            <ul v-if="a.pushes.length" class="grid grid-cols-1 gap-1.5 border-t pt-3">
               <li
                 v-for="p in a.pushes"
                 :key="p.binding_id"
@@ -366,7 +366,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
         </DetailSection>
       </div>
 
-      <div class="grid content-start gap-8">
+      <div class="grid grid-cols-1 content-start gap-8">
         <DetailSection title="覆盖它的订阅" :aside="`${lane.devices.length} 台`">
           <p v-if="!lane.devices.length" class="text-muted-foreground text-sm">
             还没有订阅包含这个来源。
