@@ -132,15 +132,11 @@ const stepClass = (ok: boolean) =>
               在已安装 {{ client.label }} 的设备上打开以下链接，或使用相机扫描二维码。
             </p>
           </div>
+          <!-- 手机上多半就是在要安装的设备上打开的：「在本机打开」排最前、占满一行，二维码缩小；宽屏上可直接扫码，不显示该按钮 -->
           <div class="flex flex-wrap items-start gap-4">
-            <QrCode :value="sub.links.install_url" class="w-36 shrink-0" />
+            <QrCode :value="sub.links.install_url" class="w-28 shrink-0 sm:w-36" />
             <div class="grid min-w-0 flex-1 basis-60 gap-2">
               <CopyField :value="sub.links.install_url" label="安装链接" />
-              <div class="md:hidden">
-                <Button as="a" :href="sub.links.install_url" size="sm"
-                  ><DownloadIcon /> 在本机打开</Button
-                >
-              </div>
               <p v-if="sub.outdated" class="text-warning flex gap-1.5 text-sm">
                 <TriangleAlertIcon class="mt-0.5 size-4 shrink-0" />
                 MITM 域名已变更，需更新设备上的{{ term }}：重新打开上方链接，或在
@@ -155,6 +151,13 @@ const stepClass = (ok: boolean) =>
                 }}）
               </p>
             </div>
+            <Button
+              as="a"
+              :href="sub.links.install_url"
+              size="sm"
+              class="md:hidden max-sm:order-first max-sm:w-full"
+              ><DownloadIcon /> 在本机打开</Button
+            >
           </div>
         </div>
       </li>

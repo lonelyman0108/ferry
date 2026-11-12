@@ -22,7 +22,8 @@ import { useOverview } from '@/stores/overview'
 
 // 总览与聚焦共用这一页。总览：整页是一张流向图，左上角浮着收件箱，窄于 1280 时收件箱放在图的上面。
 // 聚焦（/sources/:id、/subscriptions/:id、/destinations/:id）：图收成左侧窄栏，只留相关节点，详情占主体；
-// 手机上窄栏换成详情顶部的横向链路。两种模式切换时节点卡从原位置滑到新位置。
+// 内容区不足 56rem 时（手机、平板竖屏、侧栏展开的小屏笔记本）窄栏换成详情顶部的横向链路，把宽度留给详情。
+// 两种模式切换时节点卡从原位置滑到新位置。
 const route = useRoute()
 const router = useRouter()
 const overview = useOverview()
@@ -160,13 +161,6 @@ function play() {
 
 watch(focusKey, () => (before = snapshot()), { flush: 'pre' })
 watch(focusKey, () => void nextTick(() => requestAnimationFrame(play)), { flush: 'post' })
-
-const legend = [
-  { label: '正常', cls: 'border-(--edge)' },
-  { label: '失败', cls: 'border-(--edge-failed) border-dashed' },
-  { label: '等待重试', cls: 'border-warning border-dashed' },
-  { label: '未连通或未推送', cls: 'border-(--edge-idle) border-dotted' },
-]
 </script>
 
 <template>
@@ -174,31 +168,32 @@ const legend = [
     <!-- 总览 -->
     <div
       v-if="!focus"
-      class="relative flex-1 bg-[radial-gradient(var(--canvas-dot)_1px,transparent_1.2px)] [background-size:22px_22px] px-4 pt-4 pb-24 md:px-8 md:pb-20"
+      class="relative flex-1 bg-[radial-gradient(var(--canvas-dot)_1px,transparent_1.2px)] [background-size:22px_22px] px-4 pt-4 pb-24 md:px-8 md:pb-10"
     >
       <h1 class="sr-only">总览</h1>
 
-      <div
-        v-if="overview.data"
-        class="mb-6 max-w-xl xl:absolute xl:top-4 xl:left-4 xl:z-10 xl:mb-0 xl:max-h-[calc(100svh-8rem)] xl:w-[340px]"
-        :class="!inboxOpen && 'xl:w-auto'"
-      >
-        <InboxPanel v-model:open="inboxOpen" :items="overview.data.items" @changed="load(true)" />
-      </div>
-
+      <!-- 窄于 1280 时自上而下：引导条、收件箱、流向图；宽屏上收件箱浮在左上角（相对外层定位），引导条和图让出左侧位置 -->
       <div
         class="transition-[padding] duration-300 xl:pt-10"
         :class="inboxOpen ? 'xl:pl-[372px]' : 'xl:pt-20 xl:pl-8'"
       >
         <div
           v-if="nextStep"
-          class="bg-card mx-auto mb-8 flex max-w-2xl flex-wrap items-center gap-3 rounded-xl border p-4"
+          class="bg-card mb-6 flex max-w-xl flex-wrap items-center gap-3 rounded-xl border p-4 xl:mx-auto xl:mb-8 xl:max-w-2xl"
         >
           <SparklesIcon class="text-primary size-5 shrink-0" />
           <p class="min-w-0 flex-1 text-sm">{{ nextStep.text }}</p>
-          <Button size="sm" @click="router.push(nextStep.to)">
+          <Button size="sm" class="max-sm:h-11 max-sm:w-full" @click="router.push(nextStep.to)">
             {{ nextStep.action }}<ArrowRightIcon />
           </Button>
+        </div>
+
+        <div
+          v-if="overview.data"
+          class="mb-6 max-w-xl xl:absolute xl:top-4 xl:left-4 xl:z-10 xl:mb-0 xl:flex xl:max-h-[calc(100svh-8rem)] xl:w-[340px] xl:flex-col"
+          :class="!inboxOpen && 'xl:w-auto'"
+        >
+          <InboxPanel v-model:open="inboxOpen" :items="overview.data.items" @changed="load(true)" />
         </div>
 
         <FlowCanvas
@@ -206,31 +201,25 @@ const legend = [
           :flow="flow.data"
           class="mx-auto max-w-5xl"
           @select="select"
-        />
-        <div v-else-if="!flow.data" class="mx-auto grid max-w-5xl gap-10 md:grid-cols-3">
-          <Skeleton v-for="i in 3" :key="i" class="h-64 rounded-xl" />
+        >
+          <template v-if="overview.data" #summary>
+            {{ overview.data.counts.identities }} 个身份 ·
+            {{ overview.data.counts.bindings }} 条推送规则
+          </template>
+        </FlowCanvas>
+        <div v-else-if="!flow.data" class="@container mx-auto max-w-5xl">
+          <div class="grid gap-10 @flow:grid-cols-3">
+            <Skeleton v-for="i in 3" :key="i" class="h-64 rounded-xl" />
+          </div>
         </div>
       </div>
-
-      <footer
-        v-if="flow.data?.sources.length"
-        class="bg-card/90 text-muted-foreground absolute right-4 bottom-4 hidden flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-1.5 text-xs backdrop-blur md:flex"
-      >
-        <span v-for="l in legend" :key="l.label" class="flex items-center gap-1.5">
-          <span class="w-5 border-t-2" :class="l.cls" />{{ l.label }}
-        </span>
-        <span v-if="overview.data" class="border-l pl-4">
-          {{ overview.data.counts.identities }} 个身份 ·
-          {{ overview.data.counts.bindings }} 条推送规则
-        </span>
-      </footer>
     </div>
 
     <!-- 聚焦 -->
-    <div v-else class="flex flex-1">
+    <div v-else class="@container/focus flex flex-1">
       <aside
         aria-label="相关节点"
-        class="hidden w-[304px] shrink-0 bg-[radial-gradient(var(--canvas-dot)_1px,transparent_1.2px)] [background-size:22px_22px] md:block"
+        class="hidden w-[304px] shrink-0 bg-[radial-gradient(var(--canvas-dot)_1px,transparent_1.2px)] [background-size:22px_22px] @4xl/focus:block"
       >
         <div class="sticky top-14 max-h-[calc(100svh-3.5rem)] overflow-y-auto p-4">
           <FocusRail
@@ -250,15 +239,16 @@ const legend = [
       >
         <div
           :key="focus.kind"
-          class="bg-background min-w-0 flex-1 px-4 pt-4 pb-24 md:border-l md:px-8 md:pt-6 md:pb-12"
+          class="bg-background @container min-w-0 flex-1 px-4 pt-4 pb-24 md:px-8 md:pt-6 md:pb-12 @4xl/focus:border-l"
         >
           <MiniChain
             v-if="flow.data"
             :id="focus.id"
-            class="mb-4 md:hidden"
+            class="mb-4 @4xl/focus:hidden"
             :flow="flow.data"
             :kind="focus.kind"
             @select="select"
+            @back="back"
           />
           <SourceDetail
             v-if="focus.kind === 'source'"

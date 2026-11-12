@@ -22,7 +22,10 @@ import {
 
 // 三列流向图：设备（订阅）→ 来源 → 目的地。连线画在一层 SVG 上，端点位置按节点卡实际渲染的位置量出来。
 // 线型表示通不通：实线正常，红虚线失败，琥珀虚线等待重试，灰虚线没连通或没推过。
-// 窄屏上不画线，三列上下排，每张卡用一句话写去向（宽屏上这句话留给读屏）。
+// 图例放在图的右上角，占正常文档流，不压节点；summary 插槽接在图例末尾，放总数之类的补充说明。
+// 按图本身的宽度切换（容器变体 @flow:，即三列的最小宽度，不看视口）：不够宽时不画线、不显示图例，
+// 三列上下排，每张卡用一句话写去向（够宽时这句话留给读屏），summary 单独占图上方一行。
+// 侧栏展开、收件箱占位时图会比视口窄得多，按视口切会把右列挤出去。
 // 键盘聚焦到节点时和鼠标悬停一样高亮相关连线。
 const props = defineProps<{ flow: Flow; selected?: string | null }>()
 const emit = defineEmits<{ select: [kind: 'device' | 'source' | 'destination', id: number] }>()
@@ -99,6 +102,13 @@ watch(
   { deep: true },
 )
 
+const legend = [
+  { label: '正常', cls: 'border-(--edge)' },
+  { label: '失败', cls: 'border-(--edge-failed) border-dashed' },
+  { label: '等待重试', cls: 'border-warning border-dashed' },
+  { label: '未连通或未推送', cls: 'border-(--edge-idle) border-dotted' },
+]
+
 const hovered = ref<string | null>(null)
 // 键盘焦点和鼠标悬停分开记，离开时各清各的：焦点从一个节点移走时，鼠标仍停着的节点保持高亮。
 // 两者同时存在时取最近发生的那个。
@@ -142,9 +152,9 @@ const paths = computed(() =>
 </script>
 
 <template>
-  <div ref="root" class="relative">
+  <div ref="root" class="@container relative">
     <svg
-      class="pointer-events-none absolute inset-0 hidden overflow-visible md:block"
+      class="pointer-events-none absolute inset-0 hidden overflow-visible @flow:block"
       :width="size.w"
       :height="size.h"
       aria-hidden="true"
@@ -159,7 +169,7 @@ const paths = computed(() =>
         :stroke-width="p.hl ? 2 : 1.5"
       />
     </svg>
-    <div class="pointer-events-none absolute inset-0 hidden md:block">
+    <div class="pointer-events-none absolute inset-0 hidden @flow:block">
       <span
         v-for="p in paths.filter((x) => x.label)"
         :key="p.id"
@@ -174,8 +184,25 @@ const paths = computed(() =>
       >
     </div>
 
+    <div class="mb-6 hidden justify-end @flow:flex">
+      <p
+        class="bg-card text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-1.5 text-xs"
+      >
+        <span v-for="l in legend" :key="l.label" class="flex items-center gap-1.5">
+          <span class="w-5 border-t-2" :class="l.cls" />{{ l.label }}
+        </span>
+        <span v-if="$slots.summary" class="border-l pl-4"><slot name="summary" /></span>
+      </p>
+    </div>
+    <p
+      v-if="$slots.summary"
+      class="text-muted-foreground mb-6 flex justify-end px-0.5 text-xs @flow:hidden"
+    >
+      <slot name="summary" />
+    </p>
+
     <div
-      class="relative grid gap-6 md:grid-cols-[minmax(150px,190px)_minmax(200px,250px)_minmax(150px,200px)] md:items-center md:justify-between md:gap-10"
+      class="relative grid gap-6 @flow:grid-cols-[minmax(150px,190px)_minmax(200px,250px)_minmax(150px,200px)] @flow:items-center @flow:justify-between @flow:gap-8"
     >
       <section class="grid min-w-0 grid-cols-1 content-center gap-3" aria-label="设备">
         <h2 class="text-muted-foreground flex justify-between px-0.5 text-xs">
@@ -260,7 +287,7 @@ const paths = computed(() =>
           />
           <p
             v-if="d.enabled && (d.state === 'failed' || d.state === 'retrying') && d.last_error"
-            class="text-destructive mt-1 hidden truncate px-1 text-xs md:block"
+            class="text-destructive mt-1 hidden truncate px-1 text-xs @flow:block"
             :title="d.last_error"
           >
             {{ d.last_error }}

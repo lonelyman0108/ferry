@@ -6,6 +6,7 @@ import type { Tone } from '@/lib/tone'
 
 // 流向图上的一张节点卡：标识（品牌图标、来源头像或图标块）、名称、副标题、状态徽章，下面一排概要数字。
 // 左右两侧的小圆点是连线的端口；line 是窄屏上替代连线的一句去向说明，宽屏上画了连线，只留给读屏。
+// 宽窄按所在流向图的容器宽度判断，和流向图的三列切换用同一个断点。
 // selected 表示当前页面就是这个对象，此时不是按钮，点了也不跳转。
 defineProps<{
   mark: Mark
@@ -38,12 +39,12 @@ defineEmits<{ select: [] }>()
   >
     <span
       v-if="portLeft"
-      class="bg-background absolute top-1/2 -left-[5px] hidden size-[9px] -translate-y-1/2 rounded-full border-[1.5px] border-(--edge) md:block"
+      class="bg-background absolute top-1/2 -left-[5px] hidden size-[9px] -translate-y-1/2 rounded-full border-[1.5px] border-(--edge) @flow:block"
       :class="selected && 'border-primary'"
     />
     <span
       v-if="portRight"
-      class="bg-background absolute top-1/2 -right-[5px] hidden size-[9px] -translate-y-1/2 rounded-full border-[1.5px] border-(--edge) md:block"
+      class="bg-background absolute top-1/2 -right-[5px] hidden size-[9px] -translate-y-1/2 rounded-full border-[1.5px] border-(--edge) @flow:block"
       :class="selected && 'border-primary'"
     />
     <span class="flex min-w-0 items-center gap-2.5">
@@ -73,6 +74,8 @@ defineEmits<{ select: [] }>()
         >
       </span>
     </span>
-    <span v-if="line" class="text-muted-foreground mt-2 block text-sm md:sr-only">{{ line }}</span>
+    <span v-if="line" class="text-muted-foreground mt-2 block text-sm @flow:sr-only">{{
+      line
+    }}</span>
   </component>
 </template>

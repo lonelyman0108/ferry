@@ -13,6 +13,7 @@ import {
   Undo2Icon,
   XIcon,
 } from '@lucide/vue'
+import { useMediaQuery } from '@vueuse/core'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { toast } from 'vue-sonner'
 
@@ -51,6 +52,7 @@ const field = ref('')
 const more = ref(false)
 const revealed = reactive<Record<number, string>>({})
 const busy = ref(false)
+const wide = useMediaQuery('(min-width: 640px)')
 
 const fieldName = (key: string) => identity.value?.fields?.find((f) => f.key === key)?.name || key
 const pendingTotal = computed(() =>
@@ -224,7 +226,7 @@ function shown(v: Version) {
           </CardHeader>
           <CardContent class="grid gap-2 text-sm">
             <template v-if="f.current">
-              <div class="flex items-start gap-1">
+              <div class="flex items-center gap-1">
                 <code
                   class="bg-muted/70 flex-1 rounded-md border px-2 py-1.5 font-mono text-xs break-all"
                   >{{ shown(f.current) }}</code
@@ -316,7 +318,7 @@ function shown(v: Version) {
       <SectionHeading title="历史值" :icon="HistoryIcon">
         <template #actions>
           <Tabs :model-value="field" @update:model-value="pickField">
-            <TabsList class="no-scrollbar max-w-full overflow-x-auto">
+            <TabsList class="no-scrollbar max-w-full justify-start scroll-px-0.75 overflow-x-auto">
               <TabsTrigger value="">全部字段</TabsTrigger>
               <TabsTrigger v-for="f in identity.fields" :key="f.key" :value="f.key">{{
                 f.name || f.key
@@ -344,7 +346,7 @@ function shown(v: Version) {
                   {{ fmtAgo(v.created_at) }} · 回传 {{ v.seen_count }} 次
                 </span>
               </div>
-              <div class="flex items-start gap-1">
+              <div class="flex items-center gap-1">
                 <code
                   class="bg-muted/70 flex-1 rounded-md border px-2 py-1.5 font-mono text-xs break-all"
                   >{{ shown(v) }}</code
@@ -417,7 +419,8 @@ function shown(v: Version) {
       </div>
     </template>
     <ListSkeleton v-else :rows="2" class="md:grid-cols-2" item-class="h-32" />
-    <template #footer>
+    <!-- 手机上弹窗高度有限，右上角已有关闭按钮，不再占一行底部栏 -->
+    <template v-if="wide" #footer>
       <Button variant="outline" @click="emit('close')">关闭</Button>
     </template>
   </DialogShell>
