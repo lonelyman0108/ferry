@@ -13,6 +13,14 @@ export const themeModes: { value: ThemeMode; label: string }[] = [
 const storageKey = 'ferry.theme'
 const media = window.matchMedia('(prefers-color-scheme: dark)')
 
+// 浏览器地址栏、状态栏的颜色（theme-color）。index.html 里两条按系统深浅色各给一个颜色，
+// 界面里手动选了深浅色后系统设置不再作数，两条都改成实际生效那一档的颜色。
+const themeMetas = [...document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')]
+const themeColors = {
+  light: themeMetas.find((m) => m.media.includes('light'))?.content,
+  dark: themeMetas.find((m) => m.media.includes('dark'))?.content,
+}
+
 function readMode(): ThemeMode {
   try {
     const v = localStorage.getItem(storageKey)
@@ -29,6 +37,8 @@ function apply() {
   const dark = themeMode.value === 'dark' || (themeMode.value === 'system' && media.matches)
   document.documentElement.classList.toggle('dark', dark)
   document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+  const color = dark ? themeColors.dark : themeColors.light
+  if (color) for (const m of themeMetas) m.content = color
 }
 
 export function setThemeMode(mode: ThemeMode) {

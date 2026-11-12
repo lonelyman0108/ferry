@@ -1,15 +1,5 @@
 <script setup lang="ts">
-import {
-  BoxesIcon,
-  HistoryIcon,
-  ListChecksIcon,
-  LoaderCircleIcon,
-  PencilIcon,
-  PlayIcon,
-  RefreshCwIcon,
-  SendIcon,
-  SmartphoneIcon,
-} from '@lucide/vue'
+import { HistoryIcon, LoaderCircleIcon, PencilIcon, PlayIcon, RefreshCwIcon } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -19,10 +9,13 @@ import ActivityList from '@/components/flow/ActivityList.vue'
 import { clientName } from '@/components/flow/inbox'
 import InboxItem from '@/components/flow/InboxItem.vue'
 import { deviceBadges, destStates, isSoon } from '@/components/flow/nodes'
+import EntityIcon from '@/components/EntityIcon.vue'
+import SourceAvatar from '@/components/SourceAvatar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fmtAgo, fmtTime, fmtUntil } from '@/format'
+import { destMark, deviceMark, icons } from '@/lib/icons'
 import IdentityDialog from '@/views/IdentityDialog.vue'
 import SourceEditor from '@/views/sources/SourceEditor.vue'
 import {
@@ -189,10 +182,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
   </div>
   <div v-else class="grid grid-cols-1 gap-6">
     <header class="flex flex-wrap items-start gap-x-4 gap-y-3">
-      <span
-        class="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg border"
-        ><BoxesIcon class="size-5"
-      /></span>
+      <SourceAvatar :name="src.name" :skey="src.key" :disabled="!src.enabled" size="lg" />
       <div class="min-w-0 flex-1">
         <h1 class="flex flex-wrap items-center gap-2 text-xl font-semibold">
           {{ src.name }}
@@ -204,7 +194,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
       </div>
       <div class="flex w-full flex-wrap gap-2 sm:w-auto">
         <Button variant="outline" size="sm" @click="setQuery({ edit: 'setup' })"
-          ><ListChecksIcon /> 接入清单</Button
+          ><component :is="icons.checklist" /> 接入清单</Button
         >
         <Button size="sm" @click="setQuery({ edit: 'basic' })"><PencilIcon /> 编辑读取规则</Button>
       </div>
@@ -280,7 +270,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
                 :key="p.binding_id"
                 class="flex flex-wrap items-center gap-2 text-sm"
               >
-                <SendIcon class="text-muted-foreground size-3.5" />
+                <EntityIcon :mark="destMark(p.destination_kind)" size="xs" />
                 <span>{{ p.destination_name }}</span>
                 <StatusBadge :tone="pushState(p).tone" dot>{{ pushState(p).label }}</StatusBadge>
                 <span v-if="p.last" class="text-muted-foreground text-xs">{{
@@ -298,7 +288,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
                   <LoaderCircleIcon
                     v-if="busy === `push-${p.binding_id}-${a.id}`"
                     class="animate-spin"
-                  /><PlayIcon v-else /> 立即推送
+                  /><component :is="icons.push" v-else /> 立即推送
                 </Button>
                 <span
                   v-if="p.last?.last_error && p.last.status !== 'success'"
@@ -328,7 +318,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
               :key="b.id"
               class="flex flex-wrap items-center gap-2 p-3"
             >
-              <SendIcon class="text-muted-foreground size-4" />
+              <EntityIcon :mark="destMark(b.destination_kind)" size="xs" />
               <button
                 type="button"
                 class="font-medium hover:underline"
@@ -378,7 +368,7 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
                 class="hover:bg-accent/50 flex w-full flex-wrap items-center gap-2 p-3 text-left"
                 @click="emit('focus', 'device', d.id)"
               >
-                <SmartphoneIcon class="text-muted-foreground size-4" />
+                <EntityIcon :mark="deviceMark(d.client)" size="xs" />
                 <span class="font-medium">{{ d.name }}</span>
                 <span class="text-muted-foreground text-xs">{{ clientName(d.client) }}</span>
                 <StatusBadge v-for="b in deviceBadges(d)" :key="b.label" :tone="b.tone" dot>{{

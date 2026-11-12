@@ -1,14 +1,20 @@
 <script setup lang="ts">
-import { BellIcon, CheckCheckIcon, DownloadIcon, SendIcon } from '@lucide/vue'
+import { CheckCheckIcon, DownloadIcon } from '@lucide/vue'
 
 import { fmtAgo, fmtTime } from '@/format'
+import { icons } from '@/lib/icons'
 import type { ActivityItem } from '@/types'
 
 // 记录时间线：回传、审核、推送、通知按时间倒序。结果用圆点颜色和文字一起表示。
 // compact 用在详情里，不显示来源名（都是同一个来源）。
 defineProps<{ items: ActivityItem[]; compact?: boolean }>()
 
-const icons = { sync: DownloadIcon, review: CheckCheckIcon, push: SendIcon, notify: BellIcon }
+const kindIcons = {
+  sync: DownloadIcon,
+  review: CheckCheckIcon,
+  push: icons.push,
+  notify: icons.notify,
+}
 const outcome: Record<string, { dot: string; label: string }> = {
   success: { dot: 'bg-success', label: '成功' },
   warning: { dot: 'bg-warning', label: '异常' },
@@ -30,17 +36,17 @@ const who = (it: ActivityItem, compact?: boolean) =>
     <li
       v-for="(it, i) in items"
       :key="`${it.kind}-${it.batch_id ?? it.push_id ?? i}-${it.at}`"
-      class="relative grid grid-cols-[1.5rem_1fr] gap-x-3 pb-4 last:pb-0"
+      class="relative grid grid-cols-[1.75rem_1fr] gap-x-3 pb-4 last:pb-0"
     >
       <span
         v-if="i < items.length - 1"
-        class="bg-border absolute top-6 bottom-0 left-3 w-px"
+        class="bg-border absolute top-7 bottom-0 left-3.5 w-px"
         aria-hidden="true"
       />
       <span
-        class="bg-card text-muted-foreground relative flex size-6 items-center justify-center rounded-full border [&>svg]:size-3"
+        class="bg-card text-muted-foreground relative flex size-7 items-center justify-center rounded-full border"
       >
-        <component :is="icons[it.kind]" />
+        <component :is="kindIcons[it.kind]" class="size-3.5" />
         <span
           class="ring-card absolute -right-0.5 -bottom-0.5 size-2 rounded-full ring-2"
           :class="outcome[it.outcome]?.dot"

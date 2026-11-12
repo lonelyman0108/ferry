@@ -103,7 +103,7 @@ watch(
         v-for="n in groups.up"
         :key="n.key"
         :data-node="n.key"
-        :icon="n.icon"
+        :mark="n.mark"
         :title="n.title"
         :subtitle="n.subtitle"
         :mono="n.mono"
@@ -117,7 +117,7 @@ watch(
       <p class="text-muted-foreground text-xs">{{ currentLabel[kind] }}</p>
       <FlowNode
         :data-node="current.key"
-        :icon="current.icon"
+        :mark="current.mark"
         :title="current.title"
         :subtitle="current.subtitle"
         :mono="current.mono"
@@ -136,7 +136,7 @@ watch(
         v-for="n in groups.down"
         :key="n.key"
         :data-node="n.key"
-        :icon="n.icon"
+        :mark="n.mark"
         :title="n.title"
         :subtitle="n.subtitle"
         :mono="n.mono"

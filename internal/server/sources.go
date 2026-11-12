@@ -22,6 +22,7 @@ type sourceSummary struct {
 	ID        uint      `json:"id"`
 	Key       string    `json:"key"`
 	Name      string    `json:"name"`
+	Icon      string    `json:"icon,omitempty"`
 	Enabled   bool      `json:"enabled"`
 	Matchers  int       `json:"matchers"`
 	Fields    int       `json:"fields"`
@@ -68,7 +69,7 @@ func (s *Server) handleListSources(w http.ResponseWriter, r *http.Request) {
 	out := make([]sourceSummary, 0, len(all))
 	for _, x := range all {
 		out = append(out, sourceSummary{
-			ID: x.ID, Key: x.Key, Name: x.Name, Enabled: x.Enabled,
+			ID: x.ID, Key: x.Key, Name: x.Name, Icon: x.Icon, Enabled: x.Enabled,
 			Matchers: len(x.Matchers), Fields: len(x.Fields), Outputs: len(x.Outputs), UpdatedAt: x.UpdatedAt,
 		})
 	}

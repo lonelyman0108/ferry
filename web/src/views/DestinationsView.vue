@@ -6,10 +6,7 @@ import {
   PlugZapIcon,
   PlusIcon,
   RefreshCwIcon,
-  SendIcon,
-  ServerIcon,
   SplitIcon,
-  WebhookIcon,
 } from '@lucide/vue'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -22,13 +19,13 @@ import FormField from '@/components/FormField.vue'
 import FormSection from '@/components/FormSection.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import HintText from '@/components/HintText.vue'
-import BrandIcon from '@/components/BrandIcon.vue'
-import IconTile from '@/components/IconTile.vue'
+import EntityIcon from '@/components/EntityIcon.vue'
 import ListRow from '@/components/ListRow.vue'
 import ListSkeleton from '@/components/ListSkeleton.vue'
 import KeyValueEditor from '@/components/KeyValueEditor.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RowActions from '@/components/RowActions.vue'
+import SourceAvatar from '@/components/SourceAvatar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,6 +42,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { fmtAgo, fmtTime } from '@/format'
 import { urlProblem, useFormCheck } from '@/lib/form'
+import { destMark, icons } from '@/lib/icons'
 import { toneText } from '@/lib/tone'
 import { useOverview } from '@/stores/overview'
 import {
@@ -102,8 +100,7 @@ const kindOptions = [
     value: 'webhook' as const,
     label: 'Webhook',
     description: 'HTTP 请求，可选 HMAC 签名',
-    icon: WebhookIcon,
-    tone: 'sky' as const,
+    icon: icons.webhook,
   },
 ]
 const modeOptions = [
@@ -112,18 +109,18 @@ const modeOptions = [
     label: '每个身份一条',
     description: '按身份分别写入，备注 ferry:<来源>:<身份>',
     icon: SplitIcon,
-    tone: 'sky' as const,
   },
   {
     value: 'joined' as const,
     label: '合并为一条',
     description: '多个身份以 & 连接，备注 ferry:<来源>',
     icon: MergeIcon,
-    tone: 'indigo' as const,
   },
 ]
-const sourceName = (id: number) => sources.value.find((s) => s.id === id)?.name ?? `#${id}`
-const destName = (id: number) => dests.value.find((d) => d.id === id)?.name ?? `#${id}`
+const sourceOf = (id: number) => sources.value.find((s) => s.id === id)
+const sourceName = (id: number) => sourceOf(id)?.name ?? `#${id}`
+const destOf = (id: number) => dests.value.find((d) => d.id === id)
+const destName = (id: number) => destOf(id)?.name ?? `#${id}`
 const identityKey = (id: number | null) =>
   id ? (identities.value.find((a) => a.id === id)?.key ?? `#${id}`) : '全部身份'
 const bindingLabel = (id: number) => {
@@ -488,14 +485,14 @@ async function runPush() {
         class="no-scrollbar mr-auto max-sm:min-w-0 max-sm:overflow-x-auto max-sm:[&_svg]:hidden"
       >
         <TabsTrigger value="destinations"
-          ><ServerIcon /> 目的地
+          ><component :is="icons.destination" /> 目的地
           <span
             class="bg-muted-foreground/15 text-muted-foreground min-w-5 rounded-full px-1.5 text-xs tabular-nums"
             >{{ dests.length }}</span
           ></TabsTrigger
         >
         <TabsTrigger value="bindings"
-          ><SplitIcon /> 推送规则
+          ><component :is="icons.bindings" /> 推送规则
           <span
             class="bg-muted-foreground/15 text-muted-foreground min-w-5 rounded-full px-1.5 text-xs tabular-nums"
             >{{ bindings.length }}</span
@@ -520,7 +517,7 @@ async function runPush() {
       <ListSkeleton v-if="!loaded" :rows="2" />
       <EmptyState
         v-else-if="!dests.length"
-        :icon="SendIcon"
+        :icon="icons.destination"
         title="暂无目的地"
         description="目的地是登录态的最终写入位置，例如青龙环境变量或自定义 Webhook。"
       >
@@ -528,8 +525,7 @@ async function runPush() {
       </EmptyState>
       <ListRow v-for="d in dests" :key="d.id" :dim="!d.enabled">
         <template #icon>
-          <BrandIcon v-if="d.kind === 'qinglong'" brand="qinglong" />
-          <IconTile v-else :icon="WebhookIcon" tone="sky" />
+          <EntityIcon :mark="destMark(d.kind)" />
         </template>
         <template #title
           ><router-link :to="`/destinations/${d.id}`" class="hover:underline" title="查看链路">{{
@@ -598,7 +594,7 @@ async function runPush() {
       <ListSkeleton v-if="!loaded" :rows="2" />
       <EmptyState
         v-else-if="!bindings.length"
-        :icon="SplitIcon"
+        :icon="icons.bindings"
         title="暂无推送规则"
         description="推送规则定义各来源的登录态推送至哪个目的地。"
       >
@@ -608,21 +604,32 @@ async function runPush() {
         >
         <Button v-else @click="newBinding"><PlusIcon /> 新建推送规则</Button>
       </EmptyState>
-      <EmptyState v-else-if="!shownBindings.length" :icon="SplitIcon" title="该来源暂无推送规则">
+      <EmptyState
+        v-else-if="!shownBindings.length"
+        :icon="icons.bindings"
+        title="该来源暂无推送规则"
+      >
         <Button @click="newBinding"><PlusIcon /> 新建推送规则</Button>
       </EmptyState>
       <template v-else>
         <ListRow v-for="b in shownBindings" :key="b.id" :dim="!b.enabled">
           <template #icon>
-            <IconTile
-              :icon="b.mode === 'joined' ? MergeIcon : SplitIcon"
-              :tone="b.mode === 'joined' ? 'indigo' : 'sky'"
+            <SourceAvatar
+              :name="sourceName(b.source_id)"
+              :skey="sourceOf(b.source_id)?.key ?? ''"
+              :icon="sourceOf(b.source_id)?.icon ?? ''"
+              :disabled="sourceOf(b.source_id)?.enabled === false"
             />
           </template>
           <template #title>
             <span class="flex flex-wrap items-center gap-1.5"
               >{{ sourceName(b.source_id) }}
               <ArrowRightIcon class="text-muted-foreground size-3.5" />
+              <EntityIcon
+                v-if="destOf(b.destination_id)"
+                :mark="destMark(destOf(b.destination_id)!.kind)"
+                size="xs"
+              />
               {{ destName(b.destination_id) }}</span
             >
           </template>
@@ -651,7 +658,7 @@ async function runPush() {
               @remove="removeBinding(b)"
             >
               <Button variant="outline" size="sm" :disabled="!b.enabled" @click="openPush(b)"
-                ><SendIcon /> 手动推送</Button
+                ><component :is="icons.push" /> 手动推送</Button
               >
             </RowActions>
           </template>
@@ -784,8 +791,7 @@ async function runPush() {
     :title="destForm.id ? '编辑目的地' : '新建目的地'"
     :description="destForm.id ? destForm.name : '登录态更新后的推送目标'"
     :brand="destForm.kind === 'qinglong' ? 'qinglong' : undefined"
-    :icon="WebhookIcon"
-    :tone="destForm.kind === 'qinglong' ? 'emerald' : 'sky'"
+    :icon="icons.webhook"
     :busy="busy"
     @submit="saveDest"
   >
@@ -891,8 +897,7 @@ async function runPush() {
         ? `${sourceName(bindForm.source_id)} → ${destName(bindForm.destination_id)}`
         : '将来源的输出变量推送至目的地'
     "
-    :icon="SplitIcon"
-    tone="emerald"
+    :icon="icons.bindings"
     :busy="busy"
     @submit="saveBinding"
   >
@@ -958,8 +963,7 @@ async function runPush() {
     v-model:open="pushForm.open"
     title="手动推送"
     :description="pushForm.binding ? bindingLabel(pushForm.binding.id) : ''"
-    :icon="SendIcon"
-    tone="emerald"
+    :icon="icons.push"
     size="sm"
     submit-text="立即推送"
     :busy="busy"

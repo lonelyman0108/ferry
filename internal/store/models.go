@@ -60,7 +60,11 @@ type Source struct {
 	Key         string `gorm:"size:64;uniqueIndex;not null"`
 	Name        string `gorm:"size:128;not null"`
 	Description string `gorm:"type:text"`
-	Enabled     bool   `gorm:"not null"`
+	// Icon 是自定义图标的 data URI，为空时界面显示名称首字。
+	// 不写 type:text：MySQL 的 TEXT 最多 64KB，放不下 base64 编码后的 64KB 图片；
+	// 不指定类型时 MySQL 建 longtext，SQLite、PostgreSQL 仍是 text。
+	Icon    string
+	Enabled bool `gorm:"not null"`
 	// IdentityField 是用作身份标识的字段 key；为空时所有回传都归到默认身份。
 	IdentityField string `gorm:"size:64"`
 	// MergeWindowSec 内到达的字段合并成一次更新。

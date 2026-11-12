@@ -1,14 +1,5 @@
 <script setup lang="ts">
-import {
-  ArrowRightIcon,
-  BellRingIcon,
-  BoxesIcon,
-  ListChecksIcon,
-  MegaphoneIcon,
-  PlusIcon,
-  SendHorizontalIcon,
-  WebhookIcon,
-} from '@lucide/vue'
+import { ArrowRightIcon, PlusIcon, SendHorizontalIcon } from '@lucide/vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -20,7 +11,7 @@ import FormField from '@/components/FormField.vue'
 import FormSection from '@/components/FormSection.vue'
 import FormDialog from '@/components/FormDialog.vue'
 import HintText from '@/components/HintText.vue'
-import BrandIcon from '@/components/BrandIcon.vue'
+import EntityIcon from '@/components/EntityIcon.vue'
 import IconTile from '@/components/IconTile.vue'
 import ListRow from '@/components/ListRow.vue'
 import ListSkeleton from '@/components/ListSkeleton.vue'
@@ -32,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { urlProblem, useFormCheck } from '@/lib/form'
+import { channelMark, icons } from '@/lib/icons'
 import {
   type Channel,
   type ChannelConfig,
@@ -67,8 +59,7 @@ const kindOptions = [
     value: 'webhook' as const,
     label: 'Webhook',
     description: 'HTTP POST',
-    icon: WebhookIcon,
-    tone: 'sky' as const,
+    icon: icons.webhook,
   },
 ]
 const eventOptions = eventTypes
@@ -350,14 +341,14 @@ function secretHint(key: string, fallback = '') {
     <div class="mb-2 flex flex-wrap items-center gap-2">
       <TabsList class="mr-auto">
         <TabsTrigger value="channels"
-          ><MegaphoneIcon /> 通知渠道
+          ><component :is="icons.channel" /> 通知渠道
           <span
             class="bg-muted-foreground/15 text-muted-foreground min-w-5 rounded-full px-1.5 text-xs tabular-nums"
             >{{ channels.length }}</span
           ></TabsTrigger
         >
         <TabsTrigger value="rules"
-          ><ListChecksIcon /> 通知规则
+          ><component :is="icons.notifyRules" /> 通知规则
           <span
             class="bg-muted-foreground/15 text-muted-foreground min-w-5 rounded-full px-1.5 text-xs tabular-nums"
             >{{ rules.length }}</span
@@ -377,7 +368,7 @@ function secretHint(key: string, fallback = '') {
       <ListSkeleton v-if="!loaded" :rows="2" />
       <EmptyState
         v-else-if="!channels.length"
-        :icon="BellRingIcon"
+        :icon="icons.channel"
         title="暂无通知渠道"
         description="推送失败或登录态即将过期时，Ferry 通过通知渠道发送提醒，支持 Bark、Telegram 与 Webhook。"
       >
@@ -385,8 +376,7 @@ function secretHint(key: string, fallback = '') {
       </EmptyState>
       <ListRow v-for="c in channels" :key="c.id" :dim="!c.enabled">
         <template #icon>
-          <BrandIcon v-if="c.kind !== 'webhook'" :brand="c.kind" />
-          <IconTile v-else :icon="WebhookIcon" tone="sky" />
+          <EntityIcon :mark="channelMark(c.kind)" />
         </template>
         <template #title>{{ c.name }}</template>
         <template #badges>
@@ -424,7 +414,7 @@ function secretHint(key: string, fallback = '') {
       <ListSkeleton v-if="!loaded" :rows="2" />
       <EmptyState
         v-else-if="!rules.length"
-        :icon="ListChecksIcon"
+        :icon="icons.notifyRules"
         title="暂无通知规则"
         description="通知规则定义各类事件发送至哪些通知渠道；未配置规则时不发送任何通知。"
       >
@@ -432,7 +422,7 @@ function secretHint(key: string, fallback = '') {
         <Button v-else @click="startChannel"><PlusIcon /> 新建通知渠道</Button>
       </EmptyState>
       <ListRow v-for="r in rules" :key="r.id" :dim="!r.enabled">
-        <template #icon><IconTile :icon="ListChecksIcon" tone="amber" /></template>
+        <template #icon><IconTile :icon="icons.notifyRules" /></template>
         <template #title>{{ r.name }}</template>
         <template #description>
           <span class="flex w-full flex-wrap gap-1">
@@ -441,10 +431,10 @@ function secretHint(key: string, fallback = '') {
             }}</StatusBadge>
           </span>
           <span class="flex w-full flex-wrap items-center gap-1.5">
-            <BoxesIcon class="size-3.5" />
+            <component :is="icons.source" class="size-3.5" />
             {{ r.source_keys.length ? r.source_keys.map(sourceName).join('、') : '全部来源' }}
             <ArrowRightIcon class="size-3.5" />
-            <BellRingIcon class="size-3.5" />
+            <component :is="icons.channel" class="size-3.5" />
             {{ liveChannels(r.channel_ids).map(channelName).join('、') || '无可用渠道' }}
           </span>
         </template>
@@ -469,8 +459,7 @@ function secretHint(key: string, fallback = '') {
     :title="chForm.id ? '编辑通知渠道' : '新建通知渠道'"
     :description="chForm.id ? chForm.name : '事件通知的投递目标'"
     :brand="chForm.kind !== 'webhook' ? chForm.kind : undefined"
-    :icon="WebhookIcon"
-    tone="sky"
+    :icon="icons.webhook"
     :busy="busy"
     @submit="saveChannel"
   >
@@ -584,8 +573,7 @@ function secretHint(key: string, fallback = '') {
     v-model:enabled="ruleForm.enabled"
     :title="ruleForm.id ? '编辑通知规则' : '新建通知规则'"
     :description="ruleForm.id ? ruleForm.name : '事件 + 来源 → 通知渠道'"
-    :icon="ListChecksIcon"
-    tone="amber"
+    :icon="icons.notifyRules"
     :busy="busy"
     @submit="saveRule"
   >

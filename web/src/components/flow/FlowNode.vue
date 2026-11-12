@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import type { Component } from 'vue'
-
+import EntityIcon from '@/components/EntityIcon.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import type { Mark } from '@/lib/icons'
 import type { Tone } from '@/lib/tone'
 
-// 流向图上的一张节点卡：图标、名称、副标题、状态徽章，下面一排概要数字。
+// 流向图上的一张节点卡：标识（品牌图标、来源头像或图标块）、名称、副标题、状态徽章，下面一排概要数字。
 // 左右两侧的小圆点是连线的端口；line 是窄屏上替代连线的一句去向说明，宽屏上画了连线，只留给读屏。
 // selected 表示当前页面就是这个对象，此时不是按钮，点了也不跳转。
 defineProps<{
-  icon: Component
+  mark: Mark
   title: string
   subtitle?: string
   mono?: boolean
@@ -47,10 +47,7 @@ defineEmits<{ select: [] }>()
       :class="selected && 'border-primary'"
     />
     <span class="flex min-w-0 items-center gap-2.5">
-      <span
-        class="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md border [&>svg]:size-3.5"
-        ><component :is="icon"
-      /></span>
+      <EntityIcon :mark="mark" size="sm" />
       <span class="min-w-0 flex-1">
         <span class="block truncate text-sm leading-5 font-semibold">{{ title }}</span>
         <span

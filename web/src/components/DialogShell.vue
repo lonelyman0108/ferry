@@ -13,7 +13,7 @@ import BrandIcon from './BrandIcon.vue'
 import IconTile from './IconTile.vue'
 
 // 全站弹窗的外壳，来源编辑器、表单弹窗、详情弹窗都用它，保证头部和底部栏一致：
-// 头部是图标、标题（badges 插槽放状态徽章）、说明，右侧依次是 header-actions 插槽、启用开关、关闭按钮；
+// 头部是图标（icon 插槽可换成别的标识，如来源头像）、标题（badges 插槽放状态徽章）、说明，右侧依次是 header-actions 插槽、启用开关、关闭按钮；
 // 正文在内部滚动，默认带内边距，bare 时交给调用方自己排（如来源编辑器的分栏）；
 // 底部栏左侧是 footer-start 插槽（导出、删除这类次要操作），右侧是 footer 插槽（取消、保存）。
 // 关闭按钮、Esc 只发 close，由调用方决定要不要真的关（例如有未保存的修改时先确认）；
@@ -39,7 +39,7 @@ withDefaults(
     description: '',
     icon: undefined,
     brand: undefined,
-    tone: 'primary',
+    tone: 'neutral',
     size: 'md',
     enabledLabel: '启用',
   },
@@ -77,7 +77,8 @@ const width = {
     >
       <!-- 头部不换行：窄屏时隐藏图标，标题截断，开关和关闭始终在右侧同一行 -->
       <div class="flex items-center gap-3 border-b px-4 py-3 sm:px-5">
-        <BrandIcon v-if="brand" :brand="brand" class="max-sm:hidden" />
+        <span v-if="$slots.icon" class="flex max-sm:hidden"><slot name="icon" /></span>
+        <BrandIcon v-else-if="brand" :brand="brand" class="max-sm:hidden" />
         <IconTile v-else-if="icon" :icon="icon" :tone="tone" class="max-sm:hidden" />
         <div class="mr-auto min-w-0">
           <DialogTitle class="flex flex-wrap items-center gap-2 text-base">

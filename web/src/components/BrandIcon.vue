@@ -6,12 +6,21 @@ import { cn } from '@/lib/utils'
 
 // 品牌图标，尺寸与 IconTile 对齐，可以在同一列表里混用。
 const props = withDefaults(
-  defineProps<{ brand: string; size?: 'sm' | 'md' | 'lg'; class?: HTMLAttributes['class'] }>(),
+  defineProps<{
+    brand: string
+    size?: 'xs' | 'sm' | 'md' | 'lg'
+    class?: HTMLAttributes['class']
+  }>(),
   { size: 'md', class: undefined },
 )
 
-const box = { sm: 'size-7 rounded-md', md: 'size-9 rounded-lg', lg: 'size-11 rounded-xl' }
-const pad = { sm: 'p-1', md: 'p-1.5', lg: 'p-2' }
+const box = {
+  xs: 'size-5 rounded',
+  sm: 'size-7 rounded-md',
+  md: 'size-9 rounded-lg',
+  lg: 'size-11 rounded-xl',
+}
+const pad = { xs: 'p-0.5', sm: 'p-1', md: 'p-1.5', lg: 'p-2' }
 </script>
 
 <template>

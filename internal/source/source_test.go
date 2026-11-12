@@ -2,6 +2,7 @@ package source
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -221,5 +222,140 @@ func TestDeleteRemovesDependents(t *testing.T) {
 	db.First(&left)
 	if left.SourceID != b.ID {
 		t.Errorf("留下的身份属于来源 %d，期望 %d", left.SourceID, b.ID)
+	}
+}
+
+func TestIconValidation(t *testing.T) {
+	b64 := base64.StdEncoding.EncodeToString
+	png := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 32)...)
+	jpeg := append([]byte("\xff\xd8\xff\xe0"), make([]byte, 32)...)
+	webp := append([]byte("RIFF\x24\x00\x00\x00WEBPVP8 "), make([]byte, 32)...)
+	svg := []byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"/>`)
+	big := append(append([]byte{}, png...), make([]byte, MaxIconBytes)...)
+
+	for _, tc := range []struct {
+		name, icon, want string
+	}{
+		{"空", "", ""},
+		{"PNG", "data:image/png;base64," + b64(png), ""},
+		{"JPEG", "data:image/jpeg;base64," + b64(jpeg), ""},
+		{"WebP", "data:image/webp;base64," + b64(webp), ""},
+		{"SVG", "data:image/svg+xml;base64," + b64(svg), ""},
+		{"刚好 64KB", "data:image/png;base64," + b64(big[:MaxIconBytes]), ""},
+		{"网络地址", "https://example.com/a.png", "不支持网络地址"},
+		{"不支持的类型", "data:image/gif;base64,R0lGODlh", "仅支持 PNG"},
+		{"未 base64", "data:image/svg+xml;utf8,<svg/>", "仅支持 PNG"},
+		{"base64 无效", "data:image/png;base64,***", "base64 数据无效"},
+		{"内容为空", "data:image/png;base64,", "图片内容为空"},
+		{"超过 64KB", "data:image/png;base64," + b64(big[:MaxIconBytes+1]), "超过 64 KB"},
+		{"类型不符", "data:image/png;base64," + b64(jpeg), "不符"},
+		{"不是 SVG", "data:image/svg+xml;base64," + b64([]byte("<html></html>")), "不是 SVG"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := ninebot(t)
+			d.Icon = tc.icon
+			d.Normalize()
+			err := d.Validate()
+			if tc.want == "" {
+				if err != nil {
+					t.Errorf("应当通过：%v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), "icon") || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %v，期望包含 %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// SVG 图标里的 DOCTYPE、脚本、事件属性和外部引用一律拒收，正常的图形、文档内引用与内嵌位图不受影响。
+func TestIconSVGUnsafe(t *testing.T) {
+	const head = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 24 24">`
+	for _, tc := range []struct {
+		name, body string
+		bad        bool
+	}{
+		{"普通 path", `<path d="M0 0h24v24H0z" fill="#333"/>`, false},
+		{"use 指向片段", `<defs><path id="a" d="M0 0h1v1z"/></defs><use href="#a"/>`, false},
+		{"xlink:href 指向片段", `<use xlink:href = "#a"/>`, false},
+		{"渐变 url(#g)", `<defs><linearGradient id="g"/></defs><rect width="24" height="24" fill="url(#g)"/>`, false},
+		{"style 里的 url('#g')", `<rect style="fill: url( '#g' )" width="1" height="1"/>`, false},
+		{"内嵌位图", `<image href="data:image/png;base64,iVBORw0KGgo=" width="24" height="24"/>`, false},
+		{"内嵌 SVG", `<image href="data:image/svg+xml;base64,PHN2Zy8+" width="24" height="24"/>`, true},
+		{"script", `<script>alert(1)</script>`, true},
+		{"SCRIPT 大写", `<SCRIPT>alert(1)</SCRIPT>`, true},
+		{"ScRiPt 混写", `<ScRiPt type="text/javascript">alert(1)</ScRiPt>`, true},
+		{"带前缀的 script", `<svg:script xmlns:svg="http://www.w3.org/2000/svg">alert(1)</svg:script>`, true},
+		{"onload 带空白", `<rect width="1" height="1" onload = "alert(1)"/>`, true},
+		{"OnClick 大写", `<rect width="1" height="1" OnClick='alert(1)'/>`, true},
+		{"xlink:href 外链", `<image xlink:href="https://example.com/a.png" width="24" height="24"/>`, true},
+		{"href 外链带空白", `<use href ="//example.com/s.svg#a"/>`, true},
+		{"style 里 url(http…)", `<rect style="fill:url(http://example.com/x.svg#g)" width="1" height="1"/>`, true},
+		{"style 元素里 url(http…)", `<style>rect{fill:URL("https://example.com/p")}</style>`, true},
+		{"@import", `<style>@import "https://example.com/a.css";</style>`, true},
+		{"javascript: 字符引用", `<a href="jav&#x61;script:alert(1)"><path d="M0 0h1v1z"/></a>`, true},
+		{"javascript: 夹空白", `<animate to="java&#9;script:alert(1)"/>`, true},
+		{"动画改写 href", `<animate attributeName="href" to="https://example.com/"/>`, true},
+		{"foreignObject", `<foreignObject width="24" height="24"><div/></foreignObject>`, true},
+		{"CSS 转义的 url", `<rect style="fill:u\72l(https://example.com/p)" width="1" height="1"/>`, true},
+		{"CSS 转义的 @import", `<style>@\69mport "https://example.com/a.css";</style>`, true},
+		{"image-set 字符串地址", `<rect style="fill:image-set(&quot;https://example.com/a.png&quot; 1x)" width="1" height="1"/>`, true},
+		{"-webkit-image-set", `<style>rect{background:-webkit-image-set("https://example.com/a.png" 1x)}</style>`, true},
+		{"cross-fade", `<style>rect{background:cross-fade("https://example.com/a.png" 50%, url(#g))}</style>`, true},
+		{"image 元素不误伤", `<image href="#a" width="24" height="24"/>`, false},
+		{"属性里的 Windows 路径", `<path d="M0 0h1v1z" inkscape:export-filename="C:\Users\me\icon.png"/>`, false},
+		{"转义加空白的 url", `<style>rect{fill:\75 rl(https://example.com/p)}</style>`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := ninebot(t)
+			d.Icon = "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(head+tc.body+"</svg>"))
+			d.Normalize()
+			err := d.Validate()
+			if !tc.bad {
+				if err != nil {
+					t.Errorf("应当通过：%v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), "icon SVG 图片不得包含脚本、事件属性或外部引用") {
+				t.Errorf("err = %v，期望拒收", err)
+			}
+		})
+	}
+	// DTD 与实体声明在 <svg 之前，单独拼。
+	for _, pre := range []string{
+		`<!DOCTYPE svg [<!ENTITY x "y">]>`,
+		`<!doctype svg>`,
+		`<!ENTITY x SYSTEM "file:///etc/passwd">`,
+	} {
+		d := ninebot(t)
+		d.Icon = "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(pre+head+`<path d="M0 0"/></svg>`))
+		d.Normalize()
+		if err := d.Validate(); err == nil || !strings.Contains(err.Error(), "icon SVG 图片不得包含 DOCTYPE 或 ENTITY 声明") {
+			t.Errorf("%s：err = %v，期望拒收", pre, err)
+		}
+	}
+}
+
+func TestIconPersists(t *testing.T) {
+	ctx := context.Background()
+	db := openDB(t).DB
+	d := ninebot(t)
+	d.Icon = "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`))
+	s, err := Create(ctx, db, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := FromModel(s).Icon; got != d.Icon {
+		t.Errorf("新建后图标 = %q", got)
+	}
+	d.Icon = ""
+	s, err = Update(ctx, db, s.ID, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := FromModel(s).Icon; got != "" {
+		t.Errorf("清除后图标 = %q，期望为空", got)
 	}
 }

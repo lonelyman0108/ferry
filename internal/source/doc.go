@@ -2,9 +2,14 @@
 package source
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
+	"html"
+	"net/http"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/lonelyman0108/ferry/internal/probe"
 	"github.com/lonelyman0108/ferry/internal/rules"
@@ -42,6 +47,8 @@ const (
 	maxMatchers        = 20
 	maxFields          = 50
 	maxOutputs         = 20
+	// MaxIconBytes 是自定义图标解码后的上限。
+	MaxIconBytes = 64 << 10
 )
 
 // Doc 是一个来源的完整定义。
@@ -49,6 +56,8 @@ type Doc struct {
 	Key         string `json:"key" yaml:"key"`
 	Name        string `json:"name" yaml:"name"`
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	// Icon 是可选的自定义图标，只接受 base64 编码的图片 data URI（见 validateIcon），为空时界面显示名称首字。
+	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
 	// Enabled 为 nil 时按启用处理。
 	Enabled       *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	IdentityField string `json:"identity_field,omitempty" yaml:"identity_field,omitempty"`
@@ -115,6 +124,7 @@ func (e *ValidationError) Error() string {
 func (d *Doc) Normalize() {
 	d.Key = strings.TrimSpace(d.Key)
 	d.Name = strings.TrimSpace(d.Name)
+	d.Icon = strings.TrimSpace(d.Icon)
 	d.IdentityField = strings.TrimSpace(d.IdentityField)
 	if d.Enabled == nil {
 		t := true
@@ -160,6 +170,11 @@ func (d *Doc) Validate() error {
 	}
 	if d.Name == "" || len(d.Name) > 128 {
 		add("name 不能为空，且不超过 128 个字节")
+	}
+	if d.Icon != "" {
+		if err := validateIcon(d.Icon); err != nil {
+			add("icon %v", err)
+		}
 	}
 	switch d.Notify {
 	case NotifyAlways, NotifyFirst, NotifyChanged:
@@ -262,6 +277,161 @@ func (d *Doc) Validate() error {
 		return &ValidationError{Problems: p}
 	}
 	return nil
+}
+
+// 图标允许的图片类型。只收内嵌的 data URI，不收 http(s) 地址，管理界面不去加载第三方资源。
+var iconTypes = map[string]bool{"image/png": true, "image/jpeg": true, "image/webp": true, "image/svg+xml": true}
+
+// validateIcon 检查图标是 data:image/<类型>;base64,<数据>，类型在 iconTypes 里，解码后不超过 MaxIconBytes，
+// 且内容和声明的类型一致（位图看文件头，SVG 要有 <svg 标签）。SVG 另见 checkSVG。
+func validateIcon(icon string) error {
+	rest, ok := strings.CutPrefix(icon, "data:")
+	if !ok {
+		return fmt.Errorf("仅支持 data:image/…;base64, 形式的图片，不支持网络地址")
+	}
+	mime, data, ok := strings.Cut(rest, ";base64,")
+	if !ok || !iconTypes[mime] {
+		return fmt.Errorf("仅支持 PNG、JPEG、WebP、SVG 图片，且须为 base64 编码")
+	}
+	if base64.StdEncoding.DecodedLen(len(data)) > MaxIconBytes+2 {
+		return fmt.Errorf("图片超过 %d KB", MaxIconBytes>>10)
+	}
+	raw, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return fmt.Errorf("base64 数据无效")
+	}
+	if len(raw) == 0 {
+		return fmt.Errorf("图片内容为空")
+	}
+	if len(raw) > MaxIconBytes {
+		return fmt.Errorf("图片超过 %d KB", MaxIconBytes>>10)
+	}
+	if mime == "image/svg+xml" {
+		if !bytes.Contains(raw, []byte("<svg")) {
+			return fmt.Errorf("内容不是 SVG 图片")
+		}
+		if err := checkSVG(string(raw)); err != nil {
+			return err
+		}
+	} else if http.DetectContentType(raw) != mime {
+		return fmt.Errorf("内容与声明的类型 %s 不符", mime)
+	}
+	return nil
+}
+
+// SVG 图标的拒绝规则，都不区分大小写，属性名与等号之间允许空白。
+var (
+	// DOCTYPE 与实体声明（可引入外部实体）。
+	svgDTDRe = regexp.MustCompile(`(?i)<!\s*(?:doctype|entity)`)
+	// 脚本与可嵌入 HTML 的元素（含带命名空间前缀的写法，如 <svg:script>）、CSS 的 @import，
+	// 以及可以直接写字符串地址、不经过 url() 的 CSS 图像函数（image-set("…")、image("…")、cross-fade("…")）。
+	svgBannedRe = regexp.MustCompile(`(?i)<\s*(?:[\w.-]+:)?(?:script|foreignobject)|@import|\bimage(?:-set)?\s*\(|\bcross-fade\s*\(`)
+	// on 开头的事件属性，如 onload=、onclick =。
+	svgEventRe = regexp.MustCompile(`(?i)[\s"'/]on[a-z]+\s*=`)
+	// href 与任意前缀的 href（xlink:href），取出属性值。
+	svgHrefRe = regexp.MustCompile(`(?i)[\s"'/](?:[\w.-]+:)?href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]*))`)
+	// CSS 与属性里的 url(...)，取出括号里的值。
+	svgURLRe = regexp.MustCompile(`(?i)url\s*\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))`)
+	// 用动画改写 href（<animate attributeName="href" to="…">）也算外部引用。
+	svgAnimHrefRe = regexp.MustCompile(`(?i)attributename\s*=\s*["']?\s*(?:[\w.-]+:)?href`)
+	// 允许的引用：文档内的片段（#id），以及内嵌的位图（导出工具常把位图以 data URI 嵌进 SVG）。
+	svgRefOKRe = regexp.MustCompile(`(?i)^(?:#|data:image/(?:png|jpeg|gif|webp);base64,)`)
+)
+
+// checkSVG 检查 SVG 是否含 DOCTYPE、脚本、事件属性或外部引用，有则返回给界面的说明。
+// 界面用 <img> 显示图标时脚本本来不会执行，这里是纵深防御：来源定义可以导入导出，图标随定义流转到别处。
+// 先解开字符引用（&#x6A; 之类），免得用编码绕过；href、xlink:href 与 url(...) 只允许 svgRefOKRe 里的两种。
+func checkSVG(svg string) error {
+	text := html.UnescapeString(svg)
+	if svgDTDRe.MatchString(text) {
+		return fmt.Errorf("SVG 图片不得包含 DOCTYPE 或 ENTITY 声明")
+	}
+	// 浏览器也会解开 CSS 转义（u\72l(、@\69mport），所以解开后再查一遍。不直接拒收反斜杠：
+	// 有的编辑器会把 Windows 路径写进属性（如 inkscape:export-filename）。
+	for _, t := range []string{text, cssUnescape(text)} {
+		if svgUnsafe(t) {
+			return fmt.Errorf("SVG 图片不得包含脚本、事件属性或外部引用")
+		}
+	}
+	return nil
+}
+
+// svgUnsafe 报告 SVG 文本里是否有脚本、事件属性或外部引用。
+func svgUnsafe(text string) bool {
+	if svgBannedRe.MatchString(text) || svgEventRe.MatchString(text) || svgAnimHrefRe.MatchString(text) {
+		return true
+	}
+	// 浏览器解析地址时会去掉其中的空白和控制字符，java&#9;script: 一样生效，所以去掉后再找。
+	compact := strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || unicode.IsControl(r) {
+			return -1
+		}
+		return unicode.ToLower(r)
+	}, text)
+	if strings.Contains(compact, "javascript:") {
+		return true
+	}
+	for _, re := range []*regexp.Regexp{svgHrefRe, svgURLRe} {
+		for _, m := range re.FindAllStringSubmatch(text, -1) {
+			if !svgRefOKRe.MatchString(strings.TrimSpace(m[1] + m[2] + m[3])) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// cssUnescape 按 CSS 的规则解开反斜杠转义：\72 → r（十六进制最多 6 位，后面可跟一个空白），
+// 反斜杠加其他字符得到该字符本身，反斜杠加换行是续行。
+func cssUnescape(s string) string {
+	if !strings.Contains(s, `\`) {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\\' {
+			b.WriteByte(s[i])
+			continue
+		}
+		var r rune
+		n := 0
+		for n < 6 && i+1+n < len(s) {
+			v := hexValue(s[i+1+n])
+			if v < 0 {
+				break
+			}
+			r = r<<4 | rune(v)
+			n++
+		}
+		if n == 0 {
+			if i+1 < len(s) && s[i+1] != '\n' {
+				b.WriteByte(s[i+1])
+			}
+			i++
+			continue
+		}
+		if r == 0 || r > unicode.MaxRune || (r >= 0xD800 && r <= 0xDFFF) {
+			r = unicode.ReplacementChar
+		}
+		b.WriteRune(r)
+		i += n
+		if i+1 < len(s) && strings.IndexByte(" \t\n\r\f", s[i+1]) >= 0 {
+			i++
+		}
+	}
+	return b.String()
+}
+
+func hexValue(c byte) int {
+	switch {
+	case '0' <= c && c <= '9':
+		return int(c - '0')
+	case 'a' <= c && c <= 'f':
+		return int(c-'a') + 10
+	case 'A' <= c && c <= 'F':
+		return int(c-'A') + 10
+	}
+	return -1
 }
 
 // MatcherNeedsBody 返回每条匹配规则是否需要请求正文：绑定在它上面、或没绑定规则的字段要从正文取值时就需要。

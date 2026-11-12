@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ArrowRightIcon, CheckIcon, RefreshCwIcon, SmartphoneIcon, XIcon } from '@lucide/vue'
+import { ArrowRightIcon, CheckIcon, RefreshCwIcon, XIcon } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { fmtAgo, fmtUntil } from '@/format'
+import { icons } from '@/lib/icons'
 import type { AttentionItem } from '@/types'
 
 import { clientName, itemLabels, useInboxActions } from './inbox'
@@ -70,7 +71,7 @@ const identity = computed(() =>
       v-if="item.kind === 'expiring' || item.kind === 'expired'"
       class="text-muted-foreground flex items-start gap-1.5 text-sm"
     >
-      <SmartphoneIcon class="mt-0.5 size-3.5 shrink-0" />
+      <component :is="icons.subscription" class="mt-0.5 size-3.5 shrink-0" />
       在设备上打开{{ item.source_name }}的 App 后，新的登录态将自动回传
     </p>
 

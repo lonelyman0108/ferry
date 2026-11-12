@@ -235,7 +235,7 @@ onMounted(async () => {
       </EmptyState>
       <template v-else>
         <ListRow v-for="t in tokens" :key="t.id" :dim="!!t.revoked_at">
-          <template #icon><IconTile :icon="KeyRoundIcon" tone="slate" /></template>
+          <template #icon><IconTile :icon="KeyRoundIcon" /></template>
           <template #title>{{ t.name }}</template>
           <template #badges>
             <StatusBadge
@@ -276,7 +276,6 @@ onMounted(async () => {
     title="新建令牌"
     description="只读权限，生成后仅显示一次"
     :icon="KeyRoundIcon"
-    tone="slate"
     size="sm"
     submit-text="生成令牌"
     :busy="busy"

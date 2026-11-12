@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-  BoxesIcon,
   ChevronRightIcon,
   FileUpIcon,
   KeyRoundIcon,
@@ -18,17 +17,19 @@ import DialogShell from '@/components/DialogShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import FormField from '@/components/FormField.vue'
 import FormDialog from '@/components/FormDialog.vue'
-import IconTile from '@/components/IconTile.vue'
 import ListSkeleton from '@/components/ListSkeleton.vue'
 import SourceEditor from './SourceEditor.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RowActions from '@/components/RowActions.vue'
+import SourceAvatar from '@/components/SourceAvatar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { fmtAgo } from '@/format'
 import { useFormCheck } from '@/lib/form'
+import { icons } from '@/lib/icons'
 import { useOverview } from '@/stores/overview'
+import { useSourceIcons } from '@/stores/sourceIcons'
 import type { Example, SourceSummary, SourceView, Subscription } from '@/types'
 
 const props = defineProps<{ editing?: string }>()
@@ -64,6 +65,7 @@ async function load() {
       overview.load(),
     ])
     list.value = l.data
+    useSourceIcons().set(l.data)
     subs.value = sb.data
   } catch (e) {
     toast.error(errorText(e))
@@ -150,7 +152,7 @@ async function importYAML() {
   <ListSkeleton v-if="!list" :rows="3" class="md:grid-cols-2 xl:grid-cols-3" item-class="h-40" />
   <EmptyState
     v-else-if="!list.length"
-    :icon="BoxesIcon"
+    :icon="icons.source"
     title="暂无来源"
     description="来源定义目标 App 的请求匹配、字段读取规则与输出变量。可从内置示例导入。"
   >
@@ -167,7 +169,7 @@ async function importYAML() {
       class="bg-card ring-foreground/10 hover:ring-primary/40 has-[[data-card-link]:focus-visible]:ring-ring/50 relative flex flex-col gap-4 rounded-xl p-4 text-left ring-1 transition hover:shadow-sm has-[[data-card-link]:focus-visible]:ring-3"
     >
       <div class="flex items-start gap-3">
-        <IconTile :icon="BoxesIcon" :tone="s.enabled ? 'violet' : 'neutral'" />
+        <SourceAvatar :name="s.name" :skey="s.key" :icon="s.icon ?? ''" :disabled="!s.enabled" />
         <div class="min-w-0 flex-1">
           <div class="flex min-w-0 items-center gap-2">
             <router-link
@@ -227,12 +229,11 @@ async function importYAML() {
     title="从示例导入"
     description="同一来源标识仅可导入一次"
     :icon="SparklesIcon"
-    tone="violet"
     @close="showExamples = false"
   >
     <div class="grid gap-2">
       <div v-for="e in examples" :key="e.key" class="flex items-start gap-3 rounded-lg border p-3">
-        <IconTile :icon="BoxesIcon" tone="violet" size="sm" />
+        <SourceAvatar :name="e.name" :skey="e.key" icon="" size="sm" />
         <div class="min-w-0 flex-1">
           <div class="font-medium">
             {{ e.name }} <span class="text-muted-foreground font-mono text-xs">{{ e.key }}</span>
@@ -254,7 +255,6 @@ async function importYAML() {
     title="导入 YAML"
     description="粘贴或上传来源定义文件"
     :icon="FileUpIcon"
-    tone="violet"
     submit-text="导入"
     size="lg"
     :busy="busy"

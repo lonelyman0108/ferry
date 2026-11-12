@@ -111,7 +111,7 @@ onMounted(async () => {
     </EmptyState>
     <template v-else>
       <ListRow v-for="e in endpoints" :key="e.id">
-        <template #icon><IconTile :icon="GlobeIcon" tone="slate" /></template>
+        <template #icon><IconTile :icon="GlobeIcon" /></template>
         <template #title>{{ e.name }}</template>
         <template #badges>
           <StatusBadge tone="neutral">{{
@@ -140,7 +140,6 @@ onMounted(async () => {
     :title="epForm.id ? '编辑访问地址' : '新建访问地址'"
     :description="epForm.id ? epForm.name : '设备访问 Ferry 所用的地址'"
     :icon="GlobeIcon"
-    tone="slate"
     :busy="busy"
     @submit="saveEndpoint"
   >

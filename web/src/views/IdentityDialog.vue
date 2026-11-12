@@ -9,27 +9,27 @@ import {
   HistoryIcon,
   KeyRoundIcon,
   LockIcon,
-  SendIcon,
   ShieldAlertIcon,
   Undo2Icon,
-  WebhookIcon,
   XIcon,
 } from '@lucide/vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { toast } from 'vue-sonner'
 
 import { api, errorText } from '@/api'
-import BrandIcon from '@/components/BrandIcon.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
-import IconTile from '@/components/IconTile.vue'
 import DialogShell from '@/components/DialogShell.vue'
+import EntityIcon from '@/components/EntityIcon.vue'
+import IconTile from '@/components/IconTile.vue'
 import ListSkeleton from '@/components/ListSkeleton.vue'
 import SectionHeading from '@/components/SectionHeading.vue'
+import SourceAvatar from '@/components/SourceAvatar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { copyText, expiryState, fmtAgo, fmtTime, secondaryKey } from '@/format'
+import { destMark, icons } from '@/lib/icons'
 import { type Tone, toneDot, toneText } from '@/lib/tone'
 import {
   type Identity,
@@ -179,10 +179,12 @@ function shown(v: Version) {
     :open="true"
     :title="identity?.source_name ?? '登录态'"
     :icon="DatabaseIcon"
-    tone="sky"
     size="xl"
     @close="emit('close')"
   >
+    <template v-if="identity" #icon>
+      <SourceAvatar :name="identity.source_name" :skey="identity.source_key" />
+    </template>
     <template #badges>
       <span v-if="identity" class="text-muted-foreground font-mono text-sm font-normal">{{
         identity.key === 'default' ? '默认' : identity.key
@@ -208,7 +210,7 @@ function shown(v: Version) {
           :class="f.current ? '' : 'border border-dashed ring-0'"
         >
           <CardHeader class="flex flex-wrap items-center gap-2">
-            <IconTile :icon="KeyRoundIcon" :tone="f.current ? 'sky' : 'neutral'" size="sm" />
+            <IconTile :icon="KeyRoundIcon" size="sm" />
             <CardTitle>{{ f.name || f.key }}</CardTitle>
             <span
               v-if="secondaryKey(f.name, f.key)"
@@ -251,7 +253,7 @@ function shown(v: Version) {
         </Card>
       </div>
 
-      <SectionHeading title="推送" :icon="SendIcon">
+      <SectionHeading title="推送" :icon="icons.push">
         <template #actions>
           <router-link
             :to="{ path: '/destinations', query: { tab: 'bindings', source: identity.source_key } }"
@@ -266,8 +268,7 @@ function shown(v: Version) {
           :key="p.binding_id"
           class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3"
         >
-          <BrandIcon v-if="p.destination_kind === 'qinglong'" brand="qinglong" size="sm" />
-          <IconTile v-else :icon="WebhookIcon" tone="sky" size="sm" />
+          <EntityIcon :mark="destMark(p.destination_kind)" size="sm" />
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2 text-sm font-medium">
               {{ p.destination_name }}
@@ -298,7 +299,7 @@ function shown(v: Version) {
             size="sm"
             :disabled="!p.enabled || pushing === p.binding_id"
             @click="pushNow(p)"
-            ><SendIcon /> 手动推送</Button
+            ><component :is="icons.push" /> 手动推送</Button
           >
         </div>
       </div>

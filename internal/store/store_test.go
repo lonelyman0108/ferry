@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -190,6 +191,46 @@ func TestSubscriptionColumnsOnExistingRows(t *testing.T) {
 			}
 			if m.TransportMode != TransportPlain || m.TransportKID != nil || m.ScriptURL != "" || m.FileFetchedAt != nil || m.FileMitmHash != "" {
 				t.Errorf("升级后的旧订阅 = %q %v %v %q", m.TransportMode, m.TransportKID, m.FileFetchedAt, m.FileMitmHash)
+			}
+		})
+	}
+}
+
+// TestSourceIconFitsLargestImage 确认来源图标列放得下上限大小的图片：64KB 图片 base64 后约 87KB，超过 MySQL TEXT 的 64KB。
+// 同时模拟旧库没有这一列，升级迁移后补上、旧行为空。
+func TestSourceIconFitsLargestImage(t *testing.T) {
+	for driver, s := range testStores(t) {
+		t.Run(driver, func(t *testing.T) {
+			if err := s.DB.Migrator().DropColumn(&Source{}, "Icon"); err != nil {
+				t.Fatalf("删列：%v", err)
+			}
+			now := time.Now()
+			old := map[string]any{"key": "old", "name": "旧来源", "enabled": true, "merge_window_sec": 60, "notify_mode": "always", "min_interval_sec": 60, "debug": false, "review_mode": "auto", "created_at": now, "updated_at": now}
+			if err := s.DB.Table("sources").Create(old).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Migrate(); err != nil {
+				t.Fatalf("升级迁移：%v", err)
+			}
+			var got Source
+			if err := s.DB.Where(&Source{Key: "old"}).First(&got).Error; err != nil {
+				t.Fatal(err)
+			}
+			if got.Icon != "" {
+				t.Errorf("旧来源的图标 = %q，期望为空", got.Icon)
+			}
+
+			icon := "data:image/png;base64," + strings.Repeat("A", 87384)
+			src := Source{Key: "big", Name: "大图标", Icon: icon, Enabled: true, NotifyMode: "always"}
+			if err := s.DB.Create(&src).Error; err != nil {
+				t.Fatalf("保存：%v", err)
+			}
+			var back Source
+			if err := s.DB.First(&back, src.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if back.Icon != icon {
+				t.Errorf("读回的图标长度 %d，期望 %d", len(back.Icon), len(icon))
 			}
 		})
 	}
