@@ -160,8 +160,19 @@ async function logout() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div class="px-2 group-data-[collapsible=icon]:hidden">
+        <div
+          class="flex items-center justify-between gap-2 px-2 group-data-[collapsible=icon]:hidden"
+        >
           <ThemeSwitch />
+          <router-link
+            v-if="auth.user?.version"
+            to="/settings/system"
+            class="text-muted-foreground hover:text-foreground truncate font-mono text-xs"
+            title="系统信息"
+            >{{
+              /^\d/.test(auth.user.version) ? 'v' + auth.user.version : auth.user.version
+            }}</router-link
+          >
         </div>
         <SidebarMenu>
           <SidebarMenuItem>

@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/lonelyman0108/ferry/internal/auth"
+	"github.com/lonelyman0108/ferry/internal/buildinfo"
 	"github.com/lonelyman0108/ferry/internal/config"
 	"github.com/lonelyman0108/ferry/internal/events"
 	"github.com/lonelyman0108/ferry/internal/ingest"
@@ -30,6 +31,8 @@ type Options struct {
 	Config *config.Config
 	// Store 是已连接并迁移好的数据库；没有配置时为 nil，由向导创建。
 	Store *store.Store
+	// Listen 是实际监听的地址（命令行 -addr 可能覆盖配置），系统信息页显示它。
+	Listen string
 }
 
 // Server 是 Ferry 的 HTTP 服务。
@@ -54,6 +57,13 @@ type Server struct {
 	// HTTP 用于访问目的地和主动探测；为 nil 时用各自的默认客户端。测试里可以替换。
 	HTTP *http.Client
 	now  func() time.Time
+
+	listen    string
+	startedAt time.Time
+	// releaseURL 是查最新版本的地址，测试里替换成本地服务；update 缓存最近一次结果。
+	releaseURL string
+	updateMu   sync.Mutex
+	update     *updateView
 }
 
 // New 创建 Server。需要初始化时会生成一次性的向导令牌，调用方应把它打印到日志。
@@ -71,6 +81,12 @@ func New(o Options) (*Server, error) {
 		sealedFailLimiter: newRateLimiter(1, 10*time.Minute),
 		Bus:               &events.Bus{},
 		now:               time.Now,
+		listen:            o.Listen,
+		startedAt:         time.Now(),
+		releaseURL:        "https://api.github.com/repos/" + buildinfo.Repo + "/releases/latest",
+	}
+	if s.listen == "" {
+		s.listen = cfg.Listen
 	}
 	// 当前值变化时排推送任务；所有事件按通知规则发通知。未初始化时直接忽略。
 	s.Bus.Subscribe(func(e events.Event) {
@@ -167,6 +183,8 @@ func (s *Server) Handler() http.Handler {
 				r.Get("/tokens", s.handleListTokens)
 				r.Post("/tokens", s.handleCreateToken)
 				r.Delete("/tokens/{id}", s.handleRevokeToken)
+				r.Get("/system", s.handleSystem)
+				r.Get("/system/update", s.handleSystemUpdate)
 			})
 			r.Group(func(r chi.Router) {
 				r.Use(s.authenticate(false))

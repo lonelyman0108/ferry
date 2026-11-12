@@ -573,3 +573,42 @@ export interface ActivityPage {
   items: ActivityItem[]
   next: string | null
 }
+
+// 系统信息，口径见后端 internal/server/system.go。来源是 file、env、default，没给出时为空。
+export interface ConfigSource {
+  from: '' | 'file' | 'env' | 'default'
+  env?: string
+}
+
+export interface SystemInfo {
+  build: { version: string; commit: string; date: string; go: string; os: string; arch: string }
+  runtime: { container: boolean; started_at: string; timezone: string; listen: string }
+  database: { driver: string; version: string; target: string; size: number }
+  config: {
+    path: string
+    exists: boolean
+    sources: {
+      listen: ConfigSource
+      driver: ConfigSource
+      dsn: ConfigSource
+      master_key: ConfigSource
+    }
+  }
+  counts: {
+    sources: number
+    identities: number
+    versions: number
+    subscriptions: number
+    destinations: number
+    pushes: number
+  }
+}
+
+export interface UpdateInfo {
+  current: string
+  latest: string
+  url: string
+  newer: boolean
+  checked_at: string
+  error?: string
+}
