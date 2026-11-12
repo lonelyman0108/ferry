@@ -100,13 +100,13 @@ onMounted(async () => {
   </PageHeader>
 
   <div class="grid gap-3">
-    <HintText>手机拉取取值规则、回传登录态用的地址；可以有多个（如局域网、公网）。</HintText>
+    <HintText>设备拉取读取规则、回传登录态所用的地址，支持配置多个（如局域网、公网）。</HintText>
     <ListSkeleton v-if="!endpoints" :rows="2" />
     <EmptyState
       v-else-if="!endpoints.length"
       :icon="GlobeIcon"
-      title="还没有访问地址"
-      description="订阅靠它告诉手机去哪里拉取规则、回传登录态。"
+      title="暂无访问地址"
+      description="设备通过访问地址拉取读取规则、回传登录态，新建订阅前需至少添加一个访问地址。"
     >
       <Button @click="editEndpoint()"><PlusIcon /> 新建访问地址</Button>
     </EmptyState>
@@ -116,7 +116,7 @@ onMounted(async () => {
         <template #title>{{ e.name }}</template>
         <template #badges>
           <StatusBadge tone="neutral">{{
-            usage(e) ? `${usage(e)} 个订阅在用` : '没有订阅在用'
+            usage(e) ? `${usage(e)} 个订阅使用中` : '未被订阅使用'
           }}</StatusBadge>
         </template>
         <template #description>
@@ -126,7 +126,7 @@ onMounted(async () => {
         <template #actions>
           <RowActions
             delete-title="删除访问地址？"
-            delete-description="还有订阅用到它时不能删除。"
+            delete-description="被订阅使用的访问地址无法删除。"
             @edit="editEndpoint(e)"
             @remove="removeEndpoint(e)"
           />
@@ -138,7 +138,7 @@ onMounted(async () => {
   <FormDialog
     v-model:open="epForm.open"
     :title="epForm.id ? '编辑访问地址' : '新建访问地址'"
-    :description="epForm.id ? epForm.name : '手机访问 Ferry 用的地址'"
+    :description="epForm.id ? epForm.name : '设备访问 Ferry 所用的地址'"
     :icon="GlobeIcon"
     tone="slate"
     :busy="busy"
@@ -150,7 +150,7 @@ onMounted(async () => {
     <FormField
       label="地址"
       for="ep-url"
-      hint="手机要能访问到；经反向代理挂在子路径下时，要带上路径"
+      hint="须可从设备访问；经反向代理部署在子路径下时，须包含该路径"
       :error="epCheck.errors.base_url"
     >
       <Input

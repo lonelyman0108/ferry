@@ -70,13 +70,13 @@ const summary = computed(() => {
     {
       label: '状态',
       value: statusText[s.status],
-      sub: s.outdated ? '规则过时，要重新安装' : undefined,
+      sub: s.outdated ? 'MITM 域名已变更，需更新订阅' : undefined,
     },
     { label: '传输方式', value: s.transport_mode === 'sealed' ? '加密' : '明文' },
     {
       label: '最近连接',
       value: fmtAgo(s.last_seen_at),
-      sub: s.file_fetched_at ? `下载订阅 ${fmtAgo(s.file_fetched_at)}` : undefined,
+      sub: s.file_fetched_at ? `最近下载订阅 ${fmtAgo(s.file_fetched_at)}` : undefined,
     },
     {
       label: '覆盖来源',
@@ -131,16 +131,16 @@ async function onUpdated() {
     <section
       v-if="items.length"
       class="bg-card grid grid-cols-1 gap-3 rounded-lg border p-4"
-      aria-label="和它有关的待处理"
+      aria-label="相关待处理事项"
     >
-      <h2 class="text-muted-foreground text-xs">和它有关的待处理</h2>
+      <h2 class="text-muted-foreground text-xs">相关待处理事项</h2>
       <div v-for="it in items" :key="it.kind" class="border-b pb-3 last:border-b-0 last:pb-0">
         <InboxItem :item="it" @done="emit('changed')" />
       </div>
     </section>
 
     <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
-      <DetailSection title="它覆盖的来源" :aside="`${covered.length} 个`">
+      <DetailSection title="覆盖的来源" :aside="`${covered.length} 个`">
         <ul class="bg-card divide-y rounded-lg border">
           <li v-for="s in covered" :key="s.id">
             <button
@@ -159,16 +159,18 @@ async function onUpdated() {
         </ul>
       </DetailSection>
 
-      <DetailSection title="要放行的域名" aside="客户端里 MITM 需要包含这些">
+      <DetailSection title="需解密的域名" aside="须加入代理客户端的 MITM 主机名列表">
         <ul class="bg-card grid grid-cols-1 gap-1 rounded-lg border p-3 font-mono text-sm">
           <li v-for="h in sub.hostnames" :key="h">{{ h }}</li>
           <li v-if="!sub.hostnames.length" class="text-muted-foreground font-sans">
-            覆盖的来源里还没有配置请求匹配
+            覆盖的来源均未配置匹配规则
           </li>
         </ul>
         <p v-if="sub.transport_mode === 'sealed'" class="text-muted-foreground text-xs">
-          加密传输：换密钥后第一次解开这台手机的报文是
-          {{ sub.transport.verified_at ? fmtTime(sub.transport.verified_at) : '还没有' }}
+          <template v-if="sub.transport.verified_at"
+            >加密传输：密钥更换后首次解密成功于 {{ fmtTime(sub.transport.verified_at) }}</template
+          >
+          <template v-else>加密传输：密钥更换后尚未成功解密该设备的报文</template>
         </p>
       </DetailSection>
     </div>

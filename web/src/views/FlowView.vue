@@ -61,31 +61,31 @@ const nextStep = computed<{ text: string; action: string; to: RouteLocationRaw }
   if (!c) return null
   if (!c.sources)
     return {
-      text: '先新建一个来源：定义读取哪个 App 的哪些请求、取哪些值。',
+      text: '新建来源，配置目标 App 的请求匹配与字段读取规则。',
       action: '新建来源',
       to: '/sources/new',
     }
   if (!c.subscriptions)
     return {
-      text: '再新建一个订阅，装到手机的代理客户端里。',
+      text: '新建订阅，并安装到设备的代理客户端。',
       action: '新建订阅',
       to: '/subscriptions',
     }
   if (!c.destinations)
     return {
-      text: '还没有目的地：新建一个青龙或 Webhook，登录态才有地方推。',
+      text: '暂无目的地。新建青龙或 Webhook 目的地，用于接收推送的登录态。',
       action: '新建目的地',
       to: '/destinations',
     }
   if (!c.bindings)
     return {
-      text: '还没有推送规则：指定来源的输出变量推到哪个目的地。',
+      text: '暂无推送规则。推送规则指定来源的输出变量推送至哪个目的地。',
       action: '新建推送规则',
       to: { path: '/destinations', query: { tab: 'bindings' } },
     }
   if (!c.rules)
     return {
-      text: '还没有通知规则：推送失败、登录态过期时不会提醒你。',
+      text: '暂无通知规则。推送失败或登录态过期时不发送通知。',
       action: c.channels ? '新建通知规则' : '新建通知渠道',
       to: { path: '/notify', query: c.channels ? { tab: 'rules' } : {} },
     }
@@ -165,7 +165,7 @@ const legend = [
   { label: '正常', cls: 'border-(--edge)' },
   { label: '失败', cls: 'border-(--edge-failed) border-dashed' },
   { label: '等待重试', cls: 'border-warning border-dashed' },
-  { label: '没连通或没推过', cls: 'border-(--edge-idle) border-dotted' },
+  { label: '未连通或未推送', cls: 'border-(--edge-idle) border-dotted' },
 ]
 </script>
 

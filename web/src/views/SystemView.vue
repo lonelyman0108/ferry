@@ -109,7 +109,7 @@ const sections = computed(() => {
         { k: '系统', v: `${v.build.os}/${v.build.arch}${v.runtime.container ? '（容器）' : ''}` },
         {
           k: '已运行',
-          v: `${uptime(v.runtime.started_at)}，${fmtTime(v.runtime.started_at)} 启动`,
+          v: `${uptime(v.runtime.started_at)}，启动于 ${fmtTime(v.runtime.started_at)}`,
         },
         { k: '时区', v: v.runtime.timezone },
         { k: '监听地址', v: v.runtime.listen, mono: true },
@@ -153,7 +153,7 @@ const counts = computed(() => {
     { k: '版本', v: c.versions },
     { k: '订阅', v: c.subscriptions },
     { k: '目的地', v: c.destinations },
-    { k: '推送任务', v: c.pushes },
+    { k: '推送记录', v: c.pushes },
   ]
 })
 
@@ -168,7 +168,7 @@ async function copyDiagnostics() {
   lines.push('## 数据量', counts.value.map((c) => `${c.k} ${c.v}`).join('，'))
   try {
     await copyText(lines.join('\n'))
-    toast.success('已复制，不含任何密钥')
+    toast.success('诊断信息已复制，不含密钥')
   } catch (e) {
     toast.error(errorText(e))
   }
@@ -191,8 +191,8 @@ async function copyDiagnostics() {
     <template v-if="update?.newer">
       <ArrowUpCircleIcon class="text-primary size-5" />
       <span class="text-sm"
-        >有新版本 <b>{{ update.latest }}</b
-        >，当前是 {{ update.current }}</span
+        >发现新版本 <b>{{ update.latest }}</b
+        >，当前版本 {{ update.current }}</span
       >
       <a
         :href="update.url"
@@ -211,13 +211,13 @@ async function copyDiagnostics() {
       <span class="text-muted-foreground text-sm">
         <template v-if="update.error">检查更新：{{ update.error }}</template>
         <template v-else
-          >当前是开发构建（{{ update.current }}），最新发布版本是 {{ update.latest }}</template
+          >当前为开发构建（{{ update.current }}），最新发布版本为 {{ update.latest }}</template
         >
       </span>
     </template>
     <span v-else class="text-muted-foreground text-sm">正在检查更新…</span>
     <span v-if="update" class="text-muted-foreground ml-auto text-xs"
-      >{{ fmtAgo(update.checked_at) }}检查</span
+      >最近检查 {{ fmtAgo(update.checked_at) }}</span
     >
     <Button
       variant="ghost"
@@ -260,7 +260,7 @@ async function copyDiagnostics() {
         v-if="s.title === '配置来源'"
         class="text-muted-foreground border-t pt-3 text-xs leading-relaxed"
       >
-        配置文件里有的项以文件为准，文件里没有的才用环境变量。主密钥要和数据库分开备份：两者一起丢失，加密的数据就无从恢复；一起泄露，加密就形同虚设。
+        配置项优先读取配置文件，配置文件中未设置的项读取环境变量。主密钥须与数据库分开备份：两者同时丢失将导致加密数据无法恢复，同时泄露将导致加密失效。
       </p>
     </section>
 

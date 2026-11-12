@@ -18,7 +18,7 @@ const maxYAMLBytes = 256 << 10
 // MarshalYAML 导出来源定义，只有规则，不含任何取到的值。
 func MarshalYAML(d Doc) ([]byte, error) {
 	var buf bytes.Buffer
-	buf.WriteString("# Ferry 来源定义，只含匹配和取值规则，不含任何登录态。\n")
+	buf.WriteString("# Ferry 来源定义，仅包含匹配规则与读取规则，不包含任何登录态。\n")
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
 	if err := enc.Encode(d); err != nil {

@@ -101,19 +101,24 @@ export function useRelated(flow: () => Flow, kind: () => FocusKind, id: () => nu
       const down = f.bindings
         .filter((b) => b.source_id === id())
         .map((b) => destNode(b.destination_id, bindingState(f, b)))
-      return { up: nonNull(up), upLabel: '覆盖它的订阅', down: nonNull(down), downLabel: '推送到' }
+      return {
+        up: nonNull(up),
+        upLabel: '覆盖此来源的订阅',
+        down: nonNull(down),
+        downLabel: '推送至',
+      }
     }
     if (kind() === 'device') {
       const d = f.devices.find((x) => x.id === id())
       const down = (d?.source_ids ?? []).map((sid) =>
         sourceNode(sid, d ? coverState(f, d, sid) : 'idle'),
       )
-      return { up: [], upLabel: '', down: nonNull(down), downLabel: '它覆盖的来源' }
+      return { up: [], upLabel: '', down: nonNull(down), downLabel: '覆盖的来源' }
     }
     const up = f.bindings
       .filter((b) => b.destination_id === id())
       .map((b) => sourceNode(b.source_id, bindingState(f, b)))
-    return { up: nonNull(up), upLabel: '推到这里的来源', down: [], downLabel: '' }
+    return { up: nonNull(up), upLabel: '推送至此的来源', down: [], downLabel: '' }
   })
 
   const hidden = computed(() => {

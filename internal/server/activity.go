@@ -75,7 +75,7 @@ func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
 	case "problem":
 		f.Problems = true
 	default:
-		writeError(w, http.StatusBadRequest, "result 只能是 problem")
+		writeError(w, http.StatusBadRequest, "result 仅允许为 problem")
 		return
 	}
 	if v := q.Get("before"); v != "" {
@@ -249,7 +249,7 @@ func activityBatches(db *gorm.DB, n activityNames, f activityFilter) ([]activity
 		}
 		var parts []string
 		if b.Status == store.BatchCollecting {
-			parts = append(parts, "收集中，等其余字段到齐")
+			parts = append(parts, "收集中，等待其余字段回传")
 		}
 		if len(fresh) > 0 {
 			parts = append(parts, fmt.Sprintf("%d 个新值：%s", len(fresh), strings.Join(fresh, "、")))
@@ -258,7 +258,7 @@ func activityBatches(db *gorm.DB, n activityNames, f activityFilter) ([]activity
 			parts = append(parts, fmt.Sprintf("%d 个待审核：%s", len(review), strings.Join(review, "、")))
 		}
 		if len(rejected) > 0 {
-			parts = append(parts, "被驳回："+strings.Join(rejected, "、"))
+			parts = append(parts, "已驳回："+strings.Join(rejected, "、"))
 		}
 		it.Detail = strings.Join(parts, "；")
 		switch {
@@ -303,11 +303,11 @@ func activityPushes(db *gorm.DB, n activityNames, f activityFilter) ([]activityI
 		case store.PushSuccess:
 			it.Outcome, it.Detail = outcomeSuccess, j.Detail
 		case store.PushFailed:
-			it.Outcome, it.Detail = outcomeFailure, fmt.Sprintf("%s · 已试 %d 次", j.LastError, j.Attempts)
+			it.Outcome, it.Detail = outcomeFailure, fmt.Sprintf("%s · 已尝试 %d 次", j.LastError, j.Attempts)
 		case pushRetrying:
 			it.Outcome, it.Detail = outcomeWarning, fmt.Sprintf("%s · 等待重试", j.LastError)
 		case store.PushSkipped:
-			it.Detail = "跳过：" + j.LastError
+			it.Detail = "已跳过：" + j.LastError
 		default:
 			it.Detail = "排队中"
 		}
@@ -366,7 +366,7 @@ func activityAudits(db *gorm.DB, n activityNames, f activityFilter) ([]activityI
 			it.SourceID, it.SourceName, it.Detail = v.SourceID, n.source[v.SourceID], fieldLabel(n.field[v.FieldID])
 			n.withIdentity(&it, v.IdentityID)
 		} else {
-			it.Detail = "这个值已被清理"
+			it.Detail = "该值已清理"
 		}
 		switch a.Action {
 		case "version.approve":

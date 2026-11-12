@@ -71,10 +71,10 @@ export function sourceMeta(s: OverviewSource) {
 
 export const destStates: Record<string, Badge> = {
   success: { label: '正常', tone: 'success' },
-  failed: { label: '失败中', tone: 'danger' },
+  failed: { label: '失败', tone: 'danger' },
   retrying: { label: '等待重试', tone: 'warning' },
   queued: { label: '排队中', tone: 'info' },
-  none: { label: '还没推过', tone: 'neutral' },
+  none: { label: '未推送', tone: 'neutral' },
   skipped: { label: '跳过', tone: 'neutral' },
 }
 
@@ -93,17 +93,17 @@ export function destBadges(flow: Flow, d: FlowDestination): Badge[] {
 }
 
 export function destLine(d: FlowDestination) {
-  if (!d.bindings) return '暂无推送规则指向这里'
+  if (!d.bindings) return '暂无关联的推送规则'
   if (d.state === 'failed' || d.state === 'retrying') return d.last_error || '推送失败'
-  return d.last_at ? `最近推送 ${fmtAgo(d.last_at)}` : '还没推过'
+  return d.last_at ? `最近推送 ${fmtAgo(d.last_at)}` : '未推送'
 }
 
 export function sourceLine(flow: Flow, s: OverviewSource) {
   const bs = flow.bindings.filter((b) => b.source_id === s.id)
-  if (!bs.length) return '还没有推送规则'
+  if (!bs.length) return '暂无推送规则'
   const name = new Map(flow.destinations.map((d) => [d.id, d.name]))
   return (
-    '推到 ' +
+    '推送至 ' +
     bs
       .map((b) => {
         const st = bindingState(flow, b)

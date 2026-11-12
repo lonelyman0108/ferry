@@ -23,7 +23,7 @@ api.interceptors.response.use(
   (err: AxiosError<{ error?: string; details?: string[] }>) => {
     const status = err.response?.status ?? 0
     const data = err.response?.data
-    const msg = data?.error ?? (status ? `请求失败（HTTP ${status}）` : '无法连接服务')
+    const msg = data?.error ?? (status ? `请求失败（HTTP ${status}）` : '连接服务失败')
     const path = router.currentRoute.value.path
     // 登录过期就回登录页；尚未初始化就去向导。登录、向导页自己处理错误。
     if (status === 401 && path !== '/login' && !err.config?.url?.startsWith('/auth/login')) {

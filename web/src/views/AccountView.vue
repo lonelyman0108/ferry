@@ -47,7 +47,7 @@ const themeOptions = [
   {
     value: 'system' as const,
     label: '跟随系统',
-    description: '系统切换深浅色时跟着变',
+    description: '随系统深浅色设置自动切换',
     icon: MonitorIcon,
   },
   { value: 'light' as const, label: '浅色', icon: SunIcon },
@@ -70,7 +70,7 @@ function pickTab(v: string | number) {
 const pw = reactive({ old: '', next: '', confirm: '' })
 const pwCheck = useFormCheck(() => ({
   old: !pw.old && '请填写当前密码',
-  next: pw.next.length < 8 && '新密码至少 8 位',
+  next: pw.next.length < 8 && '新密码至少 8 个字符',
   confirm: pw.next !== pw.confirm && '两次输入的新密码不一致',
 }))
 
@@ -163,7 +163,7 @@ onMounted(async () => {
             ><LockKeyholeIcon class="text-muted-foreground size-4" />修改密码 ·
             {{ auth.user?.username }}</CardTitle
           >
-          <CardDescription>修改后其他会话失效。</CardDescription>
+          <CardDescription>修改后其他登录会话将失效。</CardDescription>
         </CardHeader>
         <CardContent>
           <form class="grid gap-4" @submit.prevent="changePassword">
@@ -184,7 +184,7 @@ onMounted(async () => {
                 v-model="pw.next"
                 type="password"
                 autocomplete="new-password"
-                placeholder="至少 8 位"
+                placeholder="至少 8 个字符"
               />
             </FormField>
             <FormField label="确认新密码" for="pw-confirm" :error="pwCheck.errors.confirm">
@@ -205,7 +205,7 @@ onMounted(async () => {
       <Card class="max-w-xl">
         <CardHeader>
           <CardTitle>深浅色</CardTitle>
-          <CardDescription>只对这台浏览器生效。</CardDescription>
+          <CardDescription>仅对当前浏览器生效。</CardDescription>
         </CardHeader>
         <CardContent>
           <ChoiceCards v-model="theme" :options="themeOptions" :cols="3" label="深浅色" />
@@ -215,12 +215,12 @@ onMounted(async () => {
 
     <TabsContent value="tokens" class="grid gap-3">
       <HintText>
-        API 只读权限：来源、身份、历史值、审计；不可写入，不返回敏感原值。认证头：
+        API 令牌为只读权限，可读取来源、身份、历史值与审计记录；不支持写入，不返回敏感原值。认证头：
         <code class="bg-muted rounded px-1 font-mono">Authorization: Bearer &lt;token&gt;</code>
       </HintText>
       <Alert v-if="newToken" class="border-warning/40 bg-warning/5">
         <AlertDescription class="grid gap-2">
-          <p>新令牌仅显示这一次，请立即复制：</p>
+          <p>新令牌仅显示一次，请立即复制：</p>
           <CopyField :value="newToken" label="令牌" />
         </AlertDescription>
       </Alert>
@@ -228,8 +228,8 @@ onMounted(async () => {
       <EmptyState
         v-else-if="!tokens.length"
         :icon="KeyRoundIcon"
-        title="还没有 API 令牌"
-        description="给监控脚本这类只读的调用方用；不调用 API 就不用建。"
+        title="暂无 API 令牌"
+        description="供监控脚本等只读调用方使用；未使用 API 时无需创建。"
       >
         <Button @click="openToken"><PlusIcon /> 新建令牌</Button>
       </EmptyState>
@@ -256,7 +256,7 @@ onMounted(async () => {
           <template v-if="!t.revoked_at" #actions>
             <ConfirmButton
               title="吊销令牌？"
-              description="立即失效，不可恢复。"
+              description="令牌将立即失效，且无法恢复。"
               confirm-text="吊销"
               variant="outline"
               size="sm"
@@ -278,7 +278,7 @@ onMounted(async () => {
     :icon="KeyRoundIcon"
     tone="slate"
     size="sm"
-    submit-text="生成"
+    submit-text="生成令牌"
     :busy="busy"
     @submit="createToken"
   >

@@ -46,8 +46,8 @@ func TestSourceLifecycle(t *testing.T) {
 		t.Errorf("状态请求只应取到 authorization：%+v", tr)
 	}
 	for _, m := range tr.Matchers {
-		if !m.Matched && m.Reason != "路径不符" {
-			t.Errorf("规则 %s 未命中的原因 = %q，期望“路径不符”", m.Name, m.Reason)
+		if !m.Matched && m.Reason != "路径不匹配" {
+			t.Errorf("规则 %s 未命中的原因 = %q，期望“路径不匹配”", m.Name, m.Reason)
 		}
 	}
 
@@ -57,7 +57,7 @@ func TestSourceLifecycle(t *testing.T) {
 	draft.Matchers[0].Host = "other.example.com"
 	sign["source"] = draft
 	h.do("POST", "/api/v1/sources/try", sign, &tr)
-	if tr.Matchers[0].Matched || tr.Matchers[0].Reason != "域名不符" {
+	if tr.Matchers[0].Matched || tr.Matchers[0].Reason != "域名不匹配" {
 		t.Errorf("草稿试跑 = %+v，期望第一条规则域名不符", tr.Matchers)
 	}
 

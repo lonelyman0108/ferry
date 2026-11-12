@@ -51,8 +51,8 @@ func main() {
 
 func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	cfgPath := fs.String("config", envOr("FERRY_CONFIG", "ferry.yaml"), "配置文件路径，也可用 FERRY_CONFIG 指定")
-	addr := fs.String("addr", "", "监听地址，覆盖配置里的 listen")
+	cfgPath := fs.String("config", envOr("FERRY_CONFIG", "ferry.yaml"), "配置文件路径，也可通过 FERRY_CONFIG 指定")
+	addr := fs.String("addr", "", "监听地址，覆盖配置文件中的 listen")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func serve(args []string) error {
 		}
 		defer st.Close()
 		if err := st.Migrate(); err != nil {
-			return fmt.Errorf("迁移数据库：%w", err)
+			return fmt.Errorf("迁移数据库失败：%w", err)
 		}
 		slog.Info("数据库就绪", "driver", cfg.Database.Driver)
 	}
@@ -83,7 +83,7 @@ func serve(args []string) error {
 	}
 	defer app.Close()
 	if token := app.SetupToken(); token != "" {
-		slog.Warn("尚未初始化：打开管理界面完成初始化向导，要用到下面的初始化令牌（每次启动都会变）",
+		slog.Warn("尚未初始化：请打开管理界面完成初始化向导，需使用以下初始化令牌（每次启动时重新生成）",
 			"config", *cfgPath, "setup_token", token)
 	}
 
@@ -125,7 +125,7 @@ func healthcheck(args []string) error {
 	}
 	host, port, err := net.SplitHostPort(cfg.Listen)
 	if err != nil {
-		return fmt.Errorf("监听地址 %q：%w", cfg.Listen, err)
+		return fmt.Errorf("监听地址 %q 无效：%w", cfg.Listen, err)
 	}
 	if host == "" || host == "0.0.0.0" || host == "::" {
 		host = "127.0.0.1"

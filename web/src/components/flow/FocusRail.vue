@@ -153,7 +153,7 @@ watch(
       @click="emit('back')"
     >
       <LayoutGridIcon class="size-4 shrink-0" />
-      另外 {{ hidden }} 个节点已收起，点了回全图
+      已收起 {{ hidden }} 个节点，点击返回全图
     </button>
   </div>
 </template>

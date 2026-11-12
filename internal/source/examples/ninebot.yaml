@@ -2,8 +2,8 @@
 key: ninebot
 name: 九号出行
 description: |
-  打开九号出行 App 的签到页，点一次“签到”即可更新（已签到也会发出请求）。
-  两个值都在签到请求里：Authorization 在请求头，deviceId 在 JSON 正文。
+  打开九号出行 App 的签到页并点击“签到”，即可更新登录态（已签到时同样会发出请求）。
+  两个值均位于签到请求中：Authorization 位于请求头，deviceId 位于 JSON 正文。
 matchers:
   - name: gateway
     host: cn-cbu-gateway.ninebot.com

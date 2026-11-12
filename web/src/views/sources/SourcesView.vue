@@ -40,7 +40,7 @@ const showExamples = ref(false)
 const yaml = ref('')
 const busy = ref(false)
 const yamlCheck = useFormCheck(() => ({
-  yaml: !yaml.value.trim() && '请粘贴 YAML，或者选一个文件',
+  yaml: !yaml.value.trim() && '请粘贴 YAML 内容或选择文件',
 }))
 
 function openImport() {
@@ -150,8 +150,8 @@ async function importYAML() {
   <EmptyState
     v-else-if="!list.length"
     :icon="BoxesIcon"
-    title="还没有来源"
-    description="来源写明从哪个 App 的哪个请求里取登录态、取出来以后输出成什么变量。可以先从内置示例导入。"
+    title="暂无来源"
+    description="来源定义目标 App 的请求匹配、字段读取规则与输出变量。可从内置示例导入。"
   >
     <Button @click="openExamples"><SparklesIcon /> 从示例导入</Button>
     <Button variant="outline" @click="router.push('/sources/new')"><PlusIcon /> 新建来源</Button>
@@ -191,7 +191,7 @@ async function importYAML() {
           ><KeyRoundIcon class="size-3.5" />{{ s.fields }} 个字段</span
         >
         <span class="flex items-center gap-1"
-          ><VariableIcon class="size-3.5" />{{ s.outputs }} 个变量</span
+          ><VariableIcon class="size-3.5" />{{ s.outputs }} 个输出变量</span
         >
       </div>
       <!-- 接入状态：没加入订阅、没有推送规则的标黄，点“接入清单”直接去补 -->

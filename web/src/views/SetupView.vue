@@ -88,7 +88,7 @@ const drivers = [
   { value: 'mysql', label: 'MySQL', hint: '' },
 ]
 const dsnHint: Record<string, string> = {
-  sqlite: '相对路径基于服务的工作目录',
+  sqlite: '相对路径以服务工作目录为基准',
   postgres: 'postgres://用户:密码@主机:5432/库名?sslmode=disable',
   mysql: '用户:密码@tcp(主机:3306)/库名?charset=utf8mb4&parseTime=True&loc=UTC',
 }
@@ -117,7 +117,7 @@ const steps = computed<Step[]>(() => {
   }
   s.push(
     { id: 'admin', title: '管理员', description: '后台登录账号', icon: UserRoundIcon },
-    { id: 'endpoint', title: '访问地址', description: '手机访问地址', icon: GlobeIcon },
+    { id: 'endpoint', title: '访问地址', description: '设备访问地址', icon: GlobeIcon },
     { id: 'review', title: '确认', description: '核对配置', icon: ListChecksIcon },
   )
   if (status.value?.needs_config && !preset.value?.master_key) {
@@ -128,8 +128,10 @@ const steps = computed<Step[]>(() => {
 const current = computed(() => steps.value[step.value])
 const needsConfig = computed(() => !!status.value?.needs_config)
 
-const passwordError = computed(() => (admin.password.length < 8 ? '至少 8 位' : ''))
-const confirmError = computed(() => (admin.confirm !== admin.password ? '两次密码不一致' : ''))
+const passwordError = computed(() => (admin.password.length < 8 ? '密码至少 8 个字符' : ''))
+const confirmError = computed(() =>
+  admin.confirm !== admin.password ? '两次输入的密码不一致' : '',
+)
 
 // 手机通过这个地址访问 Ferry，回环地址在手机上指向手机自己。
 const loopback = computed(() => {
@@ -160,7 +162,7 @@ onMounted(async () => {
       await router.replace('/login')
     }
   } catch {
-    toast.error('无法连接服务')
+    toast.error('连接服务失败')
   }
 })
 
@@ -173,10 +175,10 @@ const adminCheck = useFormCheck(() => ({
 }))
 const endpointCheck = useFormCheck(() => ({
   name: !endpoint.name.trim() && '请填写名称',
-  base_url: !urlValid.value && '地址需以 http:// 或 https:// 开头，后面跟主机名',
+  base_url: !urlValid.value && '地址须以 http:// 或 https:// 开头并包含主机名',
 }))
 const keyCheck = useFormCheck(() => ({
-  backedUp: !backedUp.value && '先把主密钥复制或下载下来，再勾选这一项',
+  backedUp: !backedUp.value && '请复制或下载主密钥后勾选此项',
 }))
 
 async function next() {
@@ -329,15 +331,17 @@ function downloadKey() {
           <div>
             <h2 class="font-semibold">{{ current.title }}</h2>
             <p class="text-muted-foreground text-sm">
-              <template v-if="current.id === 'token'">见服务启动日志，每次启动重新生成</template>
+              <template v-if="current.id === 'token'"
+                >令牌输出于服务启动日志，每次启动重新生成</template
+              >
               <template v-else-if="current.id === 'database'">数据库类型与连接</template>
               <template v-else-if="current.id === 'admin'">管理后台登录账号</template>
               <template v-else-if="current.id === 'endpoint'"
-                >手机拉取取值规则、回传登录态用的地址；之后可在系统设置里添加更多</template
+                >设备拉取读取规则、回传登录态所用的地址；初始化后可在系统设置中添加更多</template
               >
               <template v-else-if="current.id === 'review'">写入配置并创建管理员</template>
               <template v-else
-                >初始化完成。敏感字段以主密钥加密，丢失后无法解密；仅显示一次</template
+                >初始化已完成。敏感字段使用主密钥加密，主密钥丢失后无法解密。主密钥仅显示一次</template
               >
             </p>
           </div>
@@ -391,8 +395,8 @@ function downloadKey() {
               v-if="preset?.driver && sourceText(preset.dsn_from)"
               class="text-muted-foreground -mt-2 text-sm"
             >
-              已按{{ sourceText(preset.dsn_from) }}回填，密码显示为 ••••，不改就沿用原值。
-              可以修改：保存后写进配置文件，以后以配置文件为准。
+              已根据{{ sourceText(preset.dsn_from) }}回填，密码显示为 ••••，未修改时沿用原值。
+              修改后的配置将写入配置文件，此后以配置文件为准。
             </p>
             <div class="flex flex-wrap items-center gap-3">
               <Button variant="outline" :disabled="busy || !db.dsn.trim()" @click="testDB">
@@ -421,7 +425,7 @@ function downloadKey() {
                   id="admin-pass"
                   v-model="admin.password"
                   type="password"
-                  placeholder="至少 8 位"
+                  placeholder="至少 8 个字符"
                   autocomplete="new-password"
                 />
               </FormField>
@@ -453,8 +457,10 @@ function downloadKey() {
             </div>
             <Alert v-if="loopback" class="border-warning/40 text-warning">
               <TriangleAlertIcon />
-              <AlertTitle>回环地址对手机不可达</AlertTitle>
-              <AlertDescription>改用局域网 IP 或域名，如 http://192.168.1.10:8080</AlertDescription>
+              <AlertTitle>回环地址无法从设备访问</AlertTitle>
+              <AlertDescription
+                >请改用局域网 IP 或域名，例如 http://192.168.1.10:8080</AlertDescription
+              >
             </Alert>
           </template>
 
@@ -473,15 +479,15 @@ function downloadKey() {
                 <dt class="text-muted-foreground">主密钥</dt>
                 <dd class="min-w-0">
                   <template v-if="preset?.master_key">
-                    沿用{{ sourceText(preset.master_key_from) }}里的主密钥
+                    沿用{{ sourceText(preset.master_key_from) }}中的主密钥
                     <div
                       v-if="preset.master_key_from.from === 'env'"
                       class="text-muted-foreground text-xs"
                     >
-                      不会写进配置文件；以后去掉这个环境变量，需要把主密钥写进配置文件
+                      主密钥不写入配置文件；移除该环境变量前，须将主密钥写入配置文件
                     </div>
                   </template>
-                  <template v-else>完成后生成，只显示一次</template>
+                  <template v-else>完成初始化后生成，仅显示一次</template>
                 </dd>
               </div>
               <div class="grid gap-1 px-4 py-3 sm:grid-cols-[7rem_1fr]">
@@ -511,7 +517,7 @@ function downloadKey() {
               </div>
             </div>
             <div class="grid gap-1 text-sm">
-              <span class="text-muted-foreground">已写入配置文件，需一并备份</span>
+              <span class="text-muted-foreground">主密钥已写入以下配置文件，请一并备份</span>
               <code class="font-mono text-xs break-all">{{ result.config_path }}</code>
             </div>
             <FormField :error="keyCheck.errors.backedUp">
@@ -522,7 +528,7 @@ function downloadKey() {
 
         <CardFooter class="justify-end gap-2 border-t">
           <template v-if="current.id === 'key'">
-            <Button @click="done">进入登录</Button>
+            <Button @click="done">前往登录</Button>
           </template>
           <template v-else>
             <Button v-if="step > 0" variant="outline" :disabled="busy" @click="step--"

@@ -18,7 +18,7 @@ var ErrNotFound = errors.New("来源不存在")
 var ErrKeyExists = errors.New("key 已被其他来源使用")
 
 // ErrKeyChanged 表示更新时改了 key。key 会写进目的地的备注，改了就找不回原来的变量。
-var ErrKeyChanged = errors.New("来源的 key 建好后不能修改")
+var ErrKeyChanged = errors.New("来源创建后 key 不可修改")
 
 // FromModel 把数据库里的来源转成文档。s 需要预加载 Matchers、Fields、Outputs。
 func FromModel(s store.Source) Doc {

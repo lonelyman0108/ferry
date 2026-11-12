@@ -67,7 +67,7 @@ func Open(db config.Database) (*Store, error) {
 		TranslateError: true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("连接数据库：%w", err)
+		return nil, fmt.Errorf("连接数据库失败：%w", err)
 	}
 	if db.Driver == config.DriverSQLite {
 		// SQLite 同一时刻只允许一个写入者，单连接可以避免 database is locked。

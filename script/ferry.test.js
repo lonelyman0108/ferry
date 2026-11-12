@@ -374,7 +374,7 @@ test('加密通道：密钥填错时提示一次，不重复提示回传失败',
   const store = new Map([['ferry.rules', JSON.stringify({ etag: '"e1"', fetchedAt: Date.now(), rules: RULES })]]);
   const c1 = makeClient('surge', server, store, { ...SIGN }, sealedArgs());
   assertDoneOnce(await runScript(c1));
-  assert.deepEqual(c1.notes.map((n) => n[1]), ['传输密钥不对']);
+  assert.deepEqual(c1.notes.map((n) => n[1]), ['传输密钥错误']);
   assert.ok(!store.has('ferry.last.ninebot'));
   const c2 = makeClient('surge', server, store, { ...SIGN }, sealedArgs());
   assertDoneOnce(await runScript(c2));
@@ -413,7 +413,7 @@ test('加密通道：回复解不开或对应别的请求时按失败处理', as
     const c = makeClient('surge', sealedServer({ mode }), store, { ...SIGN }, sealedArgs());
     assertDoneOnce(await runScript(c));
     assert.deepEqual(c.notes.map((n) => n[1]), ['加密连接失败', '回传失败'], mode);
-    assert.ok(c.notes[1][2].startsWith('回复校验失败'), mode);
+    assert.ok(c.notes[1][2].startsWith('响应校验失败'), mode);
     assert.ok(!store.has('ferry.last.ninebot'), mode);
   }
 });
@@ -422,7 +422,7 @@ test('加密通道：订阅切回明文（410）时清掉本地记录并提示�
   const store = new Map([['ferry.sealed', '1'], ['ferry.keyfp', 'x']]);
   const c = makeClient('surge', sealedServer({ mode: 'gone' }), store, { ...SIGN }, sealedArgs());
   assertDoneOnce(await runScript(c));
-  assert.ok(c.notes.some((n) => n[1] === '订阅已改为不加密'));
+  assert.ok(c.notes.some((n) => n[1] === '订阅已切换为明文传输'));
   assert.equal(store.get('ferry.sealed'), '', '本地“走过加密”的记录应清掉');
   // 重新安装成明文模块后（参数里有令牌、没有密钥），同一台手机能正常走明文。
   const plain = fakeServer();
@@ -434,7 +434,7 @@ test('加密通道：时间超窗时提示校时', async () => {
   const store = new Map([['ferry.rules', JSON.stringify({ etag: '"e1"', fetchedAt: Date.now(), rules: RULES })]]);
   const c = makeClient('surge', sealedServer({ mode: 'clock' }), store, { ...SIGN }, sealedArgs());
   assertDoneOnce(await runScript(c));
-  assert.deepEqual(c.notes.map((n) => n[1]), ['手机时间不准']);
+  assert.deepEqual(c.notes.map((n) => n[1]), ['设备时间不准确']);
 });
 
 test('nonce：有安全随机数时用它，没有时拼出来也不重复', () => {

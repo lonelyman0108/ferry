@@ -139,7 +139,7 @@ onMounted(async () => {
   }
 })
 
-const noEndpoints = '还没有访问地址，先到“系统设置”添加一个'
+const noEndpoints = '暂无访问地址，请在“系统设置”中添加'
 const formCheck = useFormCheck(() => ({
   name: !form.name.trim() && '请填写名称',
   endpoint_id: !form.endpoint_id && (endpoints.value.length ? '请选择主地址' : noEndpoints),
@@ -147,8 +147,8 @@ const formCheck = useFormCheck(() => ({
     !form.all_sources &&
     !form.source_keys.length &&
     (sources.value.length
-      ? '至少选一个来源，或者打开“包含全部来源”'
-      : '还没有来源，可以先打开“包含全部来源”'),
+      ? '请至少选择一个来源，或开启“包含全部来源”'
+      : '暂无来源，可开启“包含全部来源”'),
 }))
 
 function openCreate() {
@@ -263,15 +263,15 @@ const confirm = ref<{ title: string; description: string; action: string; run: (
 function askRotate(s: Subscription) {
   confirm.value = {
     title: '更换令牌？',
-    description: '原链接立即失效，需要在客户端里重新安装。',
-    action: '更换',
+    description: '原链接将立即失效，需在客户端中重新安装订阅。',
+    action: '更换令牌',
     run: () => void rotate(s),
   }
 }
 async function rotate(s: Subscription) {
   try {
     const v = (await api.post<Subscription>(`/subscriptions/${s.id}/rotate`, {})).data
-    toast.success('令牌已更换，需要在客户端里重新安装')
+    toast.success('令牌已更换，请在客户端中重新安装订阅')
     await load()
     installFor.value = v
   } catch (e) {
@@ -282,15 +282,15 @@ async function rotate(s: Subscription) {
 function askRotateKey(s: Subscription) {
   confirm.value = {
     title: '更换传输密钥？',
-    description: '原密钥立即失效，需在客户端的模块参数里填入新密钥；模块本身不用重装。',
-    action: '更换',
+    description: '原密钥将立即失效，需在客户端的模块参数中填入新密钥，模块无需重新安装。',
+    action: '更换密钥',
     run: () => void rotateKey(s),
   }
 }
 async function rotateKey(s: Subscription) {
   try {
     const v = (await api.post<Subscription>(`/subscriptions/${s.id}/transport-key/rotate`, {})).data
-    toast.success('传输密钥已更换，需在客户端填入新密钥')
+    toast.success('传输密钥已更换，请在客户端中填入新密钥')
     await load()
     installFor.value = v
   } catch (e) {
@@ -310,18 +310,18 @@ async function rotateKey(s: Subscription) {
   <EmptyState
     v-else-if="!list.length && !endpoints.length"
     :icon="GlobeIcon"
-    title="先添加访问地址"
-    description="订阅里要写明手机去哪个地址拉取规则、回传登录态。"
+    title="暂无访问地址"
+    description="订阅需指定访问地址，设备通过该地址拉取读取规则、回传登录态。"
   >
     <Button as-child
-      ><RouterLink to="/settings"><PlusIcon /> 去添加访问地址</RouterLink></Button
+      ><RouterLink to="/settings"><PlusIcon /> 添加访问地址</RouterLink></Button
     >
   </EmptyState>
   <EmptyState
     v-else-if="!list.length"
     :icon="SmartphoneIcon"
-    title="还没有订阅"
-    description="每台手机上的每个代理客户端装一份订阅，装好后才会回传登录态。"
+    title="暂无订阅"
+    description="每台设备上的每个代理客户端需单独安装订阅，安装后开始回传登录态。"
   >
     <Button @click="openCreate"><PlusIcon /> 新建订阅</Button>
   </EmptyState>
@@ -343,7 +343,7 @@ async function rotateKey(s: Subscription) {
           <StatusBadge v-if="s.transport.verified_at" tone="success" :icon="LockIcon"
             >加密传输</StatusBadge
           >
-          <StatusBadge v-else tone="warning" :icon="LockIcon">待填密钥</StatusBadge>
+          <StatusBadge v-else tone="warning" :icon="LockIcon">待填写密钥</StatusBadge>
         </template>
         <StatusBadge v-else-if="isHTTP(s.endpoint_id)" tone="warning" :icon="LockOpenIcon"
           >明文传输</StatusBadge
@@ -368,7 +368,7 @@ async function rotateKey(s: Subscription) {
       <template #actions>
         <RowActions
           delete-title="删除订阅？"
-          delete-description="令牌立即失效，已安装的客户端无法再回传。"
+          delete-description="令牌将立即失效，已安装的客户端将无法回传登录态。"
           @edit="openEdit(s)"
           @remove="remove(s)"
         >
@@ -377,7 +377,7 @@ async function rotateKey(s: Subscription) {
             size="sm"
             @click="installFor = s"
           >
-            <DownloadIcon /> {{ s.outdated ? '更新' : '安装' }}
+            <DownloadIcon /> {{ s.outdated ? '更新订阅' : '安装订阅' }}
           </Button>
           <DropdownMenu :modal="false">
             <DropdownMenuTrigger as-child>
@@ -462,7 +462,7 @@ async function rotateKey(s: Subscription) {
   <FormDialog
     v-model:open="showForm"
     :title="editing ? '编辑订阅' : '新建订阅'"
-    :description="editing ? form.name : '每台设备的每个客户端一份，各有独立的令牌'"
+    :description="editing ? form.name : '每台设备上的每个代理客户端对应一份订阅，令牌相互独立'"
     :icon="SmartphoneIcon"
     tone="indigo"
     size="lg"
@@ -478,7 +478,7 @@ async function rotateKey(s: Subscription) {
       </FormField>
     </FormSection>
 
-    <FormSection title="访问地址" description="手机拉取取值规则、回传登录态">
+    <FormSection title="访问地址" description="设备拉取读取规则、回传登录态所用的地址">
       <FormField
         label="主地址"
         for="sub-endpoint"
@@ -506,8 +506,8 @@ async function rotateKey(s: Subscription) {
         full
         :hint="
           isHTTP(form.endpoint_id) && !form.script_url.trim()
-            ? '主地址是 http，脚本下载途中可能被替换；可填一个 https 地址（与平台同版本的 ferry.js）'
-            : '留空用主地址下的 /script/ferry.js'
+            ? '主地址使用 http，脚本在传输过程中可能被篡改；建议填写 https 地址（与 Ferry 版本一致的 ferry.js）'
+            : '留空时使用主地址下的 /script/ferry.js'
         "
       >
         <Input
@@ -526,18 +526,20 @@ async function rotateKey(s: Subscription) {
     >
       <Label class="font-normal"
         ><Switch v-model="sealedSwitch" :disabled="!supportsSealed(form.client)" />
-        加密回传内容（访问地址是 http 时也读不到、改不了）</Label
+        加密回传内容（访问地址为 http 时，内容也无法被读取或篡改）</Label
       >
       <HintText v-if="!supportsSealed(form.client)">
-        Quantumult X 没有模块参数，填不了传输密钥，只能明文；建议改用 https 访问地址。
+        Quantumult X 不支持模块参数，无法配置传输密钥，仅支持明文传输；建议使用 https 访问地址。
       </HintText>
       <HintText v-else-if="form.transport_mode === 'sealed'">
-        保存后打开安装引导，按步骤把传输密钥填进客户端的模块参数。
+        保存后将打开安装引导，按步骤将传输密钥填入客户端的模块参数。
       </HintText>
       <HintText v-else-if="isHTTP(form.endpoint_id)">
-        主地址是 http，不加密时同一网络里的人能看到回传的登录态。
+        主地址使用 http，未加密时同一网络中的其他设备可读取回传的登录态。
       </HintText>
-      <HintText v-if="editing && changedMode"> 切换传输方式后，需在客户端重新安装。 </HintText>
+      <HintText v-if="editing && changedMode">
+        切换传输方式后，需在客户端中重新安装订阅。
+      </HintText>
     </FormSection>
 
     <FormSection
@@ -550,9 +552,7 @@ async function rotateKey(s: Subscription) {
       >
       <FormField
         v-if="!form.all_sources"
-        :hint="
-          sources.length ? '' : '还没有来源，可以先打开“包含全部来源”，以后新增的来源会自动加进来'
-        "
+        :hint="sources.length ? '' : '暂无来源。开启“包含全部来源”后，新增的来源将自动纳入'"
         :error="formCheck.errors.sources"
       >
         <ToggleChips

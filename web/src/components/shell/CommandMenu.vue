@@ -94,18 +94,18 @@ function run(fn: () => void) {
   <CommandDialog
     v-model:open="commandOpen"
     class="sm:max-w-xl"
-    title="跳转或执行"
+    title="搜索与命令"
     description="搜索页面、对象或操作"
   >
     <CommandInput placeholder="搜索页面、来源、订阅、目的地或操作…" />
     <CommandList class="max-h-[min(60vh,420px)]">
-      <CommandEmpty>没有匹配的结果</CommandEmpty>
+      <CommandEmpty>无匹配结果</CommandEmpty>
       <CommandGroup heading="操作">
         <CommandItem value="新建来源" @select="go('/sources/new')"
           ><PlusIcon /> 新建来源</CommandItem
         >
-        <CommandItem v-if="failed.length" value="重试全部失败的推送" @select="retryFailed"
-          ><RefreshCwIcon /> 重试全部失败的推送（{{ failed.length }} 个）</CommandItem
+        <CommandItem v-if="failed.length" value="重试全部失败推送" @select="retryFailed"
+          ><RefreshCwIcon /> 重试全部失败推送（{{ failed.length }} 条）</CommandItem
         >
         <CommandItem value="切换深浅色 主题" @select="run(toggleTheme)"
           ><SunIcon class="dark:hidden" /><MoonIcon class="hidden dark:block" />

@@ -37,7 +37,7 @@ const (
 var labels = [...]string{Up: "ferry/v1/up", Down: "ferry/v1/down"}
 
 // ErrOpen 表示报文格式不对、被篡改、密钥或方向不对；不区分具体原因，避免泄露信息。
-var ErrOpen = errors.New("无法解开报文")
+var ErrOpen = errors.New("报文解密失败")
 
 // 严格模式拒绝末尾多余位不为零的写法，让同一段字节只有一种编码，和 ferry.js 的解码一致。
 var b64 = base64.RawURLEncoding.Strict()

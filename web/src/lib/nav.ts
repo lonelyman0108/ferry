@@ -37,7 +37,7 @@ export const navItems: NavItem[] = [
     short: '总览',
     icon: LayoutDashboardIcon,
     tone: 'primary',
-    description: '要处理的事和各来源的状态',
+    description: '待处理事项与各来源状态',
   },
   {
     path: '/sources',
@@ -53,7 +53,7 @@ export const navItems: NavItem[] = [
     short: '订阅',
     icon: SmartphoneIcon,
     tone: 'primary',
-    description: '装在手机代理客户端里的插件与安装链接',
+    description: '代理客户端中安装的插件与安装链接',
   },
   {
     path: '/destinations',
@@ -73,7 +73,7 @@ export const navItems: NavItem[] = [
     short: '记录',
     icon: ActivityIcon,
     tone: 'primary',
-    description: '每一次回传、审核、推送与通知',
+    description: '回传、审核、推送与通知的完整记录',
   },
   {
     path: '/settings',
@@ -83,7 +83,11 @@ export const navItems: NavItem[] = [
     tone: 'primary',
     description: '访问地址与账户',
     pages: [
-      { path: '/settings', label: '访问地址', description: '手机拉取规则、回传登录态用的地址' },
+      {
+        path: '/settings',
+        label: '访问地址',
+        description: '设备拉取读取规则、回传登录态所用的地址',
+      },
       { path: '/account', label: '账户', description: '登录密码、API 令牌与深浅色' },
       {
         path: '/settings/system',

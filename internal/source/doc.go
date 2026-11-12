@@ -156,7 +156,7 @@ func (d *Doc) Validate() error {
 	add := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
 
 	if !sourceKeyRe.MatchString(d.Key) {
-		add("key 只能用小写字母、数字、- 和 _，以字母开头，最长 64 个字符")
+		add("key 仅允许小写字母、数字、- 和 _，须以字母开头，最长 64 个字符")
 	}
 	if d.Name == "" || len(d.Name) > 128 {
 		add("name 不能为空，且不超过 128 个字节")
@@ -164,10 +164,10 @@ func (d *Doc) Validate() error {
 	switch d.Notify {
 	case NotifyAlways, NotifyFirst, NotifyChanged:
 	default:
-		add("notify 只能是 always、first 或 changed")
+		add("notify 仅允许 always、first 或 changed")
 	}
 	if d.Review != ReviewAuto && d.Review != ReviewManual {
-		add("review 只能是 auto 或 manual")
+		add("review 仅允许 auto 或 manual")
 	}
 	if *d.MergeWindow < 0 || *d.MergeWindow > maxMergeWindow {
 		add("merge_window 应在 0 到 %d 秒之间", maxMergeWindow)
@@ -182,7 +182,7 @@ func (d *Doc) Validate() error {
 	matchers := map[string]bool{}
 	for i, m := range d.Matchers {
 		if !matcherRe.MatchString(m.Name) {
-			add("matchers[%d].name 只能用小写字母、数字、- 和 _", i)
+			add("matchers[%d].name 仅允许小写字母、数字、- 和 _", i)
 		} else if matchers[m.Name] {
 			add("matchers[%d].name %q 重复", i, m.Name)
 		}
@@ -193,7 +193,7 @@ func (d *Doc) Validate() error {
 		switch m.Method {
 		case "", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS":
 		default:
-			add("matchers[%d].method %q 不是常见的 HTTP 方法", i, m.Method)
+			add("matchers[%d].method %q 不是受支持的 HTTP 方法", i, m.Method)
 		}
 	}
 
@@ -204,7 +204,7 @@ func (d *Doc) Validate() error {
 	var fieldKeys []string
 	for i, f := range d.Fields {
 		if !fieldKeyRe.MatchString(f.Key) {
-			add("fields[%d].key 只能用小写字母、数字和 _，以字母开头", i)
+			add("fields[%d].key 仅允许小写字母、数字和 _，须以字母开头", i)
 		} else if fields[f.Key] {
 			add("fields[%d].key %q 重复", i, f.Key)
 		}
@@ -222,7 +222,7 @@ func (d *Doc) Validate() error {
 			add("fields[%d].type %q 不支持", i, f.Type)
 		}
 		if f.MinLen < 0 || f.MaxLen < 0 || (f.MaxLen > 0 && f.MinLen > f.MaxLen) {
-			add("fields[%d] 的 min_len、max_len 不合理", i)
+			add("fields[%d] 的 min_len、max_len 无效：不能为负数，且 min_len 不能大于 max_len", i)
 		}
 		if f.Pattern != "" {
 			if _, err := regexp.Compile(f.Pattern); err != nil {
@@ -245,7 +245,7 @@ func (d *Doc) Validate() error {
 	outputs := map[string]bool{}
 	for i, o := range d.Outputs {
 		if !outputNameRe.MatchString(o.Name) {
-			add("outputs[%d].name 只能用字母、数字和 _，不能以数字开头", i)
+			add("outputs[%d].name 仅允许字母、数字和 _，且不能以数字开头", i)
 		} else if outputs[o.Name] {
 			add("outputs[%d].name %q 重复", i, o.Name)
 		}

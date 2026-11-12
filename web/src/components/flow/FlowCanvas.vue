@@ -186,7 +186,7 @@ const paths = computed(() =>
 
       <section class="grid min-w-0 grid-cols-1 content-center gap-3" aria-label="来源">
         <h3 class="text-muted-foreground flex justify-between px-0.5 text-xs">
-          来源<span>{{ sources.filter((s) => s.enabled).length }} 个启用</span>
+          来源<span>已启用 {{ sources.filter((s) => s.enabled).length }} 个</span>
         </h3>
         <div
           v-for="s in sources"

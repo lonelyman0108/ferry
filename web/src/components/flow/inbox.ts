@@ -50,7 +50,7 @@ export function useInboxActions() {
   async function review(it: AttentionItem, approve: boolean) {
     try {
       await api.post(`/versions/${it.version_id}/${approve ? 'approve' : 'reject'}`, {})
-      toast.success(approve ? '已通过，新值生效后会推送' : '已驳回')
+      toast.success(approve ? '已通过，新值生效后将自动推送' : '已驳回')
       return true
     } catch (e) {
       toast.error(errorText(e))
@@ -62,7 +62,7 @@ export function useInboxActions() {
     try {
       const { data } = await api.post<PushJob>(`/pushes/${it.push_id}/retry`, {})
       if (data.status === 'success') toast.success(`已推送到 ${it.destination_name}`)
-      else toast.error(`仍然没推出去：${data.last_error || '稍后自动重试'}`)
+      else toast.error(`推送失败：${data.last_error || '等待自动重试'}`)
       return true
     } catch (e) {
       toast.error(errorText(e))
@@ -81,8 +81,8 @@ export function useInboxActions() {
         // 单个失败不打断其余的
       }
     }
-    if (ok === items.length) toast.success(`${ok} 个推送都已推出去`)
-    else toast.error(`重试了 ${items.length} 个推送，${items.length - ok} 个仍然失败`)
+    if (ok === items.length) toast.success(`${ok} 条推送全部成功`)
+    else toast.error(`已重试 ${items.length} 条推送，其中 ${items.length - ok} 条失败`)
     return ok
   }
 

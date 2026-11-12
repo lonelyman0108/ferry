@@ -54,7 +54,7 @@ func viewBinding(b store.Binding) bindingView {
 
 func (in bindingInput) apply(db *gorm.DB, b *store.Binding) error {
 	if in.Mode != store.ModePerIdentity && in.Mode != store.ModeJoined {
-		return errors.New("mode 只能是 per_identity（每个身份一条）或 joined（合并为一条）")
+		return errors.New("mode 仅允许为 per_identity（每个身份一条）或 joined（合并为一条）")
 	}
 	var src store.Source
 	if err := db.Preload("Outputs").First(&src, in.SourceID).Error; err != nil {
@@ -77,7 +77,7 @@ func (in bindingInput) apply(db *gorm.DB, b *store.Binding) error {
 			continue
 		}
 		if !varNameRe.MatchString(to) {
-			return fmt.Errorf("变量名 %q 只能用字母、数字和 _，不能以数字开头", to)
+			return fmt.Errorf("变量名 %q 仅允许字母、数字和 _，且不能以数字开头", to)
 		}
 		rename[from] = to
 	}
@@ -114,7 +114,7 @@ func (s *Server) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := db.Create(&b).Error; err != nil {
-		s.writeSaveError(w, r, err, "这个来源到该目的地的推送规则已存在")
+		s.writeSaveError(w, r, err, "该来源到该目的地的推送规则已存在")
 		return
 	}
 	s.audit(r, identityFrom(r.Context()).actor(), "binding.create", "binding:"+strconv.FormatUint(uint64(b.ID), 10), b.Mode)
@@ -142,7 +142,7 @@ func (s *Server) handleUpdateBinding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := db.Save(&b).Error; err != nil {
-		s.writeSaveError(w, r, err, "这个来源到该目的地的推送规则已存在")
+		s.writeSaveError(w, r, err, "该来源到该目的地的推送规则已存在")
 		return
 	}
 	s.audit(r, identityFrom(r.Context()).actor(), "binding.update", "binding:"+strconv.FormatUint(uint64(b.ID), 10), b.Mode)
@@ -258,7 +258,7 @@ func (s *Server) handleManualPush(w http.ResponseWriter, r *http.Request) {
 		}
 		var n int64
 		if err := db.Model(&store.Identity{}).Where("id = ? AND source_id = ?", *in.IdentityID, b.SourceID).Count(&n).Error; err != nil || n == 0 {
-			writeError(w, http.StatusBadRequest, "身份不属于这条推送规则的来源")
+			writeError(w, http.StatusBadRequest, "身份不属于该推送规则的来源")
 			return
 		}
 	}

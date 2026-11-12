@@ -156,7 +156,7 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Kind != c.Kind {
-		writeError(w, http.StatusBadRequest, "通知渠道的类型不能修改")
+		writeError(w, http.StatusBadRequest, "通知渠道类型不可修改")
 		return
 	}
 	old, err := s.channelConfig(c)
@@ -266,7 +266,7 @@ func (s *Server) handleTestChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	m := notify.Message{Event: "test", Title: "Ferry：测试通知", Body: "通知渠道「" + c.Name + "」能正常收到通知。", At: s.now()}
+	m := notify.Message{Event: "test", Title: "Ferry：测试通知", Body: "通知渠道「" + c.Name + "」配置正确，可正常接收通知。", At: s.now()}
 	result := map[string]any{"ok": true}
 	if err := n.SendTo(ctx, c, m); err != nil {
 		result = map[string]any{"ok": false, "error": err.Error()}
@@ -306,7 +306,7 @@ func (in ruleInput) apply(db *gorm.DB, r *store.NotifyRule) error {
 		return errors.New("名称不能为空，且不超过 64 个字节")
 	}
 	if len(in.Events) == 0 {
-		return errors.New("至少选一种事件")
+		return errors.New("至少选择一种事件类型")
 	}
 	known := map[string]bool{}
 	for _, t := range events.Types {
@@ -318,11 +318,11 @@ func (in ruleInput) apply(db *gorm.DB, r *store.NotifyRule) error {
 		}
 	}
 	if len(in.ChannelIDs) == 0 {
-		return errors.New("至少选一个通知渠道")
+		return errors.New("至少选择一个通知渠道")
 	}
 	var n int64
 	if err := db.Model(&store.Channel{}).Where("id IN ?", in.ChannelIDs).Count(&n).Error; err != nil || int(n) != len(in.ChannelIDs) {
-		return errors.New("选中的通知渠道有的已不存在")
+		return errors.New("部分所选通知渠道不存在")
 	}
 	if in.SourceKeys == nil {
 		in.SourceKeys = []string{}

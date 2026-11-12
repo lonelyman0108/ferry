@@ -39,7 +39,7 @@ function dismiss(it: AttentionItem) {
       <InboxIcon class="text-muted-foreground size-4" />
       <span class="font-semibold">待处理</span>
       <span class="text-muted-foreground text-sm">
-        {{ action.length ? `${action.length} 件要处理` : '没有要处理的' }}
+        {{ action.length ? `${action.length} 项待处理` : '运行正常' }}
         <template v-if="notice.length"> · {{ notice.length }} 条提醒</template>
       </span>
       <ChevronDownIcon
@@ -53,11 +53,11 @@ function dismiss(it: AttentionItem) {
         class="text-muted-foreground flex items-start gap-2.5 p-4 text-sm"
       >
         <CircleCheckIcon class="text-success mt-0.5 size-4 shrink-0" />
-        全部通着，没有要处理的事。
+        暂无待处理事项。
       </div>
       <template
         v-for="group in [
-          { label: '要处理', list: action },
+          { label: '待处理', list: action },
           { label: '提醒', list: notice },
         ]"
         :key="group.label"

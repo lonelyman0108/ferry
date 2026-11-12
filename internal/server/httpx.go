@@ -38,7 +38,7 @@ func isJSON(r *http.Request) bool {
 // decodeJSON 读取 JSON 正文，拒绝未知字段和超过 1 MB 的正文。失败时已写好响应，返回 false。
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	if !isJSON(r) {
-		writeError(w, http.StatusUnsupportedMediaType, "请求正文必须是 application/json")
+		writeError(w, http.StatusUnsupportedMediaType, "请求正文须为 application/json")
 		return false
 	}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
@@ -46,14 +46,14 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := dec.Decode(v); err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
-			writeError(w, http.StatusRequestEntityTooLarge, "请求正文太大")
+			writeError(w, http.StatusRequestEntityTooLarge, "请求正文过大")
 		} else {
 			writeError(w, http.StatusBadRequest, fmt.Sprintf("请求正文不是合法的 JSON：%v", err))
 		}
 		return false
 	}
 	if dec.Decode(&struct{}{}) != io.EOF {
-		writeError(w, http.StatusBadRequest, "请求正文只能包含一个 JSON 对象")
+		writeError(w, http.StatusBadRequest, "请求正文仅允许包含一个 JSON 对象")
 		return false
 	}
 	return true

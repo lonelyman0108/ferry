@@ -193,7 +193,7 @@ function detail(a: AuditLog) {
         </TableRow>
         <TableRow v-if="list && !list.length">
           <TableCell colspan="6" class="text-muted-foreground py-8 text-center">{{
-            category ? '这个类别下还没有记录' : '暂无审计记录'
+            category ? '该类别暂无审计记录' : '暂无审计记录'
           }}</TableCell>
         </TableRow>
       </TableBody>

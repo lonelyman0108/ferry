@@ -132,7 +132,7 @@ func (s *Service) Run(ctx context.Context, jobID uint) (bool, error) {
 		return true, s.finish(db, job, store.PushSkipped, "目的地或推送规则已停用", "")
 	}
 	if noOutputs {
-		return true, s.finish(db, job, store.PushSkipped, "来源没有输出变量", "")
+		return true, s.finish(db, job, store.PushSkipped, "来源未配置输出变量", "")
 	}
 	if err == nil && len(p.Vars) == 0 {
 		return true, s.finish(db, job, store.PushSkipped, "无可推送的变量（字段尚无值）", "")
@@ -174,7 +174,7 @@ func (s *Service) finish(db *gorm.DB, job store.PushJob, status, lastErr, detail
 }
 
 // errNoOutputs 表示来源没有定义输出变量，任务按跳过处理，不重试。
-var errNoOutputs = errors.New("来源没有输出变量")
+var errNoOutputs = errors.New("来源未配置输出变量")
 
 // build 读取映射、目的地和当前值，渲染出要推送的变量。
 func (s *Service) build(ctx context.Context, job store.PushJob) (dest.Push, store.Destination, store.Binding, error) {

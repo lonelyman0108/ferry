@@ -23,7 +23,7 @@ type qinglong struct {
 func validateQinglong(c Config) error {
 	u, err := url.Parse(c.BaseURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return errors.New("青龙地址需以 http:// 或 https:// 开头")
+		return errors.New("青龙地址须以 http:// 或 https:// 开头")
 	}
 	if c.ClientID == "" || c.ClientSecret == "" {
 		return errors.New("缺少青龙应用的 client_id 或 client_secret")
@@ -65,7 +65,7 @@ func (q *qinglong) token(ctx context.Context) (string, error) {
 		Expiration int64  `json:"expiration"`
 	}
 	if err := q.call(ctx, http.MethodGet, "/open/auth/token?"+v.Encode(), "", nil, &data); err != nil {
-		return "", fmt.Errorf("换取青龙 token：%w", err)
+		return "", fmt.Errorf("获取青龙 token 失败：%w", err)
 	}
 	if data.Token == "" {
 		return "", errors.New("青龙未返回 token")
@@ -112,7 +112,7 @@ func (q *qinglong) call(ctx context.Context, method, path, token string, body an
 	}
 	var r qlResponse
 	if err := json.Unmarshal(raw, &r); err != nil {
-		return fmt.Errorf("青龙返回 HTTP %d，内容不是 JSON", resp.StatusCode)
+		return fmt.Errorf("青龙返回 HTTP %d，响应不是 JSON", resp.StatusCode)
 	}
 	if r.Code != 200 {
 		return fmt.Errorf("青龙返回 code %d：%s", r.Code, r.Message)
@@ -150,7 +150,7 @@ func (q *qinglong) Upsert(ctx context.Context, p Push) error {
 	for _, v := range p.Vars {
 		var found []qlEnv
 		if err := q.call(ctx, http.MethodGet, "/open/envs?searchValue="+url.QueryEscape(v.Remarks), tok, nil, &found); err != nil {
-			return fmt.Errorf("查找变量 %s：%w", v.Name, err)
+			return fmt.Errorf("查询变量 %s 失败：%w", v.Name, err)
 		}
 		var existing *qlEnv
 		for i := range found {
@@ -163,17 +163,17 @@ func (q *qinglong) Upsert(ctx context.Context, p Push) error {
 		if existing == nil {
 			var created []qlEnv
 			if err := q.call(ctx, http.MethodPost, "/open/envs", tok, []map[string]string{{"name": v.Name, "value": v.Value, "remarks": v.Remarks}}, &created); err != nil {
-				return fmt.Errorf("新建变量 %s：%w", v.Name, err)
+				return fmt.Errorf("新建变量 %s 失败：%w", v.Name, err)
 			}
 			if len(created) == 0 {
-				return fmt.Errorf("新建变量 %s：青龙未返回记录", v.Name)
+				return fmt.Errorf("新建变量 %s 失败：青龙未返回记录", v.Name)
 			}
 			id = created[0].ID
 		} else {
 			id = existing.ID
 			if existing.Value != v.Value {
 				if err := q.call(ctx, http.MethodPut, "/open/envs", tok, map[string]any{"id": id, "name": v.Name, "value": v.Value, "remarks": v.Remarks}, nil); err != nil {
-					return fmt.Errorf("更新变量 %s：%w", v.Name, err)
+					return fmt.Errorf("更新变量 %s 失败：%w", v.Name, err)
 				}
 			}
 			if existing.Status == 0 && existing.Value == v.Value {
@@ -181,7 +181,7 @@ func (q *qinglong) Upsert(ctx context.Context, p Push) error {
 			}
 		}
 		if err := q.call(ctx, http.MethodPut, "/open/envs/enable", tok, []int{id}, nil); err != nil {
-			return fmt.Errorf("启用变量 %s：%w", v.Name, err)
+			return fmt.Errorf("启用变量 %s 失败：%w", v.Name, err)
 		}
 	}
 	return nil

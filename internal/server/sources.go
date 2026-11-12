@@ -313,7 +313,7 @@ func (s *Server) handleTrySource(w http.ResponseWriter, r *http.Request) {
 		case err != nil:
 			res.Fields[f.Key] = tryValue{Error: err.Error()}
 		case !ok:
-			res.Fields[f.Key] = tryValue{Error: "未取到"}
+			res.Fields[f.Key] = tryValue{Error: "未读取到值"}
 		default:
 			values[f.Key] = v
 			tv := tryValue{OK: true, Value: v}
@@ -358,11 +358,11 @@ func matchReason(m source.MatcherDoc, req rules.Request) string {
 	rm.Method = ""
 	switch {
 	case !rules.HostMatches(m.Host, u.Hostname()):
-		return "域名不符"
+		return "域名不匹配"
 	case !rm.Match(req):
-		return "路径不符"
+		return "路径不匹配"
 	case m.Method != "" && !strings.EqualFold(m.Method, req.Method):
-		return "请求方法不符"
+		return "请求方法不匹配"
 	}
 	return ""
 }

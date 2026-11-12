@@ -53,11 +53,11 @@ func (s *Server) requireSetupToken(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := s.SetupToken()
 		if token == "" {
-			writeError(w, http.StatusConflict, "已经初始化，不能再次进入向导")
+			writeError(w, http.StatusConflict, "已完成初始化，无法再次进入初始化向导")
 			return
 		}
 		if !auth.Equal(r.Header.Get(setupTokenHeader), token) {
-			writeError(w, http.StatusForbidden, "初始化令牌无效，见服务启动日志")
+			writeError(w, http.StatusForbidden, "初始化令牌无效，请查看服务启动日志")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -159,7 +159,7 @@ func (s *Server) handleSetupTestDatabase(w http.ResponseWriter, r *http.Request)
 		_ = st.Close()
 	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "连不上数据库："+err.Error())
+		writeError(w, http.StatusBadRequest, "连接数据库失败："+err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -214,7 +214,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !state.NeedsConfig && !state.NeedsAdmin {
-		writeError(w, http.StatusConflict, "已经初始化，不能再次进入向导")
+		writeError(w, http.StatusConflict, "已完成初始化，无法再次进入初始化向导")
 		return
 	}
 
@@ -248,7 +248,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if st, err = openAndMigrate(newCfg.Database); err != nil {
-			writeError(w, http.StatusBadRequest, "连不上数据库："+err.Error())
+			writeError(w, http.StatusBadRequest, "连接数据库失败："+err.Error())
 			return
 		}
 		// 先落盘配置、再建管理员：建管理员失败时，状态退回“有配置、缺管理员”，
@@ -268,7 +268,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		}
 		result.ConfigPath = s.configPath
 	} else if in.Database != nil {
-		writeError(w, http.StatusBadRequest, "数据库已经由配置给出，不能在向导里修改")
+		writeError(w, http.StatusBadRequest, "数据库已在配置中指定，无法在初始化向导中修改")
 		return
 	}
 
@@ -298,7 +298,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		}).Error
 	})
 	if errors.Is(err, errAlreadyInitialized) {
-		writeError(w, http.StatusConflict, "已经初始化，不能再次进入向导")
+		writeError(w, http.StatusConflict, "已完成初始化，无法再次进入初始化向导")
 		return
 	}
 	if err != nil {
@@ -312,4 +312,4 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-var errAlreadyInitialized = errors.New("已经初始化")
+var errAlreadyInitialized = errors.New("已完成初始化")

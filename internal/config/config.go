@@ -22,7 +22,7 @@ const (
 )
 
 // ErrNotInitialized 表示既没有配置文件，环境变量也不足以组成完整配置，需要走初始化向导。
-var ErrNotInitialized = errors.New("ferry 尚未初始化")
+var ErrNotInitialized = errors.New("Ferry 尚未初始化")
 
 // Config 是 ferry.yaml 的内容。
 type Config struct {
@@ -88,7 +88,7 @@ func Load(path string) (*Config, error) {
 	case err == nil:
 		var f Config
 		if err := yaml.Unmarshal(data, &f); err != nil {
-			return nil, fmt.Errorf("解析 %s：%w", path, err)
+			return nil, fmt.Errorf("解析 %s 失败：%w", path, err)
 		}
 		file := SourceFile
 		for _, v := range []struct {
@@ -151,14 +151,14 @@ func (c *Config) Complete() bool {
 func ParseURL(raw string) (Database, error) {
 	scheme, rest, ok := strings.Cut(raw, "://")
 	if !ok {
-		return Database{}, errors.New("应以 postgres://、mysql:// 或 sqlite:// 开头")
+		return Database{}, errors.New("须以 postgres://、mysql:// 或 sqlite:// 开头")
 	}
 	switch strings.ToLower(scheme) {
 	case "postgres", "postgresql":
 		return Database{Driver: DriverPostgres, DSN: raw}, nil
 	case "sqlite", "sqlite3":
 		if rest == "" {
-			return Database{}, errors.New("sqlite:// 后面要跟文件路径")
+			return Database{}, errors.New("sqlite:// 后须指定文件路径")
 		}
 		return Database{Driver: DriverSQLite, DSN: rest}, nil
 	case "mysql":
@@ -167,7 +167,7 @@ func ParseURL(raw string) (Database, error) {
 			return Database{}, err
 		}
 		if u.Host == "" || strings.Trim(u.Path, "/") == "" {
-			return Database{}, errors.New("mysql:// 要写明主机和库名")
+			return Database{}, errors.New("mysql:// 地址须包含主机和数据库名")
 		}
 		q := u.Query()
 		for k, v := range map[string]string{"charset": "utf8mb4", "parseTime": "True", "loc": "UTC"} {
@@ -186,7 +186,7 @@ func ParseURL(raw string) (Database, error) {
 		dsn += "tcp(" + u.Host + ")/" + strings.Trim(u.Path, "/") + "?" + q.Encode()
 		return Database{Driver: DriverMySQL, DSN: dsn}, nil
 	default:
-		return Database{}, fmt.Errorf("不支持的数据库：%s", scheme)
+		return Database{}, fmt.Errorf("不支持的数据库类型：%s", scheme)
 	}
 }
 

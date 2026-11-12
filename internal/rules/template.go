@@ -60,7 +60,7 @@ func (t *Template) Render(values map[string]string) (string, error) {
 		if errors.Is(err, errOutputTooLong) {
 			return "", fmt.Errorf("渲染结果超过 %d 字节", maxOutputLen)
 		}
-		return "", fmt.Errorf("渲染模板：%s", redact(err.Error(), values))
+		return "", fmt.Errorf("渲染模板失败：%s", redact(err.Error(), values))
 	}
 	return buf.String(), nil
 }

@@ -149,7 +149,7 @@ func (s *Server) handleDeleteEndpoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if n > 0 {
-		writeError(w, http.StatusConflict, fmt.Sprintf("访问地址仍被 %d 个订阅引用", n))
+		writeError(w, http.StatusConflict, fmt.Sprintf("访问地址仍被 %d 个订阅引用，无法删除", n))
 		return
 	}
 	var e store.Endpoint
@@ -261,7 +261,7 @@ func (in subscriptionInput) apply(db *gorm.DB, m *store.Subscription) error {
 		return errors.New("名称不能为空，且不超过 64 个字节")
 	}
 	if !sub.ValidClient(in.Client) {
-		return fmt.Errorf("客户端只能是 %s", strings.Join(sub.Clients, "、"))
+		return fmt.Errorf("客户端仅允许为 %s", strings.Join(sub.Clients, "、"))
 	}
 	var n int64
 	if err := db.Model(&store.Endpoint{}).Where("id = ?", in.EndpointID).Count(&n).Error; err != nil || n == 0 {
@@ -269,7 +269,7 @@ func (in subscriptionInput) apply(db *gorm.DB, m *store.Subscription) error {
 	}
 	if in.FallbackID != nil {
 		if *in.FallbackID == in.EndpointID {
-			return errors.New("备用地址不能和主地址相同")
+			return errors.New("备用访问地址不能与主访问地址相同")
 		}
 		if err := db.Model(&store.Endpoint{}).Where("id = ?", *in.FallbackID).Count(&n).Error; err != nil || n == 0 {
 			return errors.New("备用访问地址不存在")
@@ -293,7 +293,7 @@ func (in subscriptionInput) apply(db *gorm.DB, m *store.Subscription) error {
 			return err
 		}
 		if int(found) != len(keys) {
-			return errors.New("选中的来源有不存在的")
+			return errors.New("部分所选来源不存在")
 		}
 	}
 	mode := in.TransportMode
@@ -304,10 +304,10 @@ func (in subscriptionInput) apply(db *gorm.DB, m *store.Subscription) error {
 		mode = store.TransportPlain
 	}
 	if mode != store.TransportPlain && mode != store.TransportSealed {
-		return fmt.Errorf("传输方式只能是 %s 或 %s", store.TransportPlain, store.TransportSealed)
+		return fmt.Errorf("传输方式仅允许为 %s 或 %s", store.TransportPlain, store.TransportSealed)
 	}
 	if mode == store.TransportSealed && !sub.SupportsSealed(in.Client) {
-		return errors.New("该客户端没有模块参数，无法填写传输密钥，不支持加密传输")
+		return errors.New("该客户端不支持加密传输：无法通过模块参数配置传输密钥")
 	}
 	script, err := sub.NormalizeScriptURL(in.ScriptURL)
 	if err != nil {
@@ -601,7 +601,7 @@ func (s *Server) authenticateSubscription(next http.Handler) http.Handler {
 		}
 		// 开了加密的订阅只认加密通道，免得令牌外泄后有人拿它走明文接口。
 		if m.TransportMode == store.TransportSealed {
-			writeError(w, http.StatusUnauthorized, "该订阅已开启加密传输，只接受加密请求")
+			writeError(w, http.StatusUnauthorized, "该订阅已开启加密传输，仅接受加密请求")
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), subscriptionKey{}, m)))

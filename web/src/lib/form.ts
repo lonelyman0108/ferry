@@ -36,5 +36,5 @@ export function useFormCheck(check: () => Record<string, string | false | null |
 export function urlProblem(v: string | undefined, what = '地址') {
   const t = (v ?? '').trim()
   if (!t) return `请填写${what}`
-  return /^https?:\/\//i.test(t) ? '' : `${what}需以 http:// 或 https:// 开头`
+  return /^https?:\/\//i.test(t) ? '' : `${what}须以 http:// 或 https:// 开头`
 }
