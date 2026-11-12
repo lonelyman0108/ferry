@@ -329,7 +329,11 @@ async function rotateKey(s: Subscription) {
   <div class="grid gap-3">
     <ListRow v-for="s in list" :key="s.id">
       <template #icon><BrandIcon :brand="s.client" /></template>
-      <template #title>{{ s.name }}</template>
+      <template #title
+        ><router-link :to="`/subscriptions/${s.id}`" class="hover:underline" title="查看链路">{{
+          s.name
+        }}</router-link></template
+      >
       <template #badges>
         <StatusBadge :tone="subscriptionStatus[s.status].tone" dot>{{
           subscriptionStatus[s.status].label

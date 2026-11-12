@@ -84,7 +84,7 @@ export const navItems: NavItem[] = [
     description: '访问地址与账户',
     pages: [
       { path: '/settings', label: '访问地址', description: '手机拉取规则、回传登录态用的地址' },
-      { path: '/account', label: '账户', description: '登录密码与 API 令牌' },
+      { path: '/account', label: '账户', description: '登录密码、API 令牌与深浅色' },
     ],
   },
 ]

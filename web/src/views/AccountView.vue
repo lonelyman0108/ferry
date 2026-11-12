@@ -1,10 +1,20 @@
 <script setup lang="ts">
-import { KeyRoundIcon, LockKeyholeIcon, PlusIcon } from '@lucide/vue'
-import { onMounted, reactive, ref } from 'vue'
+import {
+  KeyRoundIcon,
+  LockKeyholeIcon,
+  MonitorIcon,
+  MoonIcon,
+  PaletteIcon,
+  PlusIcon,
+  SunIcon,
+} from '@lucide/vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 
 import { api, errorText } from '@/api'
+import { setThemeMode, themeMode, type ThemeMode } from '@/lib/theme'
+import ChoiceCards from '@/components/ChoiceCards.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import CopyField from '@/components/CopyField.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -30,7 +40,20 @@ import type { ApiToken } from '@/types'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuth()
-const tabs = ['password', 'tokens']
+const tabs = ['password', 'tokens', 'appearance']
+
+// 深浅色存在这台浏览器里，换一台设备要重新选。
+const themeOptions = [
+  {
+    value: 'system' as const,
+    label: '跟随系统',
+    description: '系统切换深浅色时跟着变',
+    icon: MonitorIcon,
+  },
+  { value: 'light' as const, label: '浅色', icon: SunIcon },
+  { value: 'dark' as const, label: '深色', icon: MoonIcon },
+]
+const theme = computed<ThemeMode>({ get: () => themeMode.value, set: (v) => setThemeMode(v) })
 const tab = ref(
   typeof route.query.tab === 'string' && tabs.includes(route.query.tab)
     ? route.query.tab
@@ -126,6 +149,7 @@ onMounted(async () => {
       <TabsList class="mr-auto">
         <TabsTrigger value="password"><LockKeyholeIcon /> 修改密码</TabsTrigger>
         <TabsTrigger value="tokens"><KeyRoundIcon /> API 令牌</TabsTrigger>
+        <TabsTrigger value="appearance"><PaletteIcon /> 外观</TabsTrigger>
       </TabsList>
       <Button v-if="tab === 'tokens'" @click="openToken"
         ><PlusIcon /><span class="max-sm:sr-only">新建令牌</span></Button
@@ -173,6 +197,18 @@ onMounted(async () => {
             </FormField>
             <div><Button type="submit" :disabled="busy">修改密码</Button></div>
           </form>
+        </CardContent>
+      </Card>
+    </TabsContent>
+
+    <TabsContent value="appearance">
+      <Card class="max-w-xl">
+        <CardHeader>
+          <CardTitle>深浅色</CardTitle>
+          <CardDescription>只对这台浏览器生效。</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChoiceCards v-model="theme" :options="themeOptions" :cols="3" label="深浅色" />
         </CardContent>
       </Card>
     </TabsContent>

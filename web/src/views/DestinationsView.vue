@@ -528,7 +528,11 @@ async function runPush() {
           <BrandIcon v-if="d.kind === 'qinglong'" brand="qinglong" />
           <IconTile v-else :icon="WebhookIcon" tone="sky" />
         </template>
-        <template #title>{{ d.name }}</template>
+        <template #title
+          ><router-link :to="`/destinations/${d.id}`" class="hover:underline" title="查看链路">{{
+            d.name
+          }}</router-link></template
+        >
         <template #badges>
           <StatusBadge :tone="d.kind === 'qinglong' ? 'emerald' : 'sky'">{{
             destinationKinds[d.kind]
