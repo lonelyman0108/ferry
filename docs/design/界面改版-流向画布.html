@@ -1,0 +1,1123 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ferry 流向画布</title>
+<style>
+:root{
+  --bg:#0E0D14; --nav:#0B0A10; --surface:#16151F; --surface-2:#1D1C29; --panel:#121119;
+  --line:#272538; --line-2:#383552;
+  --text:#ECEAF3; --text-2:#B5B1C6; --text-3:#9894AC;
+  --accent:#9A8CE6; --accent-strong:#6A5AC4; --accent-hover:#7767D0; --accent-soft:rgba(140,124,224,.16);
+  --red:#F47E80; --red-line:#E5484D; --red-soft:rgba(229,72,77,.12);
+  --amber:#E9B45A; --amber-soft:rgba(233,180,90,.11);
+  --edge:#5C5874; --edge-off:#4A4762;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --panel-w:432px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:400 14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+.mono{font-family:var(--mono);font-size:13px}
+svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- 骨架 ---------- */
+.app{display:grid;grid-template-columns:200px 1fr;height:100vh;overflow:hidden}
+.side{background:var(--nav);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 10px}
+.brand{display:flex;align-items:center;gap:10px;height:36px;padding:0 8px;margin-bottom:18px;font-weight:600;font-size:15px}
+.brand svg{width:22px;height:22px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:10px;height:38px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:var(--text-2);cursor:pointer;text-align:left;font-size:14px}
+.nav button:hover{background:var(--surface);color:var(--text)}
+.nav button[aria-current="page"]{background:var(--surface-2);color:var(--text)}
+.nav button[aria-current="page"] svg{color:var(--accent)}
+.nav .cnt{margin-left:auto;font-size:12px;color:var(--amber);font-family:var(--mono)}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:8px}
+.kbtn{display:flex;align-items:center;gap:8px;height:36px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text-2);cursor:pointer;font-size:14px}
+.kbtn:hover{border-color:var(--line-2);color:var(--text)}
+kbd{font-family:var(--mono);font-size:12px;color:var(--text-3);border:1px solid var(--line-2);border-radius:5px;padding:0 5px;line-height:18px;margin-left:auto}
+.ver{font-size:12px;color:var(--text-3);padding:0 10px}
+
+.main{display:grid;grid-template-rows:56px 1fr;min-width:0;min-height:0}
+.top{display:flex;align-items:center;gap:14px;padding:0 20px;border-bottom:1px solid var(--line);background:var(--bg)}
+.crumb{color:var(--text-3);font-size:14px;display:flex;align-items:center;gap:8px}
+.crumb b{color:var(--text);font-weight:500}
+.status{display:flex;align-items:center;gap:10px;margin-left:8px;padding:0 12px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:14px}
+.status:hover{border-color:var(--line-2)}
+.status .dot{width:8px;height:8px;border-radius:50%;background:var(--amber)}
+.status.calm .dot{background:var(--accent)}
+.status .sub{color:var(--text-3)}
+.top .sp{flex:1}
+.top .kbtn{height:32px}
+.m-only{display:none}
+
+/* ---------- 画布 ---------- */
+.canvas{position:relative;overflow:hidden;background-color:var(--bg);
+  background-image:radial-gradient(rgba(255,255,255,.075) 1px,transparent 1.2px);background-size:22px 22px;background-position:11px 11px}
+#edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+#edges path{fill:none;stroke-width:1.5;transition:stroke .2s}
+#edges .ok{stroke:var(--edge)}
+#edges .off{stroke:var(--edge-off);stroke-dasharray:3 5}
+#edges .fail{stroke:var(--red-line);stroke-width:1.8;stroke-dasharray:7 5}
+#edges .hl.ok{stroke:var(--accent);stroke-width:2}
+#edges .hl.off{stroke:#7A7698}
+#edges .flow{stroke:var(--accent);stroke-width:2;stroke-dasharray:2 14;animation:flow 1.6s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-32}}
+#labels{position:absolute;inset:0;pointer-events:none;z-index:3}
+.elabel{position:absolute;transform:translate(-50%,-50%);font-size:12px;line-height:20px;padding:0 8px;border-radius:6px;background:var(--bg);border:1px solid var(--line-2);color:var(--text-2);white-space:nowrap}
+.elabel.fail{color:var(--red);border-color:rgba(229,72,77,.45)}
+
+.graph{position:absolute;top:28px;left:384px;width:816px;height:752px;display:flex;justify-content:space-between;transform-origin:0 0;transition:left .38s cubic-bezier(.3,.7,.2,1),width .38s cubic-bezier(.3,.7,.2,1)}
+.col{display:flex;flex-direction:column;justify-content:center}
+.col-dev{width:192px}.col-src{width:256px}.col-dst{width:196px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.cap{font-size:12px;color:var(--text-3);display:flex;justify-content:space-between;padding:0 2px 2px}
+.vlink{display:none}
+
+.node{position:relative;display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 13px 12px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.node:hover{border-color:var(--line-2)}
+.node:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.node.sel{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.node.muted{background:transparent;border-style:dashed}
+.node .pl,.node .pr{position:absolute;top:50%;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;background:var(--bg);border:1.5px solid var(--edge)}
+.node .pl{left:-5px}.node .pr{right:-5px}
+.node.sel .pl,.node.sel .pr{border-color:var(--accent)}
+.nh{display:flex;align-items:center;gap:10px;min-width:0}
+.ni{width:28px;height:28px;flex:none;border-radius:7px;background:var(--surface-2);border:1px solid var(--line);display:grid;place-items:center;color:var(--text-2)}
+.nt{font-weight:600;font-size:14px;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nk{font-size:12px;color:var(--text-3);line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nk.mono{font-size:12px}
+.nh .chip{margin-left:auto}
+.nmeta{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
+.nmeta div{min-width:0}
+.nmeta span{display:block;font-size:12px;color:var(--text-3);line-height:16px}
+.nmeta b{display:block;font-weight:500;font-size:14px;line-height:20px;white-space:nowrap}
+.nmeta b.amber{color:var(--amber)}
+.nmeta b.red{color:var(--red)}
+.nline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:9px;font-size:14px;color:var(--text-2)}
+.nflow{display:none}
+
+.chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:999px;font-size:12px;line-height:1;border:1px solid var(--line-2);color:var(--text-2);white-space:nowrap;flex:none}
+.chip i{width:6px;height:6px;border-radius:50%;background:var(--text-3)}
+.chip.ok i{background:var(--accent)}
+.chip.amber{color:var(--amber);border-color:rgba(233,180,90,.38);background:var(--amber-soft)}
+.chip.amber i{background:var(--amber)}
+.chip.red{color:var(--red);border-color:rgba(229,72,77,.45);background:var(--red-soft)}
+.chip.red i{background:var(--red-line)}
+
+/* ---------- 收件箱浮层 ---------- */
+.inbox{position:absolute;left:16px;top:16px;width:344px;z-index:6;background:var(--surface);border:1px solid var(--line-2);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.45);max-height:calc(100% - 96px);display:flex;flex-direction:column;overflow:hidden}
+.ib-head{display:flex;align-items:center;gap:10px;height:46px;padding:0 10px 0 14px;border:0;background:transparent;cursor:pointer;width:100%;text-align:left;flex:none}
+.ib-head .t{font-weight:600}
+.ib-head .n{font-size:12px;color:var(--text-3)}
+.ib-head .chev{margin-left:auto;color:var(--text-3);transition:transform .2s}
+.inbox.closed .chev{transform:rotate(-90deg)}
+.inbox.closed{width:auto}
+.inbox.closed .ib-body{display:none}
+.ib-body{overflow:auto;border-top:1px solid var(--line)}
+.ib-group{font-size:12px;color:var(--text-3);padding:10px 14px 2px}
+.ib-item{padding:10px 14px 12px;border-bottom:1px solid var(--line);transition:opacity .2s,transform .2s}
+.ib-item:last-child{border-bottom:0}
+.ib-item.leaving{opacity:0;transform:translateX(-12px)}
+.ib-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ib-row .who{font-weight:600}
+.ib-row .who svg{width:14px;height:14px;vertical-align:-2px;color:var(--text-3);margin:0 2px}
+.ib-det{color:var(--text-2);margin-top:4px;font-size:14px}
+.ib-det .mono{color:var(--text)}
+.ib-act{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.ib-hint{display:flex;gap:8px;align-items:flex-start;margin-top:8px;color:var(--text-2);font-size:14px}
+.ib-hint svg{margin-top:3px;color:var(--text-3)}
+.ib-empty{padding:18px 14px;color:var(--text-2);display:flex;gap:10px;align-items:flex-start}
+.ib-empty svg{color:var(--accent);margin-top:3px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:7px;border:1px solid var(--line-2);background:var(--surface-2);color:var(--text);font-weight:500;font-size:14px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:#4A4668;background:#24222F}
+.btn.pri{background:var(--accent-strong);border-color:transparent;color:#fff}
+.btn.pri:hover{background:var(--accent-hover)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--red)}
+.btn[disabled]{opacity:.75;cursor:default}
+.spin{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- 画布角落 ---------- */
+.legend{position:absolute;left:16px;bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-2);background:rgba(14,13,20,.88);border:1px solid var(--line);border-radius:8px;padding:6px 12px;z-index:4}
+.legend .sw{display:inline-flex;align-items:center;gap:6px}
+.legend svg{width:22px;height:6px}
+.legend .sep{width:1px;height:14px;background:var(--line-2)}
+.notes{position:absolute;right:16px;bottom:14px;z-index:7;transition:right .38s cubic-bezier(.3,.7,.2,1);max-width:380px}
+.app.panel-open .notes{right:calc(var(--panel-w) + 16px)}
+.notes summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);background:rgba(14,13,20,.88);border:1px solid var(--line);border-radius:8px;padding:6px 10px;float:right}
+.notes summary::-webkit-details-marker{display:none}
+.notes[open] summary{margin-top:8px}
+.notes .nb{clear:both;display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line-2);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--text-2);line-height:1.6}
+.notes[open]{display:flex;flex-direction:column-reverse}
+.notes .nb code{font-family:var(--mono);font-size:12px;color:var(--text)}
+.notes .nb p{margin:0}
+
+/* ---------- 检查面板 ---------- */
+.panel{position:absolute;top:0;right:0;bottom:0;width:var(--panel-w);background:var(--panel);border-left:1px solid var(--line-2);z-index:8;transform:translateX(100%);transition:transform .38s cubic-bezier(.3,.7,.2,1);display:flex;flex-direction:column;visibility:hidden}
+.app.panel-open .panel{transform:none;visibility:visible}
+.scrim{display:none}
+.p-head{padding:12px 16px 14px;border-bottom:1px solid var(--line);flex:none}
+.p-bar{display:flex;align-items:center;gap:6px;color:var(--text-3);font-size:14px;min-height:32px}
+.p-bar .lnk{border:0;background:none;color:var(--text-2);cursor:pointer;padding:4px 2px;border-radius:5px}
+.p-bar .lnk:hover{color:var(--text)}
+.p-bar .x{margin-left:auto;width:32px;height:32px;border-radius:7px;border:1px solid transparent;background:none;cursor:pointer;color:var(--text-2);display:grid;place-items:center}
+.p-bar .x:hover{border-color:var(--line-2);color:var(--text)}
+.handle{display:none}
+.p-title{display:flex;align-items:center;gap:12px;margin-top:8px}
+.p-title .ni{width:36px;height:36px;border-radius:9px}
+.p-title h2{margin:0;font-size:18px;font-weight:600;line-height:24px}
+.p-title .nk{font-size:12px}
+.p-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.chain{display:flex;align-items:stretch;margin-top:14px;border:1px solid var(--line);border-radius:9px;overflow-x:auto;background:var(--surface)}
+.chain button{flex:1 0 auto;border:0;background:none;padding:7px 10px;text-align:left;cursor:pointer;min-width:0}
+.chain button:hover{background:var(--surface-2)}
+.chain button span{display:block;font-size:12px;color:var(--text-3);line-height:16px}
+.chain button b{display:block;font-weight:500;font-size:14px;line-height:20px;white-space:nowrap}
+.chain button b.mono{font-size:13px}
+.chain button b.red{color:var(--red)}
+.chain .sepv{display:grid;place-items:center;color:var(--text-3);flex:none}
+.chain .sepv svg{width:12px;height:12px}
+.p-body{overflow:auto;padding:4px 16px 24px;flex:1}
+.sec{padding:16px 0 4px}
+.sec + .sec{border-top:1px solid var(--line)}
+.sec h3{margin:0 0 10px;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.sec h3 .aside{margin-left:auto;font-weight:400;font-size:12px;color:var(--text-3)}
+.rows{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:9px;background:var(--surface);overflow:hidden}
+.row{display:flex;align-items:center;gap:10px;padding:10px 12px;min-height:48px}
+.row + .row{border-top:1px solid var(--line)}
+.row .grow{flex:1;min-width:0}
+.row .l1{font-weight:500}
+.row .l2{color:var(--text-2);font-size:14px}
+.row .l2 .mono{color:var(--text)}
+.row.click{cursor:pointer;width:100%;border-left:0;border-right:0;border-bottom:0;background:none;text-align:left}
+.row.click:first-child{border-top:0}
+.row.click:hover{background:var(--surface-2)}
+.kv{display:grid;grid-template-columns:118px 1fr;gap:6px 12px;font-size:14px}
+.kv dt{color:var(--text-3);font-size:14px}
+.kv dd{margin:0;min-width:0;word-break:break-all}
+.ident{padding:12px}
+.ident + .ident{border-top:1px solid var(--line)}
+.ident .who{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:500}
+.ident .who .nk{margin-left:auto}
+.stat4{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:9px;background:var(--surface)}
+.stat4 div{padding:10px 12px}
+.stat4 div + div{border-left:1px solid var(--line)}
+.stat4 span{display:block;font-size:12px;color:var(--text-3)}
+.stat4 b{display:block;font-size:20px;font-weight:600;font-family:var(--mono)}
+.stat4 b.red{color:var(--red)}
+details.rule{border:1px solid var(--line);border-radius:9px;background:var(--surface)}
+details.rule summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:10px 12px;min-height:44px}
+details.rule summary::-webkit-details-marker{display:none}
+details.rule summary .chev{margin-left:auto;color:var(--text-3);transition:transform .2s}
+details.rule[open] summary .chev{transform:rotate(180deg)}
+details.rule .rb{padding:4px 12px 12px;border-top:1px solid var(--line)}
+.tl{list-style:none;margin:0;padding:0}
+.tl li{display:grid;grid-template-columns:86px 1fr;gap:10px;padding:8px 0;position:relative}
+.tl li + li{border-top:1px dashed var(--line)}
+.tl .when{color:var(--text-3);font-size:14px}
+.tl .what .l2{color:var(--text-2)}
+.muted{color:var(--text-3)}
+.red-t{color:var(--red)}
+.amber-t{color:var(--amber)}
+.note{font-size:14px;color:var(--text-2);margin:8px 0 0}
+
+/* ---------- 命令面板 ---------- */
+.pal-wrap{position:fixed;inset:0;background:rgba(5,4,9,.6);display:none;z-index:40;align-items:flex-start;justify-content:center;padding-top:14vh}
+.pal-wrap.on{display:flex}
+.pal{width:580px;max-width:calc(100vw - 32px);background:var(--surface);border:1px solid var(--line-2);border-radius:12px;box-shadow:0 24px 60px rgba(0,0,0,.6);overflow:hidden}
+.pal-in{display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line);height:52px;color:var(--text-3)}
+.pal-in input{flex:1;background:none;border:0;outline:0;color:var(--text);font:400 15px var(--sans);height:100%}
+.pal-in input::placeholder{color:var(--text-3)}
+.pal-list{max-height:380px;overflow:auto;padding:6px}
+.pal-g{font-size:12px;color:var(--text-3);padding:8px 10px 4px}
+.pal-it{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:0 10px;height:40px;border-radius:7px;cursor:pointer;text-align:left}
+.pal-it .s{color:var(--text-3);font-size:12px;margin-left:auto}
+.pal-it .s.mono{font-size:12px}
+.pal-it.act{background:var(--surface-2)}
+.pal-it.act .ico{color:var(--accent)}
+.pal-it .ico{color:var(--text-3);display:grid;place-items:center}
+.pal-empty{padding:18px 10px;color:var(--text-3)}
+.pal-foot{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--text-3)}
+.pal-foot kbd{margin:0 4px 0 0}
+
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);opacity:0;background:var(--surface-2);border:1px solid var(--line-2);border-radius:9px;padding:10px 14px;display:flex;gap:10px;align-items:center;z-index:50;transition:opacity .2s,transform .2s;pointer-events:none;max-width:calc(100vw - 32px)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.toast svg{color:var(--accent)}
+
+/* ---------- 375 宽 ---------- */
+@media (max-width:760px){
+  .app{display:block;height:auto;overflow:visible}
+  .side{position:fixed;left:0;right:0;bottom:0;z-index:20;flex-direction:row;padding:0 4px calc(env(safe-area-inset-bottom));border-right:0;border-top:1px solid var(--line);height:auto}
+  .brand,.side-foot{display:none}
+  .nav{flex-direction:row;width:100%;gap:0}
+  .nav button{flex:1;flex-direction:column;gap:3px;height:60px;padding:6px 0 4px;justify-content:center;font-size:12px;border-radius:0;background:none !important;position:relative}
+  .nav .cnt{position:absolute;top:6px;left:calc(50% + 8px);margin:0}
+  .main{display:block}
+  .top{position:sticky;top:0;z-index:15;height:56px;padding:0 8px 0 16px}
+  .crumb{display:none}
+  .m-only{display:flex}
+  .brand-m{align-items:center;gap:8px;font-weight:600;font-size:15px}
+  .brand-m svg{width:22px;height:22px}
+  .top .status{display:none}
+  .top .kbtn{width:44px;height:44px;padding:0;justify-content:center}
+  .top .kbtn .lbl,.top .kbtn kbd{display:none}
+  .mstatus{display:flex;margin:16px 0 14px;height:auto;min-height:44px;padding:8px 12px;width:100%}
+  .canvas{overflow:visible;padding:0 16px 96px;background-position:0 0}
+  #edges,#labels{display:none}
+  .inbox{position:static;width:auto;max-height:none;box-shadow:none}
+  .inbox.closed{width:auto}
+  .ib-head{height:52px}
+  .graph,.app.panel-open .graph{position:static;display:block;margin-top:22px;width:auto;height:auto;transform:none}
+  .col{width:auto !important;display:block}
+  .cap{font-size:14px;color:var(--text-2);font-weight:600;padding:0 0 4px}
+  .stack{gap:10px}
+  .node .pl,.node .pr{display:none}
+  .nflow{display:flex;align-items:flex-start;gap:6px;margin-top:9px;padding-top:9px;border-top:1px solid var(--line);font-size:14px;color:var(--text-2)}
+  .nflow svg{margin-top:3px;color:var(--text-3)}
+  .nflow .red-t{color:var(--red)}
+  .vlink{display:flex;align-items:center;gap:10px;padding:6px 0 6px 22px;color:var(--text-3);font-size:12px;position:relative;height:44px}
+  .vlink::before{content:"";position:absolute;left:30px;top:0;bottom:0;width:0;border-left:1.5px solid var(--edge)}
+  .vlink span{margin-left:22px}
+  .btn{height:44px;padding:0 16px}
+  .legend{position:static;margin-top:20px}
+  .legend .sep{display:none}
+  .notes,.app.panel-open .notes{position:static;margin-top:12px;max-width:none}
+  .notes summary{float:none;min-height:44px;padding:0 12px}
+  .notes[open]{display:block}
+  .notes[open] summary{margin:0 0 8px}
+  .panel{position:fixed;left:0;right:0;top:auto;bottom:0;width:auto;max-height:88vh;border-left:0;border-top:1px solid var(--line-2);border-radius:16px 16px 0 0;transform:translateY(100%);z-index:30}
+  .app.panel-open .panel{transform:none}
+  .scrim{display:block;position:fixed;inset:0;background:rgba(5,4,9,.6);z-index:25;opacity:0;pointer-events:none;transition:opacity .25s}
+  .app.panel-open .scrim{opacity:1;pointer-events:auto}
+  .handle{display:block;width:40px;height:4px;border-radius:2px;background:var(--line-2);margin:0 auto 6px}
+  .p-bar .x{width:44px;height:44px}
+  .chain button{padding:7px 9px}
+  .kv{grid-template-columns:auto 1fr}
+  .tl li{grid-template-columns:72px 1fr}
+  .stat4{grid-template-columns:repeat(2,1fr)}
+  .stat4 div:nth-child(3){border-left:0}
+  .stat4 div:nth-child(n+3){border-top:1px solid var(--line)}
+  .pal-wrap{padding-top:12px}
+  .pal-it{height:48px}
+  .toast{bottom:84px}
+}
+
+/* ---------- 聚焦模式 ---------- */
+:root{--rail-w:304px}
+#rail{display:none}
+.app.focus #rail{display:flex}
+.app.focus #graph,.app.focus #inbox,.app.focus .legend,.app.focus #labels{display:none}
+.rail{position:absolute;top:0;left:0;bottom:0;width:var(--rail-w);flex-direction:column;padding:14px 16px 72px;overflow-y:auto;overflow-x:hidden;z-index:2}
+.rail.ghost{display:flex}
+.ghost{pointer-events:none;z-index:2}
+.rail-top{display:flex;align-items:center;gap:8px;margin-bottom:18px}
+.rail-top .btn{padding:0 12px 0 10px}
+.rgroup.up,.rgroup.rcur{margin-bottom:30px}
+.rlist{display:flex;flex-direction:column;gap:8px;width:calc(100% - 64px)}
+.rempty{font-size:14px;color:var(--text-3);padding:10px 12px;border:1px dashed var(--line-2);border-radius:9px;width:calc(100% - 64px)}
+.node.mini{padding:8px 11px;border-radius:9px}
+.node.mini .nt{display:block}
+.node.mini .ms{display:block;font-size:12px;color:var(--text-3);line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rail .pl,.rail .pr{display:none}
+.rpill b{display:block;font-weight:500;color:var(--text)}.rpill small{display:block;font-size:12px;color:var(--text-3);line-height:18px}
+.rpill{margin-top:auto;display:flex;align-items:center;gap:10px;min-height:44px;width:100%;padding:8px 14px;border:1px dashed var(--line-2);border-radius:10px;background:rgba(14,13,20,.85);color:var(--text-2);cursor:pointer;font-size:14px;text-align:left;align-self:flex-start}
+.rpill:hover{color:var(--text);border-color:#4A4668}
+#edges .edot{fill:var(--bg);stroke:var(--edge);stroke-width:1.5}
+.crumb .lnk{border:0;background:none;color:var(--text-2);cursor:pointer;padding:4px 2px;border-radius:5px;font-size:14px}
+.crumb .lnk:hover{color:var(--text)}
+.app.focus .panel,.panel.pghost{left:var(--rail-w);width:auto;transform:none;visibility:visible;transition:none;display:block;overflow-y:auto;background:var(--panel)}
+.panel.pghost{overflow:hidden;pointer-events:none;z-index:9}
+.app.focus .notes{right:auto;left:16px;z-index:9}
+.app.anim #rail{z-index:10;overflow:visible}
+.app.focus .notes summary{float:left}
+.p-title{flex-wrap:wrap}
+.p-title .p-chips{margin:0 0 0 auto;align-self:center}
+.kstrip{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;margin-top:16px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.kstrip div{padding:9px 14px;min-width:0}
+.kstrip div+div{border-left:1px solid var(--line)}
+.kstrip span{display:block;font-size:12px;color:var(--text-3);line-height:16px}
+.kstrip b{display:block;font-size:15px;font-weight:500;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kstrip b.red{color:var(--red)}.kstrip b.amber{color:var(--amber)}
+.p-alerts{margin-top:14px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface)}
+.pa-h{display:flex;align-items:center;gap:8px;padding:10px 14px 0;font-size:12px;color:var(--text-3)}
+.p-alerts .ib-item{border-bottom:0}
+.p-alerts .ib-item + .ib-item{border-top:1px solid var(--line)}
+.pcols{display:block}
+.mchain{display:none}
+.ek{width:16px;height:6px;flex:none}
+.ek path{fill:none;stroke-width:2}
+.ek .ok{stroke:var(--accent)}.ek .off{stroke:#6E6A88;stroke-dasharray:3 3}.ek .fail{stroke:var(--red-line);stroke-dasharray:4 3}
+@media (min-width:761px){
+  .app.focus .p-bar{display:none}
+  .app.focus .p-head,.pghost .p-head{padding:22px 36px 20px}
+  .app.focus .p-body,.pghost .p-body{padding:4px 36px 48px;overflow:visible}
+  .app.focus .p-title,.pghost .p-title{margin-top:0;max-width:1100px}
+  .app.focus .p-title h2,.pghost .p-title h2{font-size:22px;line-height:30px}
+  .app.focus .p-title .ni,.pghost .p-title .ni{width:40px;height:40px}
+  .app.focus .kstrip,.app.focus .p-alerts,.pghost .kstrip,.pghost .p-alerts{max-width:1100px}
+  .app.focus .pcols,.pghost .pcols{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:0 36px;max-width:1100px}
+  .app.focus .pcols.single,.pghost .pcols.single{grid-template-columns:minmax(0,1fr);max-width:720px}
+  .app.focus .p-alerts .ib-item{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;align-items:center}
+  .app.focus .p-alerts .ib-item>*{grid-column:1}
+  .app.focus .p-alerts .ib-act{grid-column:2;grid-row:1 / span 4;margin:0}
+}
+@media (max-width:760px){
+  .app.focus #rail{display:none}
+  .app.focus .panel{position:fixed;top:56px;left:0;right:0;bottom:calc(61px + env(safe-area-inset-bottom));max-height:none;border-radius:0;border:0;z-index:12}
+  .app.focus .scrim,.app.focus .handle{display:none}
+  .app.focus .p-head{padding:8px 16px 16px}
+  .app.focus .p-body{padding:4px 16px 28px;overflow:visible}
+  .mchain{display:flex;gap:6px;align-items:center;overflow-x:auto;margin:4px -16px 10px;padding:2px 16px 6px;scrollbar-width:none}
+  .mchain::-webkit-scrollbar{display:none}
+  .mc{flex:none;display:flex;align-items:center;gap:6px;min-height:44px;padding:0 12px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-size:14px;white-space:nowrap;cursor:pointer}
+  .mc.cur{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);font-weight:600;cursor:default}
+  .mc .red-t,.mc .muted{font-size:12px}
+  .kstrip{grid-auto-flow:row;grid-template-columns:1fr 1fr}
+  .kstrip div+div{border-left:0}
+  .kstrip div:nth-child(even){border-left:1px solid var(--line)}
+  .kstrip div:nth-child(n+3){border-top:1px solid var(--line)}
+  .p-title .p-chips{margin:8px 0 0;flex-basis:100%}
+}
+
+@media (min-width:761px){.mstatus{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="side">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none"><rect x="1" y="1" width="22" height="22" rx="6" fill="#6A5AC4"/><path d="M6 14.5c2 1.6 4 1.6 6 0s4-1.6 6 0M6 10c2 1.6 4 1.6 6 0s4-1.6 6 0" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg>
+      Ferry
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot">
+      <button class="kbtn" data-act="palette"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>搜索与命令<kbd>⌘K</kbd></button>
+      <div class="ver">Ferry 本机实例</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div class="brand-m m-only"><svg viewBox="0 0 24 24" fill="none"><rect x="1" y="1" width="22" height="22" rx="6" fill="#6A5AC4"/><path d="M6 14.5c2 1.6 4 1.6 6 0s4-1.6 6 0M6 10c2 1.6 4 1.6 6 0s4-1.6 6 0" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/></svg>Ferry</div>
+      <div class="crumb" id="crumb"></div>
+      <button class="status" id="status" data-act="open-inbox"></button>
+      <div class="sp"></div>
+      <button class="kbtn" data-act="palette" aria-label="搜索与命令"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><span class="lbl">跳转或执行</span><kbd>⌘K</kbd></button>
+    </header>
+
+    <section class="canvas" id="canvas">
+      <button class="status mstatus" id="mstatus" data-act="open-inbox"></button>
+      <svg id="edges"></svg>
+      <div id="labels"></div>
+
+      <div class="inbox" id="inbox"></div>
+
+      <div class="graph" id="graph">
+        <div class="col col-dev"><div class="stack" id="col-dev"></div></div>
+        <div class="vlink"><span>订阅里的脚本把登录态回传到来源</span></div>
+        <div class="col col-src"><div class="stack" id="col-src"></div></div>
+        <div class="vlink"><span>按推送规则推送到目的地</span></div>
+        <div class="col col-dst"><div class="stack" id="col-dst"></div></div>
+      </div>
+
+      <div class="rail" id="rail"></div>
+
+      <div class="legend" id="legend">
+        <span class="sw"><svg viewBox="0 0 22 6"><path d="M0 3h22" stroke="#5C5874" stroke-width="1.6"/></svg>正常</span>
+        <span class="sw"><svg viewBox="0 0 22 6"><path d="M0 3h22" stroke="#E5484D" stroke-width="1.8" stroke-dasharray="6 4"/></svg>失败</span>
+        <span class="sw"><svg viewBox="0 0 22 6"><path d="M0 3h22" stroke="#6E6A88" stroke-width="1.6" stroke-dasharray="3 4"/></svg>未连通</span>
+        <span class="sep"></span>
+        <span>最近 7 天：回传 41 次，推送 23 次（失败 3），通知 6 条</span>
+      </div>
+
+      <details class="notes" id="notes">
+        <summary><svg class="i" viewBox="0 0 24 24"><path d="M8 6 3 12l5 6M16 6l5 6-5 6"/></svg>实现备注</summary>
+        <div class="nb">
+          <p><code>GET /api/v1/overview</code><br>attention 从计数改成条目列表，每条带操作要用的 id（版本 id、推送任务 id、设备 id），供收件箱就地通过、驳回、重试。</p>
+          <p><code>GET /api/v1/sources/{id}/lane</code><br>一次取回来源的身份与当前值、推送规则与最近结果、覆盖它的订阅、最近批次；检查面板和画布连线都用它。</p>
+          <p><code>GET /api/v1/activity</code><br>把批次、版本审核、推送任务、通知按“一次同步”聚合成时间线，给「记录」用。</p>
+        </div>
+      </details>
+
+      <div class="scrim" data-act="close"></div>
+      <aside class="panel" id="panel" aria-label="检查面板"></aside>
+    </section>
+  </div>
+</div>
+
+<div class="pal-wrap" id="palWrap" data-act="pal-bg">
+  <div class="pal" role="dialog" aria-label="命令面板">
+    <div class="pal-in"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><input id="palInput" placeholder="跳转到来源，或输入命令" autocomplete="off"></div>
+    <div class="pal-list" id="palList"></div>
+    <div class="pal-foot"><span><kbd>↑↓</kbd>选择</span><span><kbd>↵</kbd>执行</span><span><kbd>esc</kbd>关闭</span></div>
+  </div>
+</div>
+<div class="toast" id="toast"><svg class="i" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span id="toastText"></span></div>
+
+<script>
+(function(){
+  'use strict';
+  var P = {
+    grid:'<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+    key:'<circle cx="8" cy="15" r="4"/><path d="m11 12 8.5-8.5M16 7l2.5 2.5M14 9l2 2"/>',
+    phone:'<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+    tablet:'<rect x="4" y="2.5" width="16" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+    send:'<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>',
+    history:'<path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 4v4h4M12 7.5V12l3 2"/>',
+    sliders:'<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+    server:'<rect x="3.5" y="4" width="17" height="7" rx="1.5"/><rect x="3.5" y="13" width="17" height="7" rx="1.5"/><path d="M7.5 7.5h.01M7.5 16.5h.01"/>',
+    hook:'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    chevR:'<path d="m9 6 6 6-6 6"/>',
+    chevD:'<path d="m6 9 6 6 6-6"/>',
+    x:'<path d="M6 6l12 12M18 6 6 18"/>',
+    check:'<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    refresh:'<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/>',
+    arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+    bell:'<path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5h4"/>',
+    search:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
+    inbox:'<path d="M3.5 13.5 6 5h12l2.5 8.5V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19z"/><path d="M3.5 13.5h5l1 2h5l1-2h5"/>',
+    shield:'<path d="M12 3 5 6v5.5c0 4.3 3 7.8 7 9.5 4-1.7 7-5.2 7-9.5V6z"/>'
+  };
+  function ic(n,cls){return '<svg class="i'+(cls?' '+cls:'')+'" viewBox="0 0 24 24" aria-hidden="true">'+P[n]+'</svg>';}
+  function $(id){return document.getElementById(id);}
+
+  var S = {
+    review:'pending',      // pending | approved | rejected
+    fail:'failing',        // failing | retrying | ok
+    expiryAck:false,
+    ipad:'stale',          // stale | fresh
+    inboxOpen:true,
+    panel:null,            // {type,id}
+    nav:'overview'
+  };
+  var inboxBeforePanel = true;
+
+  var SRC = [
+    {id:'ninebot',name:'九号出行',key:'ninebot'},
+    {id:'ninebot_review',name:'九号出行（审核）',key:'ninebot_review'},
+    {id:'aliyundrive',name:'阿里云盘',key:'aliyundrive'},
+    {id:'smzdm',name:'什么值得买',key:'smzdm'},
+    {id:'ninebot_debug',name:'九号调试',key:'ninebot_debug'}
+  ];
+  var DEV = [
+    {id:'iphone',name:'iPhone 15',client:'Surge',icon:'phone'},
+    {id:'ipad',name:'iPad',client:'Loon',icon:'tablet'},
+    {id:'spare',name:'备用机',client:'Stash',icon:'phone'}
+  ];
+  var DST = [
+    {id:'ql',name:'青龙 .24',sub:'青龙 · 6 个变量',icon:'server'},
+    {id:'local',name:'本机 Webhook',sub:'Webhook',icon:'hook'},
+    {id:'old',name:'旧 Webhook',sub:'Webhook',icon:'hook'}
+  ];
+  var LIVE = ['ninebot','ninebot_review','aliyundrive','smzdm'];
+  function srcName(id){for(var i=0;i<SRC.length;i++)if(SRC[i].id===id)return SRC[i].name;return id;}
+
+  function edges(){
+    var e=[];
+    LIVE.forEach(function(s){e.push({f:'dev-iphone',t:'src-'+s,k:'ok'});});
+    LIVE.forEach(function(s){e.push({f:'dev-ipad',t:'src-'+s,k:'off'});});
+    e.push({f:'src-ninebot',t:'dst-ql',k:'ok'});
+    e.push({f:'src-ninebot_review',t:'dst-ql',k:S.review==='approved'?'ok':'off',label:S.review==='pending'?'等审核':null});
+    e.push({f:'src-aliyundrive',t:'dst-ql',k:'ok'});
+    e.push({f:'src-aliyundrive',t:'dst-old',k:S.fail==='ok'?'ok':'fail',
+      label:S.fail==='failing'?'连接被拒绝':(S.fail==='retrying'?'重试中':null),lk:'fail'});
+    e.push({f:'src-smzdm',t:'dst-ql',k:'ok'});
+    return e;
+  }
+
+  /* ---------- 节点 ---------- */
+  function devNode(d){
+    var line='', flow='', muted='';
+    if(d.id==='iphone'){
+      line='<span class="chip ok"><i></i>已连通</span><span>加密传输 · 18 分钟前</span>';
+      flow=ic('arrow')+'<span>回传到 4 个来源，最近 18 分钟前</span>';
+    }else if(d.id==='ipad'){
+      line='<span class="chip"><i></i>已安装</span>'+(S.ipad==='stale'?'<span class="chip amber"><i></i>规则过时</span>':'<span>规则已更新</span>');
+      flow=ic('arrow')+'<span>已安装，还没连通，暂无回传</span>';
+    }else{
+      line='<span class="chip"><i></i>未安装</span>'; muted=' muted';
+      flow=ic('arrow')+'<span>未安装订阅，不会回传</span>';
+    }
+    return '<button class="node'+muted+'" id="dev-'+d.id+'" data-act="open" data-type="dev" data-id="'+d.id+'">'+
+      '<span class="nh"><span class="ni">'+ic(d.icon)+'</span><span style="min-width:0"><span class="nt" style="display:block">'+d.name+'</span><span class="nk" style="display:block">'+d.client+'</span></span></span>'+
+      '<span class="nline">'+line+'</span><span class="nflow">'+flow+'</span>'+
+      (d.id!=='spare'?'<span class="pr"></span>':'')+'</button>';
+  }
+  function meta(a){return '<span class="nmeta">'+a.map(function(x){return '<span style="display:block;min-width:0"><span>'+x[0]+'</span><b'+(x[2]?' class="'+x[2]+'"':'')+'>'+x[1]+'</b></span>';}).join('')+'</span>';}
+  function srcNode(s){
+    var chip='', body='', flow='', muted='';
+    if(s.id==='ninebot'){
+      body=meta([['身份','2 个'],['最早过期','21 天后'],['最近回传','18 分钟前']]);
+      flow='推送到 青龙 .24 · 2 小时前成功';
+    }else if(s.id==='ninebot_review'){
+      if(S.review==='pending'){chip='<span class="chip amber"><i></i>待审核</span>';body=meta([['身份','1 个'],['审核','人工'],['新值','1 个待审','amber']]);flow='通过审核后推送到 青龙 .24';}
+      else if(S.review==='approved'){body=meta([['身份','1 个'],['审核','人工'],['新值','刚刚通过']]);flow='新值已通过，推送到 青龙 .24';}
+      else {body=meta([['身份','1 个'],['审核','人工'],['新值','已驳回']]);flow='保留原值，不推送';}
+    }else if(s.id==='aliyundrive'){
+      if(S.fail!=='ok')chip='<span class="chip red"><i></i>推送失败</span>';
+      body=meta([['身份','1 个'],['推送',S.fail==='ok'?'2 条正常':'1 条失败',S.fail==='ok'?'':'red'],['最近回传','3 天前']]);
+      flow=S.fail==='ok'?'推送到 青龙 .24、旧 Webhook 均成功':'推送到 青龙 .24 成功；<span class="red-t">旧 Webhook 失败</span>';
+    }else if(s.id==='smzdm'){
+      body=meta([['身份','1 个'],['最早过期','2 天后','amber'],['最近回传','26 天前']]);
+      flow='推送到 青龙 .24';
+    }else{
+      chip='<span class="chip"><i></i>已停用</span>'; muted=' muted';
+      flow='已停用，不接收回传也不推送';
+    }
+    var live=s.id!=='ninebot_debug';
+    return '<button class="node'+muted+'" id="src-'+s.id+'" data-act="open" data-type="src" data-id="'+s.id+'">'+
+      '<span class="nh"><span class="ni">'+ic('key')+'</span><span style="min-width:0"><span class="nt" style="display:block">'+s.name+'</span><span class="nk mono" style="display:block">'+s.key+'</span></span>'+chip+'</span>'+
+      body+'<span class="nflow">'+ic('send')+'<span>'+flow+'</span></span>'+
+      (live?'<span class="pl"></span><span class="pr"></span>':'')+'</button>';
+  }
+  function dstNode(d){
+    var line='', flow='';
+    if(d.id==='ql'){line='<span class="chip ok"><i></i>正常</span><span>2 小时前推送成功</span>';flow='来自 九号出行、阿里云盘、什么值得买';}
+    else if(d.id==='local'){line='<span class="muted">暂无推送规则指向这里</span>';flow='没有来源推送到这里';}
+    else{
+      if(S.fail==='ok'){line='<span class="chip ok"><i></i>正常</span><span>刚刚推送成功</span>';}
+      else line='<span class="chip red"><i></i>失败中</span><span>连接被拒绝</span>';
+      flow='来自 阿里云盘';
+    }
+    return '<button class="node" id="dst-'+d.id+'" data-act="open" data-type="dst" data-id="'+d.id+'">'+
+      '<span class="nh"><span class="ni">'+ic(d.icon)+'</span><span style="min-width:0"><span class="nt" style="display:block">'+d.name+'</span><span class="nk" style="display:block">'+d.sub+'</span></span></span>'+
+      '<span class="nline">'+line+'</span><span class="nflow">'+ic('arrow')+'<span>'+flow+'</span></span>'+
+      (d.id!=='local'?'<span class="pl"></span>':'')+'</button>';
+  }
+  function isMobile(){return window.innerWidth<=760;}
+  var reduced=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  function mode(){return !S.panel?'overview':(S.panel.type==='page'?'page':'focus');}
+  function find(arr,id){for(var i=0;i<arr.length;i++)if(arr[i].id===id)return arr[i];return null;}
+  function split(key){var i=key.indexOf('-');return {t:key.slice(0,i),id:key.slice(i+1)};}
+  var TYPE_LABEL={src:'来源',dev:'设备',dst:'目的地'};
+
+  /* 当前节点的邻居：上游（谁连到它）与下游（它连到谁） */
+  function rel(type,id){
+    var key=type+'-'+id, up=[], down=[];
+    edges().forEach(function(e){if(e.t===key)up.push(e.f);if(e.f===key)down.push(e.t);});
+    return {key:key,up:up,down:down};
+  }
+  function edgeKind(f,t){var E=edges();for(var i=0;i<E.length;i++)if(E[i].f===f&&E[i].t===t)return E[i].k;return 'off';}
+
+  function renderNodes(){
+    if(mode()==='focus'){
+      $('col-dev').innerHTML='';$('col-src').innerHTML='';$('col-dst').innerHTML='';
+      renderRail();
+    }else{
+      $('rail').innerHTML='';
+      $('col-dev').innerHTML='<div class="cap"><span>设备 · 订阅</span><span>3 台</span></div>'+DEV.map(devNode).join('');
+      $('col-src').innerHTML='<div class="cap"><span>来源</span><span>4 个启用</span></div>'+SRC.map(srcNode).join('');
+      $('col-dst').innerHTML='<div class="cap"><span>目的地</span><span>3 个</span></div>'+DST.map(dstNode).join('');
+      fitGraph();
+    }
+    markSel();
+  }
+  function markSel(){
+    var nodes=document.querySelectorAll('.node');
+    var sel=mode()==='focus'?S.panel.type+'-'+S.panel.id:null;
+    for(var i=0;i<nodes.length;i++)nodes[i].classList.toggle('sel',nodes[i].id===sel);
+  }
+
+  /* ---------- 聚焦窄栏 ---------- */
+  function miniLine(t,id){
+    var st;
+    if(t==='dev'){var d=find(DEV,id);
+      st=id==='iphone'?'已连通':(id==='ipad'?(S.ipad==='stale'?'<span class="amber-t">规则过时</span>':'已安装'):'未安装');
+      return [d.name,d.client+' · '+st];}
+    if(t==='src'){var s=find(SRC,id);
+      if(id==='ninebot')st='18 分钟前回传';
+      else if(id==='ninebot_review')st=S.review==='pending'?'<span class="amber-t">待审核</span>':(S.review==='approved'?'刚刚通过':'已驳回');
+      else if(id==='aliyundrive')st=S.fail!=='ok'?'<span class="red-t">推送失败</span>':'推送正常';
+      else if(id==='smzdm')st='<span class="amber-t">2 天后过期</span>';
+      else st='已停用';
+      return [s.name,st];}
+    var x=find(DST,id);
+    return [x.name,(id==='old'&&S.fail!=='ok')?'<span class="red-t">失败中</span>':x.sub];
+  }
+  function miniNode(key){
+    var p=split(key),l=miniLine(p.t,p.id);
+    return '<button class="node mini" id="'+key+'" data-act="open" data-type="'+p.t+'" data-id="'+p.id+'"><span class="nt">'+l[0]+'</span><span class="ms">'+l[1]+'</span></button>';
+  }
+  function renderRail(){
+    var p=S.panel,r=rel(p.type,p.id);
+    var cap={src:['覆盖它的订阅','推送到'],dev:[null,'回传到的来源'],dst:['推送到这里的来源',null]}[p.type];
+    var empty={src:['没有设备回传','没有推送规则'],dev:[null,'未安装订阅，没有回传'],dst:['暂无推送规则指向这里',null]}[p.type];
+    if(p.type==='src'&&p.id==='ninebot_debug')empty=['已停用，不接收回传','已停用，不推送'];
+    function group(cls,c,list,e){
+      return '<div class="rgroup '+cls+'"><div class="cap"><span>'+c+'</span><span>'+(list.length?list.length+' 个':'')+'</span></div>'+
+        (list.length?'<div class="rlist">'+list.map(miniNode).join('')+'</div>':'<div class="rempty">'+e+'</div>')+'</div>';
+    }
+    var cur=p.type==='src'?srcNode(find(SRC,p.id)):(p.type==='dev'?devNode(find(DEV,p.id)):dstNode(find(DST,p.id)));
+    var h='<div class="rail-top"><button class="btn ghost" data-act="nav" data-id="overview">'+ic('grid')+'返回全图</button></div>';
+    if(cap[0])h+=group('up',cap[0],r.up,empty[0]);
+    h+='<div class="rgroup rcur"><div class="cap"><span>'+TYPE_LABEL[p.type]+'</span></div>'+cur+'</div>';
+    if(cap[1])h+=group('down',cap[1],r.down,empty[1]);
+    var shown={};shown[r.key]=1;r.up.concat(r.down).forEach(function(k){shown[k]=1;});
+    var n={dev:0,src:0,dst:0};
+    DEV.forEach(function(d){if(!shown['dev-'+d.id])n.dev++;});
+    SRC.forEach(function(d){if(!shown['src-'+d.id])n.src++;});
+    DST.forEach(function(d){if(!shown['dst-'+d.id])n.dst++;});
+    var parts=[];if(n.src)parts.push(n.src+' 个来源');if(n.dev)parts.push(n.dev+' 台设备');if(n.dst)parts.push(n.dst+' 个目的地');
+    if(parts.length)h+='<button class="rpill" data-act="nav" data-id="overview">'+ic('grid')+'<span><b>另外 '+(n.src+n.dev+n.dst)+' 个节点已收起</b><small>'+parts.join(' · ')+'</small></span></button>';
+    $('rail').innerHTML=h;
+  }
+
+  /* ---------- 全图适配可用区域 ---------- */
+  function fitGraph(){
+    var g=$('graph');
+    if(isMobile()){g.style.cssText='';return;}
+    var cv=$('canvas'),m=mode();
+    var top=28,bottom=64;
+    var left=(m==='overview'&&S.inboxOpen)?($('inbox').offsetWidth+16+24):32;
+    var right=m==='page'?(432+28):40;
+    var availW=cv.clientWidth-left-right, availH=cv.clientHeight-top-bottom;
+    var needW=644+2*(m==='page'?40:60), needH=0;
+    ['col-dev','col-src','col-dst'].forEach(function(id){needH=Math.max(needH,$(id).offsetHeight);});
+    needH+=16;
+    var s=Math.min(1,availW/needW,availH/needH);
+    var w=availW/s;
+    if(s===1&&w>920){left+=(w-920)/2;w=920;}
+    g.style.left=left+'px';g.style.top=top+'px';g.style.width=w+'px';g.style.height=(availH/s)+'px';
+    g.style.transform=s<1?'scale('+s.toFixed(3)+')':'';
+  }
+
+  /* ---------- 连线 ---------- */
+  function dot(x,y){return '<circle class="edot" cx="'+x+'" cy="'+y+'" r="3.5"/>';}
+  function drawEdges(){
+    if(isMobile()){$('edges').innerHTML='';$('labels').innerHTML='';return;}
+    if(mode()==='focus'){drawRailEdges();$('labels').innerHTML='';return;}
+    var c=$('canvas').getBoundingClientRect();
+    var list=edges(), order={off:0,ok:1,fail:2};
+    list.sort(function(a,b){return order[a.k]-order[b.k];});
+    var html='', lab='';
+    list.forEach(function(e){
+      var A=$(e.f),B=$(e.t); if(!A||!B)return;
+      var a=A.getBoundingClientRect(), b=B.getBoundingClientRect();
+      var x1=a.right-c.left, y1=a.top+a.height/2-c.top, x2=b.left-c.left, y2=b.top+b.height/2-c.top;
+      var dx=Math.max(30,(x2-x1)*.5);
+      html+='<path class="'+e.k+'" d="M'+x1+' '+y1+' C'+(x1+dx)+' '+y1+' '+(x2-dx)+' '+y2+' '+x2+' '+y2+'"/>';
+      if(e.label&&!S.panel)lab+='<span class="elabel'+(e.lk==='fail'&&S.fail==='failing'?' fail':'')+'" style="left:'+((x1+x2)/2)+'px;top:'+((y1+y2)/2)+'px">'+e.label+'</span>';
+    });
+    $('edges').innerHTML=html; $('labels').innerHTML=lab;
+  }
+  /* 窄栏里的竖向连线：上游从卡片右侧出，沿右侧通道下到当前节点顶部；下游反过来 */
+  function drawRailEdges(){
+    var p=S.panel,r=rel(p.type,p.id),cur=$(r.key);if(!cur){$('edges').innerHTML='';return;}
+    var c=$('canvas').getBoundingClientRect(),cr=cur.getBoundingClientRect(),html='',dots='',R=8;
+    function path(k,d){return '<path class="'+(k==='ok'?'ok hl':k)+'" d="'+d+'"/>'+(k==='ok'?'<path class="flow" d="'+d+'"/>':'');}
+    var n=r.up.length;
+    r.up.forEach(function(key,i){var el=$(key);if(!el)return;var b=el.getBoundingClientRect();
+      var x0=b.right-c.left,y0=b.top+b.height/2-c.top,cx=x0+18+(n-1-i)*12,y2=cr.top-c.top;
+      html+=path(edgeKind(key,r.key),'M'+x0+' '+y0+' H'+(cx-R)+' Q'+cx+' '+y0+' '+cx+' '+(y0+R)+' V'+y2);
+      dots+=dot(x0,y0)+dot(cx,y2);});
+    r.down.forEach(function(key,i){var el=$(key);if(!el)return;var b=el.getBoundingClientRect();
+      var x0=b.right-c.left,y0=b.top+b.height/2-c.top,cx=x0+18+i*12,y1=cr.bottom-c.top;
+      html+=path(edgeKind(r.key,key),'M'+cx+' '+y1+' V'+(y0-R)+' Q'+cx+' '+y0+' '+(cx-R)+' '+y0+' H'+x0);
+      dots+=dot(cx,y1)+dot(x0,y0);});
+    $('edges').innerHTML=html+dots;
+  }
+  function animateEdges(ms){
+    var t0=performance.now();
+    (function f(t){fitGraph();drawEdges(); if(t-t0<ms)requestAnimationFrame(f);})(t0);
+  }
+
+  /* ---------- 收件箱与状态 ---------- */
+  function inboxItems(){
+    var a=[],r=[];
+    if(S.review==='pending')a.push('review');
+    if(S.fail!=='ok')a.push('fail');
+    if(!S.expiryAck)r.push('expiry');
+    if(S.ipad==='stale')r.push('ipad');
+    return {act:a,rem:r};
+  }
+  function itemHTML(k){
+    if(k==='review')return '<div class="ib-item" data-k="review"><div class="ib-row"><span class="chip amber"><i></i>新值待审核</span><span class="who">九号出行（审核）</span></div>'+
+      '<div class="ib-det"><span class="mono">authorization</span> · 新值 <span class="mono">eyJhbG…Q2s</span></div><div class="ib-det">主动检测：未开启</div>'+
+      '<div class="ib-act"><button class="btn pri" data-act="approve">'+ic('check')+'通过</button><button class="btn" data-act="reject">驳回</button></div></div>';
+    if(k==='fail'){var busy=S.fail==='retrying';
+      return '<div class="ib-item" data-k="fail"><div class="ib-row"><span class="chip red"><i></i>推送失败</span><span class="who">阿里云盘'+ic('arrow')+'旧 Webhook</span></div>'+
+      '<div class="ib-det">连接被拒绝 · 已重试 3 次</div>'+
+      '<div class="ib-act"><button class="btn pri" data-act="retry"'+(busy?' disabled':'')+'>'+ic('refresh',busy?'spin':'')+(busy?'正在重试…':'立即重试')+'</button><button class="btn" data-act="open" data-type="dst" data-id="old">查看目的地</button></div></div>';}
+    if(k==='expiry')return '<div class="ib-item" data-k="expiry"><div class="ib-row"><span class="chip"><i></i>即将过期</span><span class="who">什么值得买</span></div>'+
+      '<div class="ib-det"><span class="mono">cookie</span> · <span class="amber-t">2 天后过期</span></div>'+
+      '<div class="ib-hint">'+ic('phone')+'<span>在手机上打开 什么值得买 App 刷新，新的登录态会自动回传。</span></div>'+
+      '<div class="ib-act"><button class="btn ghost" data-act="ack">知道了</button></div></div>';
+    if(k==='ipad')return '<div class="ib-item" data-k="ipad"><div class="ib-row"><span class="chip"><i></i>订阅规则过时</span><span class="who">iPad · Loon</span></div>'+
+      '<div class="ib-det">域名列表比平台旧</div>'+
+      '<div class="ib-act"><button class="btn" data-act="reinstall">'+ic('refresh')+'重新安装</button></div></div>';
+    return '';
+  }
+  function statusHTML(){
+    var it=inboxItems(), n=it.act.length, r=it.rem.length;
+    if(n)return {calm:false,h:'<span class="dot"></span><span>'+n+' 件事要处理</span>'+(r?'<span class="sub">另有 '+r+' 条提醒</span>':'')};
+    return {calm:true,h:'<span class="dot"></span><span>全部通着</span>'+(r?'<span class="sub">'+r+' 条提醒</span>':'')};
+  }
+  function renderInbox(){
+    var it=inboxItems(), n=it.act.length, r=it.rem.length;
+    var head='<button class="ib-head" data-act="toggle-inbox" aria-expanded="'+S.inboxOpen+'">'+ic('inbox')+'<span class="t">待处理</span><span class="n">'+(n?n+' 件要处理':'没有要处理的')+(r?' · '+r+' 条提醒':'')+'</span>'+ic('chevD','chev')+'</button>';
+    var body='';
+    if(n){body+='<div class="ib-group">要处理</div>'+it.act.map(itemHTML).join('');}
+    if(r){body+='<div class="ib-group">提醒</div>'+it.rem.map(itemHTML).join('');}
+    if(!n&&!r)body='<div class="ib-empty">'+ic('check')+'<span>都处理完了。推送和订阅都通着，有新情况会在手机上通知你。</span></div>';
+    $('inbox').className='inbox'+(S.inboxOpen?'':' closed');
+    $('inbox').innerHTML=head+'<div class="ib-body">'+body+'</div>';
+    var st=statusHTML();
+    ['status','mstatus'].forEach(function(id){$(id).className='status'+(id==='mstatus'?' mstatus':'')+(st.calm?' calm':'');$(id).innerHTML=st.h;});
+  }
+  function leave(k,fn){
+    var els=document.querySelectorAll('.ib-item[data-k="'+k+'"]');
+    if(els.length){for(var i=0;i<els.length;i++)els[i].classList.add('leaving');setTimeout(fn,200);}else fn();
+  }
+
+  /* ---------- 导航 ---------- */
+  var NAV=[['overview','总览','grid'],['source','来源','key'],['subs','订阅','phone'],['push','推送','send'],['records','记录','history'],['settings','设置','sliders']];
+  function nodeName(type,id){
+    if(type==='src')return srcName(id);
+    if(type==='dev'){var d=find(DEV,id);return d.name+' · '+d.client;}
+    return find(DST,id).name;
+  }
+  function renderNav(){
+    var n=inboxItems().act.length;
+    $('nav').innerHTML=NAV.map(function(x){
+      return '<button data-act="nav" data-id="'+x[0]+'"'+(S.nav===x[0]?' aria-current="page"':'')+'>'+ic(x[2])+'<span>'+x[1]+'</span>'+(x[0]==='overview'&&n?'<span class="cnt">'+n+'</span>':'')+'</button>';
+    }).join('');
+    var t={overview:'总览',source:'来源',subs:'订阅',push:'推送',records:'记录',settings:'设置'}[S.nav];
+    if(mode()==='focus'){
+      $('crumb').innerHTML='<button class="lnk" data-act="nav" data-id="overview">总览</button><span>/</span><span>'+TYPE_LABEL[S.panel.type]+'</span><span>/</span><b>'+nodeName(S.panel.type,S.panel.id)+'</b>';
+    }else $('crumb').innerHTML='<b>'+t+'</b>';
+  }
+
+  /* ---------- 详情 ---------- */
+  function chev(){return '<span class="sepv">'+ic('chevR')+'</span>';}
+  function sec(id,title,aside,inner){return '<section class="sec" id="sec-'+id+'"><h3>'+title+(aside?'<span class="aside">'+aside+'</span>':'')+'</h3>'+inner+'</section>';}
+  function barOf(type,name){
+    var map={src:['srclist','来源'],dev:['subs','订阅'],dst:['push','推送']}[type];
+    return '<button class="lnk" data-act="nav" data-id="'+map[0]+'">'+map[1]+'</button><span>/</span><span style="color:var(--text)">'+name+'</span>';
+  }
+  function kstrip(a){return '<div class="kstrip">'+a.map(function(x){return '<div><span>'+x[0]+'</span><b'+(x[2]?' class="'+x[2]+'"':'')+'>'+x[1]+'</b></div>';}).join('')+'</div>';}
+  function tl(items){return '<ul class="tl">'+items.map(function(x){return '<li><span class="when">'+x[0]+'</span><div class="what"><div>'+x[1]+'</div>'+(x[2]?'<div class="l2">'+x[2]+'</div>':'')+'</div></li>';}).join('')+'</ul>';}
+  function row(icon,name,l2,btn){return '<div class="row"><span class="ni">'+ic(icon)+'</span><div class="grow"><div class="l1">'+name+'</div>'+(l2?'<div class="l2">'+l2+'</div>':'')+'</div>'+(btn||'')+'</div>';}
+  function linkRow(type,id,icon,name,l2){return '<button class="row click" data-act="open" data-type="'+type+'" data-id="'+id+'"><span class="ni">'+ic(icon)+'</span><div class="grow"><div class="l1">'+name+'</div>'+(l2?'<div class="l2">'+l2+'</div>':'')+'</div>'+ic('chevR')+'</button>';}
+  function subsRows(){return '<div class="rows">'+linkRow('dev','iphone','phone','iPhone 15 · Surge','已连通 · 加密传输 · 最近 18 分钟前')+
+    linkRow('dev','ipad','tablet','iPad · Loon','已安装 · '+(S.ipad==='stale'?'<span class="amber-t">规则过时</span>':'规则已更新'))+'</div>';}
+  function note(t){return '<p class="note" style="margin:0">'+t+'</p>';}
+  function chip(cls,t){return '<span class="chip'+(cls?' '+cls:'')+'"><i></i>'+t+'</span>';}
+
+  function alertsFor(type,id){
+    var a=[];
+    if(type==='src'&&id==='ninebot_review'&&S.review==='pending')a.push('review');
+    if(type==='src'&&id==='aliyundrive'&&S.fail!=='ok')a.push('fail');
+    if(type==='src'&&id==='smzdm'&&!S.expiryAck)a.push('expiry');
+    if(type==='dev'&&id==='ipad'&&S.ipad==='stale')a.push('ipad');
+    if(type==='dst'&&id==='old'&&S.fail!=='ok')a.push('fail');
+    return a;
+  }
+  function ekSvg(k){return '<svg class="ek" viewBox="0 0 16 6" aria-hidden="true"><path class="'+k+'" d="M0 3h16"/></svg>'+(k==='fail'?'<span class="red-t">失败</span>':(k==='off'?'<span class="muted">未连通</span>':''));}
+  function mchain(){
+    var p=S.panel,r=rel(p.type,p.id);
+    function it(key,k){var s=split(key);return '<button class="mc" data-act="open" data-type="'+s.t+'" data-id="'+s.id+'"><span>'+miniLine(s.t,s.id)[0]+'</span>'+ekSvg(k)+'</button>';}
+    var h='';
+    if(r.up.length)h+=r.up.map(function(k){return it(k,edgeKind(k,r.key));}).join('')+chev();
+    h+='<span class="mc cur">'+nodeName(p.type,p.id)+'</span>';
+    if(r.down.length)h+=chev()+r.down.map(function(k){return it(k,edgeKind(r.key,k));}).join('');
+    return '<div class="mchain" aria-label="链路">'+h+'</div>';
+  }
+
+  function bSrc(id){
+    var s=find(SRC,id),o={bar:barOf('src',s.name),icon:'key',title:s.name,sub:s.key,mono:1};
+    if(id==='ninebot'){
+      o.chips=chip('ok','已启用')+chip('','主动检测开');
+      o.stats=[['身份','2 个'],['最早过期','21 天后'],['最近回传','18 分钟前'],['最近推送','2 小时前成功']];
+      o.main=sec('ids','身份与当前值','脱敏显示','<div class="rows">'+
+        '<div class="ident"><div class="who">本人</div><dl class="kv"><dt class="mono">authorization</dt><dd class="mono">eyJhbG…•••</dd><dt class="mono">device_id</dt><dd class="mono">…8F2A</dd></dl></div>'+
+        '<div class="ident"><div class="who">家人的旧手机</div><dl class="kv"><dt class="mono">authorization</dt><dd class="mono">eyJhbG…•••</dd><dt class="mono">device_id</dt><dd class="mono">…31C0</dd></dl></div></div>')+
+        sec('push','推送规则与最近结果','1 条','<div class="rows">'+row('server','青龙 .24','<span class="mono">authorization</span>、<span class="mono">device_id</span> · 2 小时前成功','<button class="btn" data-act="push-now">立即推送</button>')+'</div>');
+      o.side=sec('subs','覆盖它的订阅','2 台',subsRows())+
+        sec('rule','读取规则','','<details class="rule"><summary>'+ic('shield')+'<span>取值字段 <span class="mono">authorization</span>、<span class="mono">device_id</span></span>'+ic('chevD','chev')+'</summary>'+
+          '<div class="rb"><dl class="kv" style="margin-top:10px"><dt>来源标识</dt><dd class="mono">ninebot</dd><dt>取值字段</dt><dd><span class="mono">authorization</span>、<span class="mono">device_id</span></dd><dt>主动检测</dt><dd>已开启</dd><dt>人工审核</dt><dd>不需要</dd></dl>'+
+          '<div class="ib-act"><button class="btn" data-act="edit-rule">编辑读取规则</button></div></div></details>')+
+        sec('log','最近记录','',tl([['18 分钟前','iPhone 15 · Surge 回传'],['2 小时前','推送到 青龙 .24','成功']]));
+    }else if(id==='ninebot_review'){
+      o.chips=chip('ok','已启用')+chip('','人工审核');
+      o.stats=[['身份','1 个'],['审核','人工'],['新值',S.review==='pending'?'1 个待审核':(S.review==='approved'?'刚刚通过':'已驳回'),S.review==='pending'?'amber':'']];
+      o.main=sec('ids','新值','',S.review==='pending'?'<div class="rows"><div class="ident"><dl class="kv"><dt class="mono">authorization</dt><dd><span class="mono">eyJhbG…Q2s</span> <span class="amber-t">待审核</span></dd><dt>主动检测</dt><dd>未开启</dd></dl></div></div>':
+          note(S.review==='approved'?'新值已通过，成为当前值。':'新值已驳回，保留原来的值。'))+
+        sec('push','推送规则与最近结果','1 条','<div class="rows">'+row('server','青龙 .24',S.review==='pending'?'等审核通过后推送':(S.review==='approved'?'已加入推送队列':'本次不推送'))+'</div>');
+      o.side=sec('subs','覆盖它的订阅','2 台',subsRows());
+    }else if(id==='aliyundrive'){
+      o.chips=chip('ok','已启用');
+      o.stats=[['身份','1 个'],['最近回传','3 天前'],['推送规则','2 条'],['推送失败',S.fail==='ok'?'0 条':'1 条',S.fail==='ok'?'':'red']];
+      o.main=sec('ids','身份与当前值','','<div class="rows"><div class="ident"><dl class="kv"><dt class="mono">refresh_token</dt><dd class="muted">已保存，脱敏显示</dd></dl></div></div>')+
+        sec('push','推送规则与最近结果','2 条','<div class="rows">'+row('server','青龙 .24','成功')+row('hook','旧 Webhook',S.fail==='ok'?'刚刚重试成功':(S.fail==='retrying'?'正在重试…':'<span class="red-t">连接被拒绝 · 已重试 3 次</span>'))+'</div>');
+      o.side=sec('subs','覆盖它的订阅','2 台',subsRows())+
+        sec('log','最近记录','',tl([['3 天前','回传','推送到 青龙 .24 成功；旧 Webhook '+(S.fail==='ok'?'重试后成功':'<span class="red-t">连接被拒绝 · 已重试 3 次</span>')]]));
+    }else if(id==='smzdm'){
+      o.chips=chip('ok','已启用');
+      o.stats=[['身份','1 个'],['最早过期','2 天后','amber'],['最近回传','26 天前']];
+      o.main=sec('ids','身份与当前值','','<div class="rows"><div class="ident"><dl class="kv"><dt class="mono">cookie</dt><dd><span class="muted">已保存，脱敏显示</span> · <span class="amber-t">2 天后过期</span></dd></dl></div></div>')+
+        sec('push','推送规则与最近结果','1 条','<div class="rows">'+row('server','青龙 .24','<span class="mono">cookie</span>')+'</div>');
+      o.side=sec('subs','覆盖它的订阅','2 台',subsRows())+sec('log','最近记录','',tl([['26 天前','回传']]));
+    }else{
+      o.chips=chip('','已停用');
+      o.main=sec('st','状态','',note('已停用：不接收回传，也不推送。启用后才会出现在流向图的连线里。')+'<div class="ib-act"><button class="btn" data-act="enable">启用</button></div>');
+    }
+    return o;
+  }
+  function bDev(id){
+    var d=find(DEV,id),o={bar:barOf('dev',d.name+' · '+d.client),icon:d.icon,title:d.name+' · '+d.client};
+    var cover=sec('cov','覆盖的来源','4 个','<div class="rows">'+LIVE.map(function(s){return linkRow('src',s,'key',srcName(s),'<span class="mono">'+s+'</span>');}).join('')+'</div>');
+    if(id==='iphone'){
+      o.chips=chip('ok','已连通')+chip('','加密传输');
+      o.stats=[['状态','已连通'],['传输','加密'],['最近回传','18 分钟前'],['覆盖来源','4 个']];
+      o.main=cover;
+    }else if(id==='ipad'){
+      o.chips=chip('','已安装')+(S.ipad==='stale'?chip('amber','规则过时'):'');
+      o.stats=[['状态','已安装'],['规则',S.ipad==='stale'?'过时':'已更新',S.ipad==='stale'?'amber':''],['覆盖来源','4 个']];
+      o.main=cover;
+      o.side=sec('st','订阅规则','',note(S.ipad==='stale'?'域名列表比平台旧，重新安装订阅后才会匹配到新加的来源。':'规则已更新，等这台设备第一次回传后会显示为已连通。'));
+    }else{
+      o.chips=chip('','未安装');
+      o.stats=[['状态','未安装'],['覆盖来源','0 个']];
+      o.main=sec('st','订阅','',note('这台设备还没装订阅，不会回传任何登录态。')+'<div class="ib-act"><button class="btn pri" data-act="install">安装订阅</button></div>');
+    }
+    return o;
+  }
+  function bDst(id){
+    var d=find(DST,id),o={bar:barOf('dst',d.name),icon:d.icon,title:d.name,sub:d.sub};
+    if(id==='ql'){
+      o.chips=chip('ok','正常');
+      o.stats=[['类型','青龙'],['变量','6 个'],['推送规则','4 条'],['最近推送','2 小时前成功']];
+      o.main=sec('rules','推送规则指向这里','4 条','<div class="rows">'+[
+        ['ninebot','2 小时前成功'],['ninebot_review',S.review==='pending'?'<span class="amber-t">等审核</span>':(S.review==='approved'?'已加入推送队列':'已驳回，本次不推送')],['aliyundrive','成功'],['smzdm','']
+      ].map(function(r){return linkRow('src',r[0],'key',srcName(r[0]),r[1]);}).join('')+'</div>');
+      o.side=sec('log','最近记录','',tl([['2 小时前','九号出行 推送成功']]))+sec('cfg','配置','',note('推送规则在各来源里配，这里只看谁在往这儿推。'));
+    }else if(id==='local'){
+      o.stats=[['类型','Webhook'],['推送规则','0 条']];
+      o.main=sec('rules','推送规则指向这里','',note('暂无推送规则指向这里。推送规则在来源里配。'));
+    }else{
+      o.chips=S.fail==='ok'?chip('ok','正常'):chip('red','失败中');
+      o.stats=[['类型','Webhook'],['状态',S.fail==='ok'?'正常':'失败中',S.fail==='ok'?'':'red'],['推送规则','1 条']];
+      o.main=sec('rules','推送规则指向这里','1 条','<div class="rows">'+linkRow('src','aliyundrive','key','阿里云盘','<span class="mono">refresh_token</span>')+'</div>');
+      o.side=sec('st','最近结果','',S.fail==='ok'?note('刚刚重试成功。'):'<dl class="kv"><dt>错误</dt><dd class="red-t">连接被拒绝</dd><dt>已重试</dt><dd>3 次</dd></dl>');
+    }
+    return o;
+  }
+  function bPage(id){
+    var b='',t='';
+    if(id==='srclist'){t='来源';
+      b=sec('l','全部来源','5 个','<div class="rows">'+SRC.map(function(s){return linkRow('src',s.id,'key',s.name,'<span class="mono">'+s.key+'</span>');}).join('')+'</div>');}
+    else if(id==='subs'){t='订阅';
+      b=sec('l','按设备','3 台','<div class="rows">'+DEV.map(function(d){
+        var st=d.id==='iphone'?'已连通 · 加密传输 · 最近 18 分钟前':(d.id==='ipad'?'已安装 · '+(S.ipad==='stale'?'<span class="amber-t">规则过时</span>':'规则已更新'):'未安装');
+        return linkRow('dev',d.id,d.icon,d.name+' · '+d.client,st);}).join('')+'</div>');}
+    else if(id==='push'){t='推送';
+      b=sec('d','目的地','3 个','<div class="rows">'+DST.map(function(d){
+        var st=d.id==='ql'?'青龙 · 6 个变量 · 2 小时前成功':(d.id==='local'?'Webhook · 暂无推送规则':(S.fail==='ok'?'Webhook · 刚刚成功':'Webhook · <span class="red-t">失败中</span>'));
+        return linkRow('dst',d.id,d.icon,d.name,st);}).join('')+'</div>');
+      b+=sec('n','通知渠道','出事时提醒','<div class="rows">'+row('bell','Bark（自建）')+row('bell','Telegram')+'</div><p class="note">推送规则在各来源里配。</p>');}
+    else if(id==='records'){t='记录';
+      b=sec('s','最近 7 天','','<div class="stat4"><div><span>回传</span><b>41</b></div><div><span>推送</span><b>23</b></div><div><span>推送失败</span><b class="red">3</b></div><div><span>通知</span><b>6</b></div></div>');
+      b+=sec('t','同步时间线','回传 → 校验 → 审核 → 推送 → 通知',tl([].concat(
+        S.review==='pending'?[['<span class="amber-t">待审核</span>','九号出行（审核）','新值 <span class="mono">eyJhbG…Q2s</span> 等你审核']]:[],
+        [['18 分钟前','九号出行 · iPhone 15 · Surge 回传'],['2 小时前','九号出行 推送到 青龙 .24','成功'],
+         ['3 天前','阿里云盘 回传','推送到 青龙 .24 成功；旧 Webhook '+(S.fail==='ok'?'重试后成功':'<span class="red-t">连接被拒绝 · 已重试 3 次</span>')],
+         ['26 天前','什么值得买 回传']]))+'<p class="note">逐条操作的审计日志在「设置」里。</p>');}
+    else{t='设置';
+      b=sec('a','访问与账户','','<div class="rows">'+[['访问地址','订阅和脚本回传用的地址','修改'],['API 令牌','给自动化任务调用','管理'],['密码','登录这个管理界面','修改'],['审计日志','每次操作的完整记录','查看']].map(function(r){return row('sliders',r[0],r[1],'<button class="btn">'+r[2]+'</button>');}).join('')+'</div>');}
+    return {bar:'<span style="color:var(--text);font-weight:600;font-size:16px">'+t+'</span>',main:b};
+  }
+  function compose(o){
+    var p=S.panel,focus=mode()==='focus';
+    var h='<div class="p-head"><div class="handle"></div><div class="p-bar">'+o.bar+'<button class="x" data-act="close" aria-label="关闭">'+ic('x')+'</button></div>';
+    if(focus)h+=mchain();
+    if(o.title)h+='<div class="p-title"><span class="ni">'+ic(o.icon)+'</span><div style="min-width:0"><h2>'+o.title+'</h2>'+(o.sub?'<div class="nk'+(o.mono?' mono':'')+'">'+o.sub+'</div>':'')+'</div>'+(o.chips?'<div class="p-chips">'+o.chips+'</div>':'')+'</div>';
+    if(o.stats)h+=kstrip(o.stats);
+    var al=focus?alertsFor(p.type,p.id):[];
+    if(al.length)h+='<div class="p-alerts"><div class="pa-h">'+ic('inbox')+'和它有关的待处理</div>'+al.map(itemHTML).join('')+'</div>';
+    h+='</div><div class="p-body"><div class="pcols'+(o.side?'':' single')+'"><div class="pc">'+o.main+'</div>'+(o.side?'<div class="pc">'+o.side+'</div>':'')+'</div></div>';
+    return h;
+  }
+  function renderPanel(){
+    var p=S.panel;if(!p)return;
+    var o=p.type==='src'?bSrc(p.id):(p.type==='dev'?bDev(p.id):(p.type==='dst'?bDst(p.id):bPage(p.id)));
+    var pn=$('panel'),k=p.type+p.id,same=pn.getAttribute('data-k')===k;
+    var b0=pn.querySelector('.p-body'),sc=same?[pn.scrollTop,b0?b0.scrollTop:0]:[0,0];
+    pn.innerHTML=compose(o);pn.setAttribute('data-k',k);
+    pn.scrollTop=sc[0];var nb=pn.querySelector('.p-body');if(nb)nb.scrollTop=sc[1];
+  }
+
+  /* ---------- 模式切换与编排动画 ---------- */
+  function setModeClasses(){var m=mode();$('app').classList.toggle('panel-open',m==='page');$('app').classList.toggle('focus',m==='focus');}
+  function syncHash(){
+    var h=(S.panel&&S.panel.type==='src'&&S.panel.id==='ninebot')?'#source':'';
+    if(location.hash!==h)history.replaceState(null,'',h||location.pathname+location.search);
+  }
+  function stripIds(root){var els=root.querySelectorAll('[id]');for(var i=0;i<els.length;i++){els[i].setAttribute('data-gid',els[i].id);els[i].removeAttribute('id');}}
+  function nodeRects(){var m={},ns=$('canvas').querySelectorAll('#graph .node[id], #rail .node[id]');for(var i=0;i<ns.length;i++)m[ns[i].id]=ns[i].getBoundingClientRect();return m;}
+  var EASE='cubic-bezier(.3,.7,.2,1)',DUR=360;
+  function transitionTo(apply,from,to){
+    if(reduced||isMobile()||!Element.prototype.animate){apply();return;}
+    var cv=$('canvas'),first=nodeRects();
+    var box=from==='focus'?$('rail'):$('graph');
+    var ghost=box.cloneNode(true);ghost.removeAttribute('id');stripIds(ghost);ghost.classList.add('ghost');
+    cv.appendChild(ghost);
+    var pghost=null;
+    if(from==='focus'&&to!=='focus'){
+      pghost=$('panel').cloneNode(true);pghost.removeAttribute('id');stripIds(pghost);pghost.classList.add('pghost');
+      pghost.scrollTop=0;cv.appendChild(pghost);
+    }
+    $('panel').style.transition='none';
+    $('app').classList.add('anim');setTimeout(function(){$('app').classList.remove('anim');},DUR+40);
+    apply();
+    void $('panel').offsetWidth;$('panel').style.transition='';
+    var E=$('edges');E.style.opacity='0';
+    var now=cv.querySelectorAll('#graph .node[id], #rail .node[id]');
+    for(var i=0;i<now.length;i++){
+      var n=now[i],f=first[n.id];
+      if(f){
+        var l=n.getBoundingClientRect();
+        var dx=f.left-l.left,dy=f.top-l.top,sx=f.width/l.width,sy=f.height/l.height;
+        n.animate([{transformOrigin:'0 0',transform:'translate('+dx+'px,'+dy+'px) scale('+sx+','+sy+')'},{transformOrigin:'0 0',transform:'none'}],{duration:DUR,easing:EASE});
+        var g=ghost.querySelector('[data-gid="'+n.id+'"]');if(g)g.style.visibility='hidden';
+      }else{
+        n.animate([{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'none'}],{duration:240,delay:170,easing:'ease-out',fill:'backwards'});
+      }
+    }
+    var extra=cv.querySelectorAll(to==='focus'?'#rail .cap, #rail .rail-top, #rail .rpill, #rail .rempty':'#graph .cap, #inbox, .legend');
+    for(var j=0;j<extra.length;j++)extra[j].animate([{opacity:0},{opacity:1}],{duration:220,delay:150,easing:'ease-out',fill:'backwards'});
+    ghost.animate([{opacity:1},{opacity:0}],{duration:200,easing:'ease-out',fill:'forwards'}).onfinish=function(){ghost.parentNode&&ghost.parentNode.removeChild(ghost);};
+    if(pghost)pghost.animate([{opacity:1,transform:'none'},{opacity:0,transform:'translateX(28px)'}],{duration:240,easing:'ease-in',fill:'forwards'}).onfinish=function(){pghost.parentNode&&pghost.parentNode.removeChild(pghost);};
+    if(to==='focus'){
+      var pn=$('panel');
+      if(from!=='focus')pn.animate([{opacity:0,transform:'translateX(32px)'},{opacity:1,transform:'none'}],{duration:DUR,delay:60,easing:EASE,fill:'backwards'});
+      else pn.animate([{opacity:0},{opacity:1}],{duration:220,easing:'ease-out'});
+    }
+    setTimeout(function(){drawEdges();E.style.opacity='';E.animate([{opacity:0},{opacity:1}],{duration:200,easing:'ease-out'});},DUR);
+  }
+
+  function openPanel(type,id){
+    var before=mode(),beforeKey=S.panel?S.panel.type+S.panel.id:'';
+    if(beforeKey===type+id)return;
+    if(before==='overview')inboxBeforePanel=S.inboxOpen;
+    var after=type==='page'?'page':'focus';
+    function apply(){
+      S.panel={type:type,id:id};
+      S.nav=type==='src'?'source':(type==='dev'?'subs':(type==='dst'?'push':(id==='srclist'?'source':id)));
+      if(type==='page'&&!isMobile())S.inboxOpen=false;
+      setModeClasses();syncHash();renderAll();
+      if(after==='focus')$('panel').scrollTop=0;
+    }
+    if(before==='focus'||after==='focus')transitionTo(apply,before,after);
+    else{apply();animateEdges(450);}
+  }
+  function closePanel(){
+    if(!S.panel)return;
+    var before=mode();
+    function apply(){S.panel=null;S.nav='overview';S.inboxOpen=inboxBeforePanel;setModeClasses();syncHash();renderAll();}
+    if(before==='focus')transitionTo(apply,before,'overview');
+    else{apply();animateEdges(450);}
+  }
+  function renderAll(){renderInbox();renderNodes();renderNav();renderPanel();drawEdges();}
+
+  /* ---------- 动作 ---------- */
+  var tt;
+  function toast(msg){$('toastText').textContent=msg;$('toast').classList.add('on');clearTimeout(tt);tt=setTimeout(function(){$('toast').classList.remove('on');},2600);}
+  function approve(){leave('review',function(){S.review='approved';renderAll();toast('已通过，新值会推送到 青龙 .24');});}
+  function reject(){leave('review',function(){S.review='rejected';renderAll();toast('已驳回，保留原来的值');});}
+  function retry(){
+    if(S.fail!=='failing'){if(S.fail==='ok')toast('没有失败的推送');return;}
+    S.fail='retrying';renderAll();
+    setTimeout(function(){leave('fail',function(){S.fail='ok';renderAll();toast('已推送到 旧 Webhook');});},1300);
+  }
+  function reinstall(){leave('ipad',function(){S.ipad='fresh';renderAll();toast('已生成安装链接，在 iPad 上打开 Loon 完成安装');});}
+
+  var ACT={
+    open:function(el){openPanel(el.getAttribute('data-type'),el.getAttribute('data-id'));},
+    close:closePanel,
+    nav:function(el){var id=el.getAttribute('data-id');
+      if(id==='overview')closePanel();
+      else if(id==='source')openPanel('src','ninebot');
+      else openPanel('page',id);},
+    approve:approve, reject:reject, retry:retry, reinstall:reinstall,
+    ack:function(){leave('expiry',function(){S.expiryAck=true;renderAll();});},
+    'toggle-inbox':function(){S.inboxOpen=!S.inboxOpen;renderInbox();animateEdges(450);},
+    'open-inbox':function(){
+      if(S.panel){inboxBeforePanel=true;closePanel();}
+      else{S.inboxOpen=true;renderInbox();animateEdges(450);}
+      if(isMobile())setTimeout(function(){$('inbox').scrollIntoView({behavior:'smooth',block:'start'});},50);
+    },
+    jump:function(el){var t=$('sec-'+el.getAttribute('data-to'));if(t){t.scrollIntoView({behavior:'smooth',block:'start'});var d=t.querySelector('details');if(d)d.open=true;}},
+    'push-now':function(){toast('已加入推送队列：青龙 .24');},
+    'edit-rule':function(){toast('原型里不展开规则编辑器');},
+    install:function(){toast('已生成安装链接，在备用机上打开 Stash 完成安装');},
+    enable:function(){toast('原型里不切换启用状态');},
+    palette:function(){openPal();},
+    'pal-bg':function(el,e){if(e.target===el)closePal();}
+  };
+  document.addEventListener('click',function(e){
+    var el=e.target.closest('[data-act]'); if(!el)return;
+    var a=el.getAttribute('data-act');
+    if(a==='pal-bg'&&e.target!==el)return;
+    if(ACT[a]){e.preventDefault();ACT[a](el,e);}
+  });
+
+  /* ---------- 命令面板 ---------- */
+  var palIdx=0, palRows=[];
+  function cmds(){
+    var c=[];
+    SRC.forEach(function(s){c.push({g:'来源',ic:'key',t:s.name,s:s.key,mono:1,run:function(){openPanel('src',s.id);}});});
+    [['overview','总览','grid'],['subs','订阅','phone'],['push','推送','send'],['records','记录','history'],['settings','设置','sliders']].forEach(function(x){
+      c.push({g:'跳转',ic:x[2],t:x[1],s:'',run:function(){ACT.nav({getAttribute:function(){return x[0];}});}});});
+    c.push({g:'操作',ic:'refresh',t:'重试全部失败的推送',s:S.fail==='failing'?'1 条失败':'没有失败的推送',run:retry});
+    if(S.review==='pending')c.push({g:'操作',ic:'check',t:'通过 九号出行（审核）的新值',s:'待审核',run:approve});
+    c.push({g:'操作',ic:'inbox',t:'打开待处理',s:'',run:function(){closePanel();ACT['open-inbox']();}});
+    return c;
+  }
+  function renderPal(){
+    var q=$('palInput').value.trim().toLowerCase();
+    palRows=cmds().filter(function(c){return !q||(c.t+' '+c.s+' '+c.g).toLowerCase().indexOf(q)>-1;});
+    if(palIdx>=palRows.length)palIdx=Math.max(0,palRows.length-1);
+    var html='',g='';
+    palRows.forEach(function(c,i){
+      if(c.g!==g){g=c.g;html+='<div class="pal-g">'+g+'</div>';}
+      html+='<button class="pal-it'+(i===palIdx?' act':'')+'" data-i="'+i+'"><span class="ico">'+ic(c.ic)+'</span><span>'+c.t+'</span><span class="s'+(c.mono?' mono':'')+'">'+c.s+'</span></button>';
+    });
+    $('palList').innerHTML=html||'<div class="pal-empty">没有匹配的来源或命令</div>';
+  }
+  function openPal(){$('palWrap').classList.add('on');$('palInput').value='';palIdx=0;renderPal();setTimeout(function(){$('palInput').focus();},10);}
+  function closePal(){$('palWrap').classList.remove('on');}
+  function runPal(i){var c=palRows[i];if(!c)return;closePal();c.run();}
+  $('palInput').addEventListener('input',function(){palIdx=0;renderPal();});
+  $('palList').addEventListener('click',function(e){var b=e.target.closest('.pal-it');if(b)runPal(+b.getAttribute('data-i'));});
+  $('palList').addEventListener('mousemove',function(e){var b=e.target.closest('.pal-it');if(b&&+b.getAttribute('data-i')!==palIdx){palIdx=+b.getAttribute('data-i');renderPal();}});
+  document.addEventListener('keydown',function(e){
+    if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();$('palWrap').classList.contains('on')?closePal():openPal();return;}
+    if($('palWrap').classList.contains('on')){
+      if(e.key==='Escape'){closePal();}
+      else if(e.key==='ArrowDown'){e.preventDefault();palIdx=Math.min(palRows.length-1,palIdx+1);renderPal();}
+      else if(e.key==='ArrowUp'){e.preventDefault();palIdx=Math.max(0,palIdx-1);renderPal();}
+      else if(e.key==='Enter'){e.preventDefault();runPal(palIdx);}
+      return;
+    }
+    if(e.key==='Escape')closePanel();
+  });
+
+
+  /* ---------- 启动 ---------- */
+  function fromHash(){ if(location.hash==='#source')openPanel('src','ninebot'); }
+  window.addEventListener('hashchange',fromHash);
+  var rt;window.addEventListener('resize',function(){cancelAnimationFrame(rt);rt=requestAnimationFrame(function(){fitGraph();drawEdges();});});
+  if(location.hash==='#source'){S.panel={type:'src',id:'ninebot'};S.nav='source';}
+  setModeClasses();
+  renderAll();
+  window.addEventListener('load',function(){fitGraph();drawEdges();});
+})();
+</script>
+</body>
+</html>
