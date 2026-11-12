@@ -230,7 +230,14 @@ async function logout() {
           <SearchIcon class="size-4" />
         </button>
       </header>
-      <div class="mx-auto w-full max-w-6xl p-4 pb-24 md:p-6 lg:p-8">
+      <!-- 总览的画布铺满内容区，其余页面居中留边 -->
+      <div
+        :class="
+          route.meta.fullBleed
+            ? 'flex flex-1 flex-col'
+            : 'mx-auto w-full max-w-6xl p-4 pb-24 md:p-6 lg:p-8'
+        "
+      >
         <router-view />
       </div>
     </SidebarInset>

@@ -1,7 +1,15 @@
 <script setup lang="ts">
-import { BoxesIcon, MoonIcon, PlusIcon, SendIcon, SmartphoneIcon, SunIcon } from '@lucide/vue'
+import {
+  BoxesIcon,
+  MoonIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  SendIcon,
+  SmartphoneIcon,
+  SunIcon,
+} from '@lucide/vue'
 import { onKeyStroke } from '@vueuse/core'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { api } from '@/api'
@@ -13,12 +21,27 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
+import { useInboxActions } from '@/components/flow/inbox'
 import { commandOpen } from '@/lib/command'
 import { navItems } from '@/lib/nav'
 import { toggleTheme } from '@/lib/theme'
+import { useFlow } from '@/stores/flow'
+import { useOverview } from '@/stores/overview'
 import { clients, type Destination, type SourceSummary, type Subscription } from '@/types'
 
 const router = useRouter()
+const overview = useOverview()
+const flow = useFlow()
+const { retryAll } = useInboxActions()
+
+// 只重试每个“推送规则 + 身份”最近一次失败的任务，已经被后来的成功覆盖的旧任务不算。
+const failed = computed(() => overview.data?.items.filter((it) => it.kind === 'push_failed') ?? [])
+
+async function retryFailed() {
+  commandOpen.value = false
+  await retryAll(failed.value)
+  await Promise.all([overview.load(), flow.load().catch(() => {})])
+}
 
 // 按 ⌘K / Ctrl+K 打开；输入框里也能用，所以不检查焦点在哪。
 onKeyStroke('k', (e) => {
@@ -70,6 +93,9 @@ function run(fn: () => void) {
       <CommandGroup heading="操作">
         <CommandItem value="新建来源" @select="go('/sources/new')"
           ><PlusIcon /> 新建来源</CommandItem
+        >
+        <CommandItem v-if="failed.length" value="重试全部失败的推送" @select="retryFailed"
+          ><RefreshCwIcon /> 重试全部失败的推送（{{ failed.length }} 个）</CommandItem
         >
         <CommandItem value="切换深浅色 主题" @select="run(toggleTheme)"
           ><SunIcon class="dark:hidden" /><MoonIcon class="hidden dark:block" />
