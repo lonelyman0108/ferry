@@ -1,0 +1,44 @@
+# 九号出行：给青龙里的签到脚本提供 NINEBOT_AUTHORIZATION 和 NINEBOT_DEVICE_ID。
+key: ninebot
+name: 九号出行
+description: |
+  打开九号出行 App 的签到页，点一次“签到”即可更新（已签到也会发出请求）。
+  两个值都在签到请求里：Authorization 在请求头，deviceId 在 JSON 正文。
+matchers:
+  - name: gateway
+    host: cn-cbu-gateway.ninebot.com
+    path: ^/portal/api/
+  - name: sign
+    host: cn-cbu-gateway.ninebot.com
+    path: ^/portal/api/user-sign/v2/sign$
+    method: POST
+fields:
+  - key: authorization
+    name: Authorization
+    matcher: gateway
+    in: header
+    path: Authorization
+    type: jwt
+    sensitive: true
+    min_len: 20
+  - key: device_id
+    name: 设备 ID
+    matcher: sign
+    in: body_json
+    path: deviceId
+    min_len: 4
+outputs:
+  - name: NINEBOT_AUTHORIZATION
+    template: '{{.authorization}}'
+  - name: NINEBOT_DEVICE_ID
+    template: '{{.device_id}}'
+# 用新的 Authorization 查一次签到状态（只读，不会签到），和青龙签到脚本的判断方式一致。
+# 缺 language 头时接口返回 code 2（Params error），2026-10-23 实测。
+probe:
+  url: https://cn-cbu-gateway.ninebot.com/portal/api/user-sign/v2/status
+  headers:
+    Authorization: '{{.authorization}}'
+    language: zh
+    Origin: https://h5-bj.ninebot.com
+    Referer: https://h5-bj.ninebot.com/
+  expect: status == 200 && json.code == 0

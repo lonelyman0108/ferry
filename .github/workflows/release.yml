@@ -1,0 +1,41 @@
+# Docker 服务的发布：推送 vX.Y.Z tag 后跑完整门禁，构建并推送镜像到 GHCR，再建或更新 GitHub Release（正文附镜像地址）。
+# bootstrap --stack docker 把它放到 .github/workflows/release.yml。tag 在维护者发起发版后推送（agent 或维护者）；不写 concurrency。
+# 部署由维护者手动改 compose 里的镜像版本，这里不做。
+name: Release
+on:
+  push:
+    tags: ['v*']
+# 建 Release 需要 contents: write，推 GHCR 需要 packages: write
+permissions:
+  contents: write
+  packages: write
+# run 一律用 bash（-eo pipefail），不依赖 runner 镜像的默认 shell
+defaults:
+  run:
+    shell: bash
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        if: hashFiles('.node-version') != ''
+        with:
+          node-version-file: .node-version
+      - name: 准备工具
+        run: scripts/ci/setup-tools.sh >> "$GITHUB_PATH"
+      - name: 门禁
+        run: scripts/check.sh --full
+      - name: 构建并推送镜像
+        env:
+          # 默认推 ghcr.io/<owner>/<repo>，用 workflow 自带的令牌登录；推 Docker Hub 时设 IMAGE 并改用仓库 secret
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: scripts/ci/docker-release.sh --notes .release-notes.md "$GITHUB_REF_NAME"
+      - name: Release 页
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci/release-page.sh --notes .release-notes.md "$GITHUB_REF_NAME"

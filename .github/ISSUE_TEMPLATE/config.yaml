@@ -1,0 +1,2 @@
+# 工单只收外部输入（用户反馈、审核被拒、运维告警）；自己的待办写进 docs/plans/ 的计划文档。
+blank_issues_enabled: false

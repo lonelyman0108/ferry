@@ -1,0 +1,147 @@
+{
+  "comment": "由官方 tweetnacl 1.0.3 生成；Go（internal/transport）与 script/ferry.js 共用。",
+  "keys": [
+    {
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "up": "70bf831dbd7587a82b3c6e7473cd9e41fb24b6b67e6c93ad9d216ef27eee43ab",
+      "down": "1ae3e252ecaafb3b5b738786af68f4d310d8defe51c52c152ca5360eac1ee136"
+    },
+    {
+      "key": "yM_W3eTr8vkABw4VHCMqMTg_Rk1UW2JpcHd-hYyTmqE",
+      "up": "9ae546f58faf0912b7ab88ac4174911ef9001aa2757088ec9058dfa16a2ab304",
+      "down": "6a8157ed8f000303734b09ebfb812caea4e2652d9dff7c1a7b788a2ee9de43fa"
+    }
+  ],
+  "sealed": [
+    {
+      "name": "空明文",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "up",
+      "nonce": "0910171e252c333a41484f565d646b727980878e959ca3aa",
+      "plaintext": "",
+      "sealed": "f1.CRAXHiUsMzpBSE9WXWRrcnmAh46VnKOqYM9am218NkxqfLATFXdv5A"
+    },
+    {
+      "name": "请求：短 JSON",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "up",
+      "nonce": "11181f262d343b424950575e656c737a81888f969da4abb2",
+      "plaintext": "{\"v\":1,\"op\":\"ping\",\"ts\":1792000000123}",
+      "sealed": "f1.ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyFF8E8qZ8fURlV9wI4NINj25-7Jz-elGOjscxudi2iO8x3Dm1UEiLmojbP7OTJeZru51iW6LO"
+    },
+    {
+      "name": "回复：中文与四字节字符",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "down",
+      "nonce": "21282f363d444b525960676e757c838a91989fa6adb4bbc2",
+      "plaintext": "{\"v\":1,\"status\":200,\"body\":{\"message\":\"收到 2 个新值 ✅ 𝄞\"}}",
+      "sealed": "f1.ISgvNj1ES1JZYGdudXyDipGYn6attLvCYGuA_DdGxz2E0--DFJeYZFXaAA4PcUXGNfbngVY77PbhSmdmD7hfwtcP9p6BZlzcd7i0V6ofHljL1Mypuvyj0EBhDrg6pfPHLyc9JpeatFy2PCQcdQ"
+    },
+    {
+      "name": "请求：跨多个分组的长正文",
+      "key": "yM_W3eTr8vkABw4VHCMqMTg_Rk1UW2JpcHd-hYyTmqE",
+      "dir": "up",
+      "nonce": "41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2",
+      "plaintext": "{\"v\":1,\"op\":\"sync\",\"ts\":1792000000123,\"body\":{\"source\":\"ninebot\",\"matcher\":\"sign\",\"fields\":{\"authorization\":\"eyJaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.sig\",\"device_id\":\"6666666666666666666666666666666666666666\"},\"seen_at\":1792000000}}",
+      "sealed": "f1.QUhPVl1ka3J5gIeOlZyjqrG4v8bN1Nvi0gFZ-74pMF9k-UXlqrSk5eOjZAqCO3cyKRtY5mHCQR_NVPa4oeK648Q1FNUaGJf2CggnMdipi-Cjw1ND-Gsdxi6KOUi2NUV411B4yqvbWqshlVNHjGRgBt7obBsweHSWCiYe9KFleH8SqJpAT4ktAt2KysKr1amkKDNvohJqCwQdC66mCd-aXl8XQwOsPw7LAG78FMBsTl2ReZc8DHWIgrKFkgxaKrBPXQY20PFnB9-Csyg3F2nGHxCujtACpV2IC9ZNcghc22N1dvPrqv6FR176jgsn77Ba8btyQpo2TPVnVc2q4VcTGhWPKBb9hG7KdsYH-d2mPXohnBVxCpSM06XXA1dXgoSbBOSzYEI_tzyRiSMEmmeSasvT-fAXw97wFYrX5ubIGTrLFovrg6FKoQmiIlUu3QUn5lKxe6UMtJjGYr2DbP487FJbyh8yWWNwXHOqtEhkvsiQwiFb7sDAQDyGzl8ng3XEXLePWp7mR_PPIh9vZ0rMZVGzcl8coMBEz1biq9H8pDE-qOv7UisJlaffaz58TkgXkjesXOiSlKfs4_p1yKZtJpuuhfcQDvtasT5VP7otrbHUL8zVPxRd3aLikoFfOfnfd0p8vApOPtjK686-u7A9pHyQxTekOAFyDaIZaj74Y8y2YVm7S8cXWgdm4SYT61Cgb4jcdgAAixE"
+    },
+    {
+      "name": "回复：另一把密钥",
+      "key": "yM_W3eTr8vkABw4VHCMqMTg_Rk1UW2JpcHd-hYyTmqE",
+      "dir": "down",
+      "nonce": "81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b22",
+      "plaintext": "{\"v\":1,\"status\":304}",
+      "sealed": "f1.gYiPlp2kq7K5wMfO1dzj6vH4_wYNFBsijdkotkX3fbN2iozD77fAc084PRFwfLslBX9Dcfj3QDImvQQx"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "改动 nonce",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "up",
+      "sealed": "f1.EBgfJi00O0JJUFdeZWxzeoGIj5adpKuyFF8E8qZ8fURlV9wI4NINj25-7Jz-elGOjscxudi2iO8x3Dm1UEiLmojbP7OTJeZru51iW6LO"
+    },
+    {
+      "name": "改动认证标签",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "up",
+      "sealed": "f1.ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyFV8E8qZ8fURlV9wI4NINj25-7Jz-elGOjscxudi2iO8x3Dm1UEiLmojbP7OTJeZru51iW6LO"
+    },
+    {
+      "name": "改动密文",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "up",
+      "sealed": "f1.ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyFF8E8qZ8fURlV9wI4NINj25-7Jz-elGOjscxudi2iO8x3Dm1UEiLmojbP7OTJeZru51iW6LP"
+    },
+    {
+      "name": "错误的密钥",
+      "key": "yM_W3eTr8vkABw4VHCMqMTg_Rk1UW2JpcHd-hYyTmqE",
+      "dir": "up",
+      "sealed": "f1.ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyFF8E8qZ8fURlV9wI4NINj25-7Jz-elGOjscxudi2iO8x3Dm1UEiLmojbP7OTJeZru51iW6LO"
+    },
+    {
+      "name": "方向不对：请求当回复解",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "down",
+      "sealed": "f1.ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyFF8E8qZ8fURlV9wI4NINj25-7Jz-elGOjscxudi2iO8x3Dm1UEiLmojbP7OTJeZru51iW6LO"
+    },
+    {
+      "name": "未知的格式前缀",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "up",
+      "sealed": "f2.ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyFF8E8qZ8fURlV9wI4NINj25-7Jz-elGOjscxudi2iO8x3Dm1UEiLmojbP7OTJeZru51iW6LO"
+    },
+    {
+      "name": "缺少格式前缀",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "up",
+      "sealed": "ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyFF8E8qZ8fURlV9wI4NINj25-7Jz-elGOjscxudi2iO8x3Dm1UEiLmojbP7OTJeZru51iW6LO"
+    },
+    {
+      "name": "长度不足 nonce 加认证标签",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "up",
+      "sealed": "f1.ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyFF8E8qZ8fURlV9wI4NIN"
+    },
+    {
+      "name": "非法的 base64url 字符",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "up",
+      "sealed": "f1.ERgfJi0+O0JJUFdeZWxzeoGIj5adpKuyFF8E8qZ8fURlV9wI4NINj25-7Jz-elGOjscxudi2iO8x3Dm1UEiLmojbP7OTJeZru51iW6LO"
+    },
+    {
+      "name": "末尾带填充",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "up",
+      "sealed": "f1.ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyFF8E8qZ8fURlV9wI4NINj25-7Jz-elGOjscxudi2iO8x3Dm1UEiLmojbP7OTJeZru51iW6LO="
+    },
+    {
+      "name": "截掉最后一个字符",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "dir": "up",
+      "sealed": "f1.ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyFF8E8qZ8fURlV9wI4NINj25-7Jz-elGOjscxudi2iO8x3Dm1UEiLmojbP7OTJeZru51iW6L"
+    }
+  ],
+  "invalid_keys": [
+    {
+      "name": "空",
+      "key": ""
+    },
+    {
+      "name": "少一个字符",
+      "key": "QgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o"
+    },
+    {
+      "name": "标准 base64 的字符",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09+"
+    },
+    {
+      "name": "带填充",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o="
+    },
+    {
+      "name": "解码后不是 32 字节",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM0w"
+    }
+  ]
+}

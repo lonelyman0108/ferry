@@ -1,0 +1,35 @@
+# 通用段：本地配置与密钥。按栈的段落由 scripts/bootstrap.sh --stack 追加。
+# AI 工具目录与 .DS_Store 放在全局 core.excludesFile，这里不重复。
+.env
+.env.*
+!.env.example
+*.token
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+secrets/
+
+# ---- go ----
+/bin/
+/dist/
+*.test
+coverage.out
+
+# ---- node ----
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# ---- docker ----
+# docker-release.sh --notes 写出的镜像清单，只在发布 job 里临时使用
+.release-notes.md
+
+# ---- ferry ----
+# 本地运行产生的配置（含主密钥）和 SQLite 数据库
+/ferry.yaml
+*.db
+*.db-shm
+*.db-wal

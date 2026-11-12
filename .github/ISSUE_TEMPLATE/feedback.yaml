@@ -1,0 +1,33 @@
+name: 外部反馈
+about: 用户邮件、商店评论、审核被拒、运维告警等外部来源的输入
+title: "[反馈] "
+labels: []
+body:
+  - type: dropdown
+    id: source
+    attributes:
+      label: 来源
+      options:
+        - 用户反馈
+        - 商店审核被拒
+        - 商店评论
+        - 运维告警
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: content
+    attributes:
+      label: 原文或摘要
+      description: 保留关键原话；去掉对方的联系方式等个人信息
+    validations:
+      required: true
+  - type: input
+    id: when
+    attributes:
+      label: 时间
+      placeholder: YYYY-MM-DD
+  - type: textarea
+    id: next
+    attributes:
+      label: 初步判断与下一步

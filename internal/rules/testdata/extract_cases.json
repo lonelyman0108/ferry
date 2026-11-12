@@ -1,0 +1,161 @@
+{
+  "_说明": "Go（internal/rules）和手机端脚本（script/ferry.js）共用的样例。每条有 matcher 就检查 match，有 field 就检查 ok 和 value。headers 的键按原样大小写给出，实现必须不区分大小写。",
+  "cases": [
+    {
+      "name": "精确域名 + 路径前缀",
+      "request": {"method": "GET", "url": "https://cn-cbu-gateway.ninebot.com/portal/api/user-sign/v2/status?t=1"},
+      "matcher": {"host": "cn-cbu-gateway.ninebot.com", "path_regex": "^/portal/api/"},
+      "match": true
+    },
+    {
+      "name": "域名大小写、端口不影响匹配",
+      "request": {"method": "GET", "url": "https://CN-CBU-Gateway.ninebot.com:443/portal/api/x"},
+      "matcher": {"host": "cn-cbu-gateway.ninebot.com"},
+      "match": true
+    },
+    {
+      "name": "路径正则只看 path，不看 query",
+      "request": {"method": "GET", "url": "https://a.example.com/other?next=/portal/api/"},
+      "matcher": {"host": "a.example.com", "path_regex": "/portal/api/"},
+      "match": false
+    },
+    {
+      "name": "通配匹配多级子域",
+      "request": {"method": "GET", "url": "https://x.y.jd.com/"},
+      "matcher": {"host": "*.jd.com"},
+      "match": true
+    },
+    {
+      "name": "通配不匹配裸域",
+      "request": {"method": "GET", "url": "https://jd.com/"},
+      "matcher": {"host": "*.jd.com"},
+      "match": false
+    },
+    {
+      "name": "通配不匹配后缀相同的其他域名",
+      "request": {"method": "GET", "url": "https://evil-jd.com/"},
+      "matcher": {"host": "*.jd.com"},
+      "match": false
+    },
+    {
+      "name": "方法不区分大小写",
+      "request": {"method": "post", "url": "https://a.example.com/sign"},
+      "matcher": {"host": "a.example.com", "method": "POST"},
+      "match": true
+    },
+    {
+      "name": "方法不符",
+      "request": {"method": "GET", "url": "https://a.example.com/sign"},
+      "matcher": {"host": "a.example.com", "method": "POST"},
+      "match": false
+    },
+    {
+      "name": "请求头不区分大小写",
+      "request": {"method": "GET", "url": "https://a.example.com/", "headers": {"authorization": "Bearer ey.a.b"}},
+      "field": {"in": "header", "path": "Authorization"},
+      "ok": true, "value": "Bearer ey.a.b"
+    },
+    {
+      "name": "请求头不存在",
+      "request": {"method": "GET", "url": "https://a.example.com/", "headers": {"X-Other": "1"}},
+      "field": {"in": "header", "path": "Authorization"},
+      "ok": false
+    },
+    {
+      "name": "Cookie 按名字取",
+      "request": {"method": "GET", "url": "https://api.m.jd.com/", "headers": {"Cookie": "pt_key=AAJk-xyz; pt_pin=jd_user%40x; other=1"}},
+      "field": {"in": "cookie", "path": "pt_pin"},
+      "ok": true, "value": "jd_user%40x"
+    },
+    {
+      "name": "Cookie 名字区分大小写",
+      "request": {"method": "GET", "url": "https://api.m.jd.com/", "headers": {"Cookie": "PT_KEY=1"}},
+      "field": {"in": "cookie", "path": "pt_key"},
+      "ok": false
+    },
+    {
+      "name": "query 参数会解码",
+      "request": {"method": "GET", "url": "https://a.example.com/x?token=a%2Bb&uid=7"},
+      "field": {"in": "query", "path": "token"},
+      "ok": true, "value": "a+b"
+    },
+    {
+      "name": "query 参数为空字符串也算取到",
+      "request": {"method": "GET", "url": "https://a.example.com/x?token="},
+      "field": {"in": "query", "path": "token"},
+      "ok": true, "value": ""
+    },
+    {
+      "name": "JSON 点路径取字符串",
+      "request": {"method": "POST", "url": "https://cn-cbu-gateway.ninebot.com/portal/api/user-sign/v2/sign", "body": "{\"deviceId\":\"6A1B-77\"}"},
+      "field": {"in": "body_json", "path": "deviceId"},
+      "ok": true, "value": "6A1B-77"
+    },
+    {
+      "name": "JSON 路径里的数组下标与数字",
+      "request": {"method": "POST", "url": "https://a.example.com/", "body": "{\"data\":{\"list\":[{\"id\":12345678901234567890}]}}"},
+      "field": {"in": "body_json", "path": "data.list.0.id"},
+      "ok": true, "value": "12345678901234567890"
+    },
+    {
+      "name": "JSON 布尔值",
+      "request": {"method": "POST", "url": "https://a.example.com/", "body": "{\"vip\":true}"},
+      "field": {"in": "body_json", "path": "vip"},
+      "ok": true, "value": "true"
+    },
+    {
+      "name": "JSON 对象输出紧凑 JSON",
+      "request": {"method": "POST", "url": "https://a.example.com/", "body": "{\"user\": {\"id\": 1, \"name\": \"a\"}}"},
+      "field": {"in": "body_json", "path": "user"},
+      "ok": true, "value": "{\"id\":1,\"name\":\"a\"}"
+    },
+    {
+      "name": "JSON 嵌套对象按键排序输出，不转义 HTML 字符",
+      "request": {"method": "POST", "url": "https://a.example.com/", "body": "{\"data\": {\"z\": \"<a&b>\", \"a\": [1, 2.50, true, null]}}"},
+      "field": {"in": "body_json", "path": "data"},
+      "ok": true, "value": "{\"a\":[1,2.50,true,null],\"z\":\"<a&b>\"}"
+    },
+    {
+      "name": "正文后面有多余内容时只看第一个 JSON 值",
+      "request": {"method": "POST", "url": "https://a.example.com/", "body": "{\"a\":\"x\"} trailing"},
+      "field": {"in": "body_json", "path": "a"},
+      "ok": true, "value": "x"
+    },
+    {
+      "name": "JSON null 视为没取到",
+      "request": {"method": "POST", "url": "https://a.example.com/", "body": "{\"token\":null}"},
+      "field": {"in": "body_json", "path": "token"},
+      "ok": false
+    },
+    {
+      "name": "正文不是 JSON",
+      "request": {"method": "POST", "url": "https://a.example.com/", "body": "a=1"},
+      "field": {"in": "body_json", "path": "a"},
+      "ok": false
+    },
+    {
+      "name": "表单正文",
+      "request": {"method": "POST", "url": "https://a.example.com/", "body": "a=1&sign=x%20y"},
+      "field": {"in": "body_form", "path": "sign"},
+      "ok": true, "value": "x y"
+    },
+    {
+      "name": "正则作用于 URL，取第一个捕获组",
+      "request": {"method": "GET", "url": "https://a.example.com/u/12345/home"},
+      "field": {"in": "regex", "path": "/u/(\\d+)/", "regex_on": "url"},
+      "ok": true, "value": "12345"
+    },
+    {
+      "name": "正则作用于正文",
+      "request": {"method": "POST", "url": "https://a.example.com/", "body": "token: abc-123;"},
+      "field": {"in": "regex", "path": "token: ([\\w-]+)", "regex_on": "body"},
+      "ok": true, "value": "abc-123"
+    },
+    {
+      "name": "正则不命中",
+      "request": {"method": "GET", "url": "https://a.example.com/"},
+      "field": {"in": "regex", "path": "/u/(\\d+)/", "regex_on": "url"},
+      "ok": false
+    }
+  ]
+}

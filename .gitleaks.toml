@@ -1,0 +1,7 @@
+# gitleaks 配置：在默认规则之上登记确认过的误报。
+[extend]
+useDefault = true
+
+[allowlist]
+description = "测试样例里的固定密钥，只用于两端加解密一致性测试，不是真实凭据"
+paths = ['''^internal/transport/testdata/sealed_cases\.json$''']
