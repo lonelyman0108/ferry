@@ -22,7 +22,8 @@ import {
 
 // 三列流向图：设备（订阅）→ 来源 → 目的地。连线画在一层 SVG 上，端点位置按节点卡实际渲染的位置量出来。
 // 线型表示通不通：实线正常，红虚线失败，琥珀虚线等待重试，灰虚线没连通或没推过。
-// 窄屏上不画线，三列上下排，每张卡用一句话写去向。
+// 窄屏上不画线，三列上下排，每张卡用一句话写去向（宽屏上这句话留给读屏）。
+// 键盘聚焦到节点时和鼠标悬停一样高亮相关连线。
 const props = defineProps<{ flow: Flow; selected?: string | null }>()
 const emit = defineEmits<{ select: [kind: 'device' | 'source' | 'destination', id: number] }>()
 
@@ -99,7 +100,24 @@ watch(
 )
 
 const hovered = ref<string | null>(null)
-const focus = computed(() => hovered.value ?? props.selected ?? null)
+// 键盘焦点和鼠标悬停分开记，离开时各清各的：焦点从一个节点移走时，鼠标仍停着的节点保持高亮。
+// 两者同时存在时取最近发生的那个。
+const focused = ref<string | null>(null)
+const byFocus = ref(false)
+const focus = computed(
+  () =>
+    (byFocus.value ? (focused.value ?? hovered.value) : (hovered.value ?? focused.value)) ??
+    props.selected ??
+    null,
+)
+function hoverOn(node: string) {
+  hovered.value = node
+  byFocus.value = false
+}
+function focusOn(node: string) {
+  focused.value = node
+  byFocus.value = true
+}
 
 const paths = computed(() =>
   edges.value.flatMap((e) => {
@@ -160,14 +178,16 @@ const paths = computed(() =>
       class="relative grid gap-6 md:grid-cols-[minmax(150px,190px)_minmax(200px,250px)_minmax(150px,200px)] md:items-center md:justify-between md:gap-10"
     >
       <section class="grid min-w-0 grid-cols-1 content-center gap-3" aria-label="设备">
-        <h3 class="text-muted-foreground flex justify-between px-0.5 text-xs">
+        <h2 class="text-muted-foreground flex justify-between px-0.5 text-xs">
           设备 · 订阅<span>{{ devices.length }} 台</span>
-        </h3>
+        </h2>
         <div
           v-for="d in devices"
           :key="d.id"
-          @mouseenter="hovered = `dev-${d.id}`"
+          @mouseenter="hoverOn(`dev-${d.id}`)"
           @mouseleave="hovered = null"
+          @focusin="focusOn(`dev-${d.id}`)"
+          @focusout="focused = null"
         >
           <FlowNode
             :icon="SmartphoneIcon"
@@ -185,14 +205,16 @@ const paths = computed(() =>
       </section>
 
       <section class="grid min-w-0 grid-cols-1 content-center gap-3" aria-label="来源">
-        <h3 class="text-muted-foreground flex justify-between px-0.5 text-xs">
+        <h2 class="text-muted-foreground flex justify-between px-0.5 text-xs">
           来源<span>已启用 {{ sources.filter((s) => s.enabled).length }} 个</span>
-        </h3>
+        </h2>
         <div
           v-for="s in sources"
           :key="s.id"
-          @mouseenter="hovered = `src-${s.id}`"
+          @mouseenter="hoverOn(`src-${s.id}`)"
           @mouseleave="hovered = null"
+          @focusin="focusOn(`src-${s.id}`)"
+          @focusout="focused = null"
         >
           <FlowNode
             :icon="BoxesIcon"
@@ -213,14 +235,16 @@ const paths = computed(() =>
       </section>
 
       <section class="grid min-w-0 grid-cols-1 content-center gap-3" aria-label="目的地">
-        <h3 class="text-muted-foreground flex justify-between px-0.5 text-xs">
+        <h2 class="text-muted-foreground flex justify-between px-0.5 text-xs">
           目的地<span>{{ dests.length }} 个</span>
-        </h3>
+        </h2>
         <div
           v-for="d in dests"
           :key="d.id"
-          @mouseenter="hovered = `dst-${d.id}`"
+          @mouseenter="hoverOn(`dst-${d.id}`)"
           @mouseleave="hovered = null"
+          @focusin="focusOn(`dst-${d.id}`)"
+          @focusout="focused = null"
         >
           <FlowNode
             :icon="d.kind === 'webhook' ? WebhookIcon : SendIcon"

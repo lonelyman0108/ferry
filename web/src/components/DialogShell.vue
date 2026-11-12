@@ -18,6 +18,8 @@ import IconTile from './IconTile.vue'
 // 底部栏左侧是 footer-start 插槽（导出、删除这类次要操作），右侧是 footer 插槽（取消、保存）。
 // 关闭按钮、Esc 只发 close，由调用方决定要不要真的关（例如有未保存的修改时先确认）；
 // 点遮罩不关闭，免得误触丢掉填了一半的内容。
+// 打开时焦点放在弹窗本身，不落到第一个输入框上（手机上会直接弹出键盘），
+// 读屏会先读标题，Tab 从弹窗内第一个控件开始，焦点陷阱和 Esc 都能生效。
 const enabled = defineModel<boolean | undefined>('enabled', { default: undefined })
 withDefaults(
   defineProps<{
@@ -30,10 +32,25 @@ withDefaults(
     tone?: Tone
     size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
     bare?: boolean
+    // 头部启用开关的文字，弹窗内还有别的启用开关时写明对象，如「启用来源」
+    enabledLabel?: string
   }>(),
-  { description: '', icon: undefined, brand: undefined, tone: 'primary', size: 'md' },
+  {
+    description: '',
+    icon: undefined,
+    brand: undefined,
+    tone: 'primary',
+    size: 'md',
+    enabledLabel: '启用',
+  },
 )
 const emit = defineEmits<{ close: [] }>()
+
+function focusDialog(e: Event) {
+  e.preventDefault()
+  const content = e.target as HTMLElement | null
+  content?.focus({ preventScroll: true })
+}
 
 const width = {
   sm: 'sm:max-w-md',
@@ -56,7 +73,7 @@ const width = {
         )
       "
       @interact-outside.prevent
-      @open-auto-focus.prevent
+      @open-auto-focus="focusDialog"
     >
       <!-- 头部不换行：窄屏时隐藏图标，标题截断，开关和关闭始终在右侧同一行 -->
       <div class="flex items-center gap-3 border-b px-4 py-3 sm:px-5">
@@ -74,7 +91,7 @@ const width = {
         <div class="flex shrink-0 items-center gap-3">
           <slot name="header-actions" />
           <Label v-if="enabled !== undefined" class="font-normal"
-            ><Switch v-model="enabled" /> 启用</Label
+            ><Switch v-model="enabled" /> {{ enabledLabel }}</Label
           >
           <Button variant="ghost" size="icon-sm" aria-label="关闭" @click="emit('close')">
             <XIcon />

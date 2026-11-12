@@ -8,9 +8,12 @@ import ConfirmButton from './ConfirmButton.vue'
 
 // 列表行右侧的操作区，各页面统一用它：具名操作（默认插槽，描边小按钮）→ 编辑 → 删除 → 启用开关。
 // 编辑、删除只有图标；启用开关固定在最右，切换即保存。不传 enabled 时不显示开关，
-// 不传 deleteTitle 时不显示删除。点击不冒泡，可以放在整行可点的卡片里。
-withDefaults(
+// 不传 deleteTitle 时不显示删除。点击、回车、空格不冒泡，可以放在整行可点的卡片里；
+// Esc 照常冒泡，弹窗和菜单靠它关闭。name 是这一行对象的名称，写进各按钮的读屏名称，
+// 否则一页里几个开关都只读出「启用」，分不清是哪一项。
+const props = withDefaults(
   defineProps<{
+    name?: string
     enabled?: boolean
     toggling?: boolean
     editable?: boolean
@@ -18,6 +21,7 @@ withDefaults(
     deleteDescription?: string
   }>(),
   {
+    name: '',
     enabled: undefined,
     toggling: false,
     editable: true,
@@ -26,16 +30,18 @@ withDefaults(
   },
 )
 defineEmits<{ edit: []; remove: []; toggle: [enabled: boolean] }>()
+
+const named = (action: string) => (props.name ? `${action}「${props.name}」` : action)
 </script>
 
 <template>
-  <div class="flex shrink-0 items-center gap-1" @click.stop @keydown.stop>
+  <div class="flex shrink-0 items-center gap-1" @click.stop @keydown.enter.stop @keydown.space.stop>
     <slot />
     <Button
       v-if="editable"
       variant="ghost"
       size="icon-sm"
-      aria-label="编辑"
+      :aria-label="named('编辑')"
       title="编辑"
       @click="$emit('edit')"
       ><PencilIcon
@@ -47,7 +53,7 @@ defineEmits<{ edit: []; remove: []; toggle: [enabled: boolean] }>()
       confirm-text="删除"
       variant="ghost"
       size="icon-sm"
-      aria-label="删除"
+      :aria-label="named('删除')"
       class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
       @confirm="$emit('remove')"
     >
@@ -62,7 +68,7 @@ defineEmits<{ edit: []; remove: []; toggle: [enabled: boolean] }>()
       <Switch
         :model-value="enabled"
         :disabled="toggling"
-        :aria-label="enabled ? '已启用' : '已停用'"
+        :aria-label="named('启用')"
         :title="enabled ? '已启用，点击停用' : '已停用，点击启用'"
         @update:model-value="(v: boolean) => $emit('toggle', v)"
       />

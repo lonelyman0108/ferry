@@ -19,15 +19,20 @@ const props = withDefaults(
 
 const root = ref<HTMLElement>()
 const errorId = useId()
+// aria-describedby 里可能还有页面自己加的说明（如登录失败的提示），这里只增删本项报错的 id。
 function mark() {
   for (const el of root.value?.querySelectorAll('input, textarea, select') ?? []) {
+    const ids = (el.getAttribute('aria-describedby') ?? '')
+      .split(/\s+/)
+      .filter((id) => id && id !== errorId)
     if (props.error) {
       el.setAttribute('aria-invalid', 'true')
-      el.setAttribute('aria-describedby', errorId)
+      ids.unshift(errorId)
     } else {
       el.removeAttribute('aria-invalid')
-      if (el.getAttribute('aria-describedby') === errorId) el.removeAttribute('aria-describedby')
     }
+    if (ids.length) el.setAttribute('aria-describedby', ids.join(' '))
+    else el.removeAttribute('aria-describedby')
   }
 }
 watch(() => props.error, mark, { flush: 'post' })

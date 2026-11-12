@@ -367,6 +367,7 @@ async function rotateKey(s: Subscription) {
       </template>
       <template #actions>
         <RowActions
+          :name="s.name"
           delete-title="删除订阅？"
           delete-description="令牌将立即失效，已安装的客户端将无法回传登录态。"
           @edit="openEdit(s)"

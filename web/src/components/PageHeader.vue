@@ -8,7 +8,8 @@ import { navFor, pageFor } from '@/lib/nav'
 
 // 每个页面顶部的标题区：标题 + 一句话说明，右侧放操作按钮。
 // 不传 title / description 时取导航里这一页的名称和说明；传了 back 就显示返回按钮。
-// 导航项下有几页时，标题上方用一排链接切换。窄屏时标题独占一行，操作区换到下一行。
+// 导航项下有几页时，标题上方用一排链接切换；选中项在深色下用更亮的底色加描边，
+// 只用 bg-card 会比容器（muted 叠在背景上）还暗。窄屏时标题独占一行，操作区换到下一行。
 const props = defineProps<{ title?: string; description?: string; back?: string }>()
 
 const route = useRoute()
@@ -27,8 +28,11 @@ const page = computed(() => pageFor(route.path))
       v-for="p in nav.pages"
       :key="p.path"
       :to="p.path"
-      class="text-muted-foreground hover:text-foreground flex items-center rounded-md px-3 py-1.5 transition-colors max-md:min-h-10"
-      :class="page?.path === p.path && 'bg-card text-foreground shadow-xs'"
+      class="text-muted-foreground hover:text-foreground flex items-center rounded-md border border-transparent px-3 py-1.5 transition-colors max-md:min-h-10"
+      :class="
+        page?.path === p.path &&
+        'bg-card text-foreground dark:bg-accent dark:border-input shadow-xs'
+      "
       :aria-current="page?.path === p.path ? 'page' : undefined"
       >{{ p.label }}</router-link
     >

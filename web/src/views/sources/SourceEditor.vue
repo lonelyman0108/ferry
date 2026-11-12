@@ -541,6 +541,7 @@ const fieldsHit = computed(() =>
     size="full"
     bare
     :enabled="loaded ? doc.enabled : undefined"
+    enabled-label="启用来源"
     @update:enabled="(v) => (doc.enabled = v)"
     @close="requestClose"
   >
@@ -1061,7 +1062,7 @@ const fieldsHit = computed(() =>
                   >使用新值请求校验接口，判定通过后生效，用于过滤已失效的登录态</span
                 >
               </div>
-              <Label class="shrink-0 font-normal"><Switch v-model="probeOn" /> 启用</Label>
+              <Label class="shrink-0 font-normal"><Switch v-model="probeOn" /> 启用检测</Label>
             </div>
             <template v-if="probeOn">
               <div class="grid gap-4 sm:grid-cols-[8rem_1fr]">
