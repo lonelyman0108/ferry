@@ -59,6 +59,8 @@ type overviewSource struct {
 	Expiring      int        `json:"expiring"`
 	Expired       int        `json:"expired"`
 	Bindings      int        `json:"bindings"`
+	// ExpiresAt 是各身份当前值里最早的过期时间。
+	ExpiresAt *time.Time `json:"expires_at"`
 }
 
 type overviewView struct {
@@ -66,12 +68,18 @@ type overviewView struct {
 	Attention  overviewAttention `json:"attention"`
 	Counts     overviewCounts    `json:"counts"`
 	Sources    []overviewSource  `json:"sources"`
+	// Items 是 Attention 里各项计数对应的条目（收集中除外），带着就地处理需要的 id。
+	Items []attentionItem `json:"items"`
 }
 
 // handleOverview 给总览和侧栏角标用：需要处理的事、各类对象的数量、每个来源的状态。
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	out, err := s.overview(r.Context())
 	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	if out.Items, err = s.attentionItems(r.Context()); err != nil {
 		s.internalError(w, r, err)
 		return
 	}
@@ -149,6 +157,9 @@ func (s *Server) overview(ctx context.Context) (overviewView, error) {
 		src := byID[v.SourceID]
 		if src == nil {
 			continue
+		}
+		if src.ExpiresAt == nil || v.ExpiresAt.Before(*src.ExpiresAt) {
+			src.ExpiresAt = v.ExpiresAt
 		}
 		switch {
 		case !v.ExpiresAt.After(now):

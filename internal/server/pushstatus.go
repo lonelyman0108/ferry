@@ -95,15 +95,23 @@ func (s *Server) handleIdentityPushes(w http.ResponseWriter, r *http.Request) {
 		s.writeFindError(w, r, err, "身份不存在")
 		return
 	}
-	var bindings []store.Binding
-	if err := db.Where("source_id = ?", a.SourceID).Order("id").Find(&bindings).Error; err != nil {
+	out, err := identityPushes(db, a)
+	if err != nil {
 		s.internalError(w, r, err)
 		return
 	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// identityPushes 列出身份所属来源的每条推送规则，以及推给这个身份的最近一次任务。
+func identityPushes(db *gorm.DB, a store.Identity) ([]identityPushView, error) {
+	var bindings []store.Binding
+	if err := db.Where("source_id = ?", a.SourceID).Order("id").Find(&bindings).Error; err != nil {
+		return nil, err
+	}
 	out := make([]identityPushView, 0, len(bindings))
 	if len(bindings) == 0 {
-		writeJSON(w, http.StatusOK, out)
-		return
+		return out, nil
 	}
 	ids := make([]uint, 0, len(bindings))
 	destIDs := make([]uint, 0, len(bindings))
@@ -113,13 +121,11 @@ func (s *Server) handleIdentityPushes(w http.ResponseWriter, r *http.Request) {
 	}
 	latest, err := latestPushes(db, ids)
 	if err != nil {
-		s.internalError(w, r, err)
-		return
+		return nil, err
 	}
 	var dests []store.Destination
 	if err := db.Where("id IN ?", destIDs).Find(&dests).Error; err != nil {
-		s.internalError(w, r, err)
-		return
+		return nil, err
 	}
 	byID := map[uint]store.Destination{}
 	for _, d := range dests {
@@ -134,7 +140,7 @@ func (s *Server) handleIdentityPushes(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, v)
 	}
-	writeJSON(w, http.StatusOK, out)
+	return out, nil
 }
 
 // handleRetryPush 立即重试一个推送任务：还在排队等重试的马上执行；已经失败或跳过的，

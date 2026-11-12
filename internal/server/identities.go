@@ -167,34 +167,40 @@ func (s *Server) handleGetIdentity(w http.ResponseWriter, r *http.Request) {
 		s.writeFindError(w, r, err, "身份不存在")
 		return
 	}
-	var src store.Source
-	if err := db.Preload("Fields", func(tx *gorm.DB) *gorm.DB { return tx.Order("position") }).First(&src, a.SourceID).Error; err != nil {
+	view, err := s.identityDetail(db, a)
+	if err != nil {
 		s.internalError(w, r, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+// identityDetail 是身份详情：每个字段的当前值（敏感字段打码）和待审核的版本数。
+func (s *Server) identityDetail(db *gorm.DB, a store.Identity) (identityView, error) {
+	var src store.Source
+	if err := db.Preload("Fields", func(tx *gorm.DB) *gorm.DB { return tx.Order("position") }).First(&src, a.SourceID).Error; err != nil {
+		return identityView{}, err
 	}
 	view := identityView{ID: a.ID, SourceID: src.ID, SourceKey: src.Key, SourceName: src.Name, Key: a.Key, LastSeenAt: a.LastSeenAt, CreatedAt: a.CreatedAt, Fields: []identityField{}}
 	for _, f := range src.Fields {
 		af := identityField{Key: f.Key, Name: f.Name, Sensitive: f.Sensitive}
 		var cur store.Version
 		if err := db.Where("identity_id = ? AND field_id = ? AND current = ?", a.ID, f.ID, true).Limit(1).Find(&cur).Error; err != nil {
-			s.internalError(w, r, err)
-			return
+			return view, err
 		}
 		if cur.ID != 0 {
 			v, err := s.viewVersion(cur, f)
 			if err != nil {
-				s.internalError(w, r, err)
-				return
+				return view, err
 			}
 			af.Current = &v
 		}
 		if err := db.Model(&store.Version{}).Where("identity_id = ? AND field_id = ? AND status = ?", a.ID, f.ID, store.VersionPendingReview).Count(&af.Pending).Error; err != nil {
-			s.internalError(w, r, err)
-			return
+			return view, err
 		}
 		view.Fields = append(view.Fields, af)
 	}
-	writeJSON(w, http.StatusOK, view)
+	return view, nil
 }
 
 // handleListVersions 列出身份某个字段（或全部字段）的版本，按时间倒序分页。

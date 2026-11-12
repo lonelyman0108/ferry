@@ -438,6 +438,8 @@ export interface OverviewSource {
   expiring: number
   expired: number
   bindings: number
+  // 各身份当前值里最早的过期时间
+  expires_at: string | null
 }
 
 export interface Overview {
@@ -445,4 +447,129 @@ export interface Overview {
   attention: OverviewAttention
   counts: OverviewCounts
   sources: OverviewSource[]
+  items: AttentionItem[]
+}
+
+// 收件箱里的一条待处理，带着就地处理用的 id；action 要动手处理，notice 是提醒。
+export type AttentionKind =
+  | 'pending_review'
+  | 'push_failed'
+  | 'push_retrying'
+  | 'expired'
+  | 'expiring'
+  | 'outdated'
+  | 'never_connected'
+
+export interface AttentionItem {
+  kind: AttentionKind
+  severity: 'action' | 'notice'
+  source_id?: number
+  source_name?: string
+  identity_id?: number
+  identity_key?: string
+  field?: string
+  field_name?: string
+  version_id?: number
+  value?: string
+  masked?: boolean
+  push_id?: number
+  binding_id?: number
+  destination_id?: number
+  destination_name?: string
+  subscription_id?: number
+  subscription_name?: string
+  client?: string
+  error?: string
+  attempts?: number
+  at: string | null
+}
+
+// 流向图：设备（订阅）→ 来源 → 目的地，口径见后端 internal/server/flow.go。
+export interface FlowDevice {
+  id: number
+  name: string
+  client: string
+  status: SubscriptionStatus
+  outdated: boolean
+  last_seen_at: string | null
+  transport_mode: TransportMode
+  source_ids: number[]
+}
+
+// state 为空表示停用或没有可用的推送规则。
+export interface FlowDestination {
+  id: number
+  name: string
+  kind: 'qinglong' | 'webhook'
+  enabled: boolean
+  bindings: number
+  state: PushState | ''
+  last_error?: string
+  last_at: string | null
+}
+
+export interface FlowBinding {
+  id: number
+  source_id: number
+  destination_id: number
+  mode: string
+  enabled: boolean
+  state: PushState | ''
+  push_id?: number
+  last_error?: string
+  last_at: string | null
+}
+
+export interface Flow {
+  sources: OverviewSource[]
+  devices: FlowDevice[]
+  destinations: FlowDestination[]
+  bindings: FlowBinding[]
+}
+
+// 来源详情一次取回的整条链路。
+export interface LaneIdentity extends Identity {
+  fields: IdentityField[]
+  pushes: IdentityPush[]
+}
+
+export interface LaneBinding extends FlowBinding {
+  destination_name: string
+  destination_kind: 'qinglong' | 'webhook'
+}
+
+export interface Lane {
+  source: OverviewSource
+  review: string
+  probe: boolean
+  identity_field: string
+  identities: LaneIdentity[]
+  bindings: LaneBinding[]
+  devices: FlowDevice[]
+  items: AttentionItem[]
+  recent: ActivityItem[]
+}
+
+// 记录页时间线上的一条：回传、审核、推送、通知。
+export interface ActivityItem {
+  kind: 'sync' | 'review' | 'push' | 'notify'
+  at: string
+  outcome: 'success' | 'warning' | 'failure' | ''
+  title: string
+  detail?: string
+  source_id?: number
+  source_name?: string
+  identity_id?: number
+  identity_key?: string
+  device_id?: number
+  device_name?: string
+  destination_id?: number
+  destination_name?: string
+  batch_id?: number
+  push_id?: number
+}
+
+export interface ActivityPage {
+  items: ActivityItem[]
+  next: string | null
 }
