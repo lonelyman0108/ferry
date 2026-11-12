@@ -53,7 +53,7 @@ const router = createRouter({
           // 审计日志搬到了记录页
           beforeEnter: (to) =>
             to.query.tab === 'audit'
-              ? { path: '/activity', query: { category: to.query.category } }
+              ? { path: '/activity', query: { tab: 'audit', category: to.query.category } }
               : true,
         },
         { path: 'account', component: () => import('./views/AccountView.vue') },

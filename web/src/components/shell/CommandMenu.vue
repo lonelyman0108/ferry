@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  BellRingIcon,
   BoxesIcon,
   MoonIcon,
   PlusIcon,
@@ -27,7 +28,13 @@ import { navItems } from '@/lib/nav'
 import { toggleTheme } from '@/lib/theme'
 import { useFlow } from '@/stores/flow'
 import { useOverview } from '@/stores/overview'
-import { clients, type Destination, type SourceSummary, type Subscription } from '@/types'
+import {
+  type Channel,
+  clients,
+  type Destination,
+  type SourceSummary,
+  type Subscription,
+} from '@/types'
 
 const router = useRouter()
 const overview = useOverview()
@@ -53,18 +60,21 @@ onKeyStroke('k', (e) => {
 const sources = ref<SourceSummary[]>([])
 const subs = ref<Subscription[]>([])
 const dests = ref<Destination[]>([])
+const channels = ref<Channel[]>([])
 
 // 每次打开时取一次对象列表；取不到就只剩页面和操作，不打扰。
 watch(commandOpen, async (open) => {
   if (!open) return
-  const [a, b, c] = await Promise.allSettled([
+  const [a, b, c, d] = await Promise.allSettled([
     api.get<SourceSummary[]>('/sources'),
     api.get<Subscription[]>('/subscriptions'),
     api.get<Destination[]>('/destinations'),
+    api.get<Channel[]>('/channels'),
   ])
   if (a.status === 'fulfilled') sources.value = a.value.data
   if (b.status === 'fulfilled') subs.value = b.value.data
   if (c.status === 'fulfilled') dests.value = c.value.data
+  if (d.status === 'fulfilled') channels.value = d.value.data
 })
 
 const clientName = (v: string) => clients.find((c) => c.value === v)?.label ?? v
@@ -145,6 +155,16 @@ function run(fn: () => void) {
           @select="go(`/destinations/${d.id}`)"
         >
           <SendIcon /> {{ d.name }}
+        </CommandItem>
+      </CommandGroup>
+      <CommandGroup v-if="channels.length" heading="通知渠道">
+        <CommandItem
+          v-for="c in channels"
+          :key="c.id"
+          :value="`通知渠道 ${c.name}`"
+          @select="go('/notify')"
+        >
+          <BellRingIcon /> {{ c.name }}
         </CommandItem>
       </CommandGroup>
     </CommandList>
