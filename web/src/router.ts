@@ -12,7 +12,11 @@ const router = createRouter({
       path: '/',
       component: () => import('./layouts/AppLayout.vue'),
       children: [
-        { path: '', component: () => import('./views/OverviewView.vue') },
+        {
+          path: '',
+          component: () => import('./views/OverviewView.vue'),
+          meta: { fullBleed: true },
+        },
         { path: 'sources', component: () => import('./views/sources/SourcesView.vue') },
         // 编辑器是列表页上的弹窗，地址仍可直接打开
         {

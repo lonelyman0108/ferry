@@ -18,6 +18,16 @@ export function fmtAgo(v?: string | null): string {
   return fmtTime(v)
 }
 
+// fmtUntil 给出“21 天后”这类到期时间；已经过了的写“已过期”。
+export function fmtUntil(v?: string | null): string {
+  if (!v || v.startsWith('0001-')) return '—'
+  const sec = (new Date(v).getTime() - Date.now()) / 1000
+  if (sec <= 0) return '已过期'
+  if (sec < 3600) return `${Math.max(1, Math.floor(sec / 60))} 分钟后`
+  if (sec < 86400) return `${Math.floor(sec / 3600)} 小时后`
+  return `${Math.floor(sec / 86400)} 天后`
+}
+
 // copyText 复制到剪贴板。局域网 IP 走 http 时浏览器不提供 navigator.clipboard，退回到 execCommand。
 export async function copyText(text: string) {
   if (navigator.clipboard && window.isSecureContext) {

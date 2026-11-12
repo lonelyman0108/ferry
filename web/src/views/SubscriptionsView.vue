@@ -16,7 +16,7 @@ import {
   TriangleAlertIcon,
 } from '@lucide/vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 
 import { api, errorText } from '@/api'
@@ -126,7 +126,18 @@ async function load() {
     toast.error(errorText(e))
   }
 }
-onMounted(load)
+// 从总览的收件箱带 ?install=<订阅 ID> 进来时，直接打开那个订阅的安装引导。
+const route = useRoute()
+const router = useRouter()
+onMounted(async () => {
+  await load()
+  const id = Number(route.query.install)
+  const target = id ? list.value?.find((s) => s.id === id) : undefined
+  if (target) {
+    installFor.value = target
+    void router.replace({ query: { ...route.query, install: undefined } })
+  }
+})
 
 const noEndpoints = '还没有访问地址，先到“系统设置”添加一个'
 const formCheck = useFormCheck(() => ({
