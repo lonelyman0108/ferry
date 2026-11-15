@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -14,6 +16,7 @@ import (
 	"github.com/lonelyman0108/ferry/internal/probe"
 	"github.com/lonelyman0108/ferry/internal/rules"
 	"github.com/lonelyman0108/ferry/internal/source"
+	"github.com/lonelyman0108/ferry/internal/sourcecheck"
 	"github.com/lonelyman0108/ferry/internal/store"
 	"github.com/lonelyman0108/ferry/internal/validate"
 )
@@ -116,23 +119,381 @@ func (s *Server) handleCreateSource(w http.ResponseWriter, r *http.Request) {
 	s.createSource(w, r, d, "source.create")
 }
 
-type importInput struct {
-	YAML string `json:"yaml"`
+const (
+	importFetchTimeout = 10 * time.Second
+	conflictOverwrite  = "overwrite"
+	conflictRename     = "rename"
+)
+
+type importPreviewInput struct {
+	Text  string   `json:"text,omitempty"`
+	Texts []string `json:"texts,omitempty"`
+	URL   string   `json:"url,omitempty"`
 }
 
-// handleImportSource 导入 YAML 文本。为了让写请求统一走 JSON（跨站防护依赖这一点），YAML 放在 JSON 字段里。
-func (s *Server) handleImportSource(w http.ResponseWriter, r *http.Request) {
-	var in importInput
+type importPreviewItem struct {
+	Meta          source.Meta         `json:"meta"`
+	Source        source.Doc          `json:"source"`
+	Valid         bool                `json:"valid"`
+	Problems      []source.Problem    `json:"problems,omitempty"`
+	Details       []string            `json:"details,omitempty"`
+	Violations    []sourcecheck.Issue `json:"violations,omitempty"`
+	Warnings      []sourcecheck.Issue `json:"warnings,omitempty"`
+	Hosts         []string            `json:"hosts,omitempty"`
+	ProbeHost     string              `json:"probe_host,omitempty"`
+	Conflict      bool                `json:"conflict"`
+	ExistingID    uint                `json:"existing_id,omitempty"`
+	ExistingName  string              `json:"existing_name,omitempty"`
+	LocalModified bool                `json:"local_modified,omitempty"`
+}
+
+type importPreviewOutput struct {
+	URL       string              `json:"url,omitempty"`
+	GitHubURL bool                `json:"github_url,omitempty"`
+	Items     []importPreviewItem `json:"items"`
+}
+
+func isGitHubHost(host string) bool {
+	h := strings.ToLower(strings.TrimSpace(host))
+	switch h {
+	case "github.com", "raw.githubusercontent.com", "objects.githubusercontent.com", "codeload.github.com", "gist.githubusercontent.com":
+		return true
+	}
+	return false
+}
+
+func (s *Server) fetchImportURL(ctx context.Context, rawURL string) ([]byte, bool, error) {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil, false, errors.New("链接须为 http 或 https 地址")
+	}
+	ghURL := isGitHubHost(u.Hostname())
+
+	ctx, cancel := context.WithTimeout(ctx, importFetchTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, ghURL, fmt.Errorf("构造请求失败：%v", err)
+	}
+	req.Header.Set("Accept", "application/json, text/plain;q=0.9, */*;q=0.8")
+	client := &http.Client{
+		Timeout: importFetchTimeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("重定向次数过多")
+			}
+			if (req.URL.Scheme != "http" && req.URL.Scheme != "https") || req.URL.Host == "" {
+				return errors.New("不允许跳转到非 http/https 地址")
+			}
+			return nil
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, ghURL, fmt.Errorf("拉取导入链接失败：%v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, ghURL, fmt.Errorf("拉取导入链接失败：HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, source.MaxImportBytes+1))
+	if err != nil {
+		return nil, ghURL, fmt.Errorf("读取导入内容失败：%v", err)
+	}
+	if len(data) > source.MaxImportBytes {
+		return nil, ghURL, fmt.Errorf("导入内容超过 %d KB", source.MaxImportBytes>>10)
+	}
+	return data, ghURL, nil
+}
+
+func (s *Server) handleImportPreview(w http.ResponseWriter, r *http.Request) {
+	var in importPreviewInput
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	d, err := source.UnmarshalYAML([]byte(in.YAML))
-	var ve *source.ValidationError
-	if err != nil && !errors.As(err, &ve) {
-		writeError(w, http.StatusBadRequest, err.Error())
+
+	rawURL := strings.TrimSpace(in.URL)
+	text := strings.TrimSpace(in.Text)
+	var envs []source.Envelope
+	var ghURL bool
+
+	switch {
+	case rawURL != "":
+		if text != "" || len(in.Texts) > 0 {
+			writeError(w, http.StatusBadRequest, "链接导入与文本导入不能同时提供")
+			return
+		}
+		data, isGH, err := s.fetchImportURL(r.Context(), rawURL)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		ghURL = isGH
+		parsed, err := source.DecodeEnvelopes(data)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		envs = parsed
+	case len(in.Texts) > 0:
+		if text != "" {
+			writeError(w, http.StatusBadRequest, "请勿同时传入 text 与 texts")
+			return
+		}
+		totalBytes := 0
+		for i, t := range in.Texts {
+			totalBytes += len(t)
+			if totalBytes > source.MaxImportBytes {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("导入文件总大小超过 %d KB", source.MaxImportBytes>>10))
+				return
+			}
+			parsed, err := source.DecodeEnvelopes([]byte(t))
+			if err != nil {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("文件 %d：%v", i+1, err))
+				return
+			}
+			envs = append(envs, parsed...)
+			if len(envs) > source.MaxImportItems {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("单次最多导入 %d 个来源", source.MaxImportItems))
+				return
+			}
+		}
+		if len(envs) == 0 {
+			writeError(w, http.StatusBadRequest, "未提供有效的导入内容")
+			return
+		}
+	case text != "":
+		parsed, err := source.DecodeEnvelopes([]byte(text))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		envs = parsed
+	default:
+		writeError(w, http.StatusBadRequest, "请提供 JSON 内容或导入链接")
 		return
 	}
-	s.createSource(w, r, d, "source.import")
+
+	existingList, err := source.LoadAll(r.Context(), s.store().DB)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	byKey := make(map[string]store.Source, len(existingList))
+	for _, x := range existingList {
+		byKey[x.Key] = x
+	}
+
+	items := make([]importPreviewItem, 0, len(envs))
+	for _, env := range envs {
+		item := importPreviewItem{
+			Meta:   env.Meta,
+			Source: env.Source,
+			Valid:  true,
+		}
+		if err := env.Source.Validate(); err != nil {
+			item.Valid = false
+			var ve *source.ValidationError
+			if errors.As(err, &ve) {
+				item.Problems = ve.Problems
+				item.Details = ve.Details()
+			} else {
+				item.Details = []string{err.Error()}
+			}
+		}
+		rep := sourcecheck.Check(env.Source)
+		item.Violations = rep.Violations
+		item.Warnings = rep.Warnings
+		item.Hosts = rep.Hosts
+		item.ProbeHost = rep.ProbeHost
+
+		if ex, ok := byKey[env.Source.Key]; ok {
+			item.Conflict = true
+			item.ExistingID = ex.ID
+			item.ExistingName = ex.Name
+			item.LocalModified = source.HashDoc(source.FromModel(ex)) != source.HashDoc(env.Source)
+		}
+		items = append(items, item)
+	}
+
+	writeJSON(w, http.StatusOK, importPreviewOutput{
+		URL:       rawURL,
+		GitHubURL: ghURL,
+		Items:     items,
+	})
+}
+
+type importApplyItem struct {
+	Meta        source.Meta `json:"meta"`
+	Source      source.Doc  `json:"source"`
+	Conflict    string      `json:"conflict,omitempty"`
+	NewKey      string      `json:"new_key,omitempty"`
+	Acknowledge bool        `json:"acknowledge,omitempty"`
+}
+
+type importApplyInput struct {
+	Items []importApplyItem `json:"items"`
+}
+
+type importApplyResult struct {
+	Index    int              `json:"index"`
+	Key      string           `json:"key"`
+	Name     string           `json:"name"`
+	Action   string           `json:"action,omitempty"`
+	OK       bool             `json:"ok"`
+	Source   *sourceView      `json:"source,omitempty"`
+	Error    string           `json:"error,omitempty"`
+	Details  []string         `json:"details,omitempty"`
+	Problems []source.Problem `json:"problems,omitempty"`
+}
+
+type importApplyOutput struct {
+	Results   []importApplyResult `json:"results"`
+	Succeeded int                 `json:"succeeded"`
+	Failed    int                 `json:"failed"`
+}
+
+// handleImportSource 逐条应用预览确认后的来源导入。
+func (s *Server) handleImportSource(w http.ResponseWriter, r *http.Request) {
+	var in importApplyInput
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	if len(in.Items) == 0 {
+		writeError(w, http.StatusBadRequest, "导入列表为空")
+		return
+	}
+	if len(in.Items) > source.MaxImportItems {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("单次最多导入 %d 个来源", source.MaxImportItems))
+		return
+	}
+
+	actor := identityFrom(r.Context()).actor()
+	out := importApplyOutput{Results: make([]importApplyResult, 0, len(in.Items))}
+
+	for i, item := range in.Items {
+		d := item.Source
+		if item.Conflict == conflictRename {
+			nk := strings.TrimSpace(item.NewKey)
+			if nk == "" {
+				out.Failed++
+				out.Results = append(out.Results, importApplyResult{
+					Index:    i,
+					Key:      d.Key,
+					Name:     d.Name,
+					OK:       false,
+					Error:    "请填写新的来源标识",
+					Problems: []source.Problem{{Path: "key", Message: "不能为空"}},
+				})
+				continue
+			}
+			d.Key = nk
+		}
+
+		d.Normalize()
+		res := importApplyResult{Index: i, Key: d.Key, Name: d.Name}
+
+		meta := item.Meta
+		meta.Normalize()
+		if meta.Version < 1 {
+			meta.Version = 1
+		}
+		if err := meta.Validate(); err != nil {
+			res.Error = err.Error()
+			out.Failed++
+			out.Results = append(out.Results, res)
+			continue
+		}
+
+		if err := d.Validate(); err != nil {
+			var ve *source.ValidationError
+			if errors.As(err, &ve) {
+				res.Error = "来源定义有误"
+				res.Details = ve.Details()
+				res.Problems = ve.Problems
+			} else {
+				res.Error = err.Error()
+			}
+			out.Failed++
+			out.Results = append(out.Results, res)
+			continue
+		}
+
+		if rep := sourcecheck.Check(d); rep.HasViolations() && !item.Acknowledge {
+			res.Error = "该来源违反安全规则，请勾选「我已了解风险」后再导入"
+			out.Failed++
+			out.Results = append(out.Results, res)
+			continue
+		}
+
+		switch item.Conflict {
+		case "", conflictRename:
+			created, err := source.Create(r.Context(), s.store().DB, d)
+			if err != nil {
+				if errors.Is(err, source.ErrKeyExists) {
+					res.Error = err.Error()
+					res.Problems = []source.Problem{{Path: "key", Message: err.Error()}}
+				} else {
+					res.Error = err.Error()
+				}
+				out.Failed++
+				out.Results = append(out.Results, res)
+				continue
+			}
+			s.audit(r, actor, "source.import", "source:"+created.Key, "")
+			sv := viewSource(created)
+			res.OK = true
+			res.Action = "created"
+			res.Source = &sv
+			out.Succeeded++
+			out.Results = append(out.Results, res)
+
+		case conflictOverwrite:
+			var existing store.Source
+			err := s.store().DB.WithContext(r.Context()).Where("`key` = ?", d.Key).First(&existing).Error
+			if err != nil {
+				created, cerr := source.Create(r.Context(), s.store().DB, d)
+				if cerr != nil {
+					res.Error = cerr.Error()
+					out.Failed++
+					out.Results = append(out.Results, res)
+					continue
+				}
+				s.audit(r, actor, "source.import", "source:"+created.Key, "")
+				sv := viewSource(created)
+				res.OK = true
+				res.Action = "created"
+				res.Source = &sv
+				out.Succeeded++
+				out.Results = append(out.Results, res)
+				continue
+			}
+			updated, uerr := source.Update(r.Context(), s.store().DB, existing.ID, d)
+			if uerr != nil {
+				res.Error = uerr.Error()
+				out.Failed++
+				out.Results = append(out.Results, res)
+				continue
+			}
+			s.audit(r, actor, "source.import", "source:"+updated.Key, "覆盖更新")
+			sv := viewSource(updated)
+			res.OK = true
+			res.Action = "updated"
+			res.Source = &sv
+			out.Succeeded++
+			out.Results = append(out.Results, res)
+
+		default:
+			res.Error = fmt.Sprintf("不支持的冲突处理方式 %q", item.Conflict)
+			out.Failed++
+			out.Results = append(out.Results, res)
+		}
+	}
+
+	if out.Succeeded > 0 {
+		s.checkMitm(r.Context())
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleUpdateSource(w http.ResponseWriter, r *http.Request) {
@@ -190,13 +551,13 @@ func (s *Server) handleExportSource(w http.ResponseWriter, r *http.Request) {
 		s.writeSourceError(w, r, err)
 		return
 	}
-	data, err := source.MarshalYAML(source.FromModel(x))
+	data, err := source.MarshalEnvelope(source.FromModel(x), source.Meta{Version: 1})
 	if err != nil {
 		s.internalError(w, r, err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="ferry-%s.yaml"`, x.Key))
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="ferry-%s.json"`, x.Key))
 	_, _ = w.Write(data)
 }
 

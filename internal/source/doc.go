@@ -1,4 +1,4 @@
-// Package source 定义来源的文档格式（接口和 YAML 导入导出共用），负责校验、存取和生成给脚本的规则。
+// Package source 定义来源的文档格式（接口和 JSON 导入导出共用），负责校验、存取和生成给脚本的规则。
 package source
 
 import (
@@ -54,54 +54,54 @@ const (
 
 // Doc 是一个来源的完整定义。
 type Doc struct {
-	Key         string `json:"key" yaml:"key"`
-	Name        string `json:"name" yaml:"name"`
-	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 	// Icon 是可选的自定义图标，只接受 base64 编码的图片 data URI（见 validateIcon），为空时界面显示名称首字。
-	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
+	Icon string `json:"icon,omitempty"`
 	// Enabled 为 nil 时按启用处理。
-	Enabled       *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
-	IdentityField string `json:"identity_field,omitempty" yaml:"identity_field,omitempty"`
-	MergeWindow   *int   `json:"merge_window,omitempty" yaml:"merge_window,omitempty"`
-	Notify        string `json:"notify,omitempty" yaml:"notify,omitempty"`
-	MinInterval   *int   `json:"min_interval,omitempty" yaml:"min_interval,omitempty"`
-	Debug         bool   `json:"debug,omitempty" yaml:"debug,omitempty"`
+	Enabled       *bool  `json:"enabled,omitempty"`
+	IdentityField string `json:"identity_field,omitempty"`
+	MergeWindow   *int   `json:"merge_window,omitempty"`
+	Notify        string `json:"notify,omitempty"`
+	MinInterval   *int   `json:"min_interval,omitempty"`
+	Debug         bool   `json:"debug,omitempty"`
 	// Review 为 manual 时新值要人工审核才生效。
-	Review string `json:"review,omitempty" yaml:"review,omitempty"`
+	Review string `json:"review,omitempty"`
 	// Probe 是可选的主动探测，批次关闭时用新值请求一次目标服务确认有效。
-	Probe    *probe.Spec  `json:"probe,omitempty" yaml:"probe,omitempty"`
-	Matchers []MatcherDoc `json:"matchers" yaml:"matchers"`
-	Fields   []FieldDoc   `json:"fields" yaml:"fields"`
-	Outputs  []OutputDoc  `json:"outputs,omitempty" yaml:"outputs,omitempty"`
+	Probe    *probe.Spec  `json:"probe,omitempty"`
+	Matchers []MatcherDoc `json:"matchers"`
+	Fields   []FieldDoc   `json:"fields"`
+	Outputs  []OutputDoc  `json:"outputs,omitempty"`
 }
 
 // MatcherDoc 是一条请求匹配规则。
 type MatcherDoc struct {
-	Name   string `json:"name" yaml:"name"`
-	Host   string `json:"host" yaml:"host"`
-	Path   string `json:"path,omitempty" yaml:"path,omitempty"`
-	Method string `json:"method,omitempty" yaml:"method,omitempty"`
+	Name   string `json:"name"`
+	Host   string `json:"host"`
+	Path   string `json:"path,omitempty"`
+	Method string `json:"method,omitempty"`
 }
 
 // FieldDoc 是一个字段的取值方式和校验规则。
 type FieldDoc struct {
-	Key       string `json:"key" yaml:"key"`
-	Name      string `json:"name,omitempty" yaml:"name,omitempty"`
-	Matcher   string `json:"matcher,omitempty" yaml:"matcher,omitempty"`
-	In        string `json:"in" yaml:"in"`
-	Path      string `json:"path" yaml:"path"`
-	RegexOn   string `json:"regex_on,omitempty" yaml:"regex_on,omitempty"`
-	Type      string `json:"type,omitempty" yaml:"type,omitempty"`
-	Sensitive bool   `json:"sensitive,omitempty" yaml:"sensitive,omitempty"`
-	MinLen    int    `json:"min_len,omitempty" yaml:"min_len,omitempty"`
-	MaxLen    int    `json:"max_len,omitempty" yaml:"max_len,omitempty"`
-	Pattern   string `json:"pattern,omitempty" yaml:"pattern,omitempty"`
+	Key       string `json:"key"`
+	Name      string `json:"name,omitempty"`
+	Matcher   string `json:"matcher,omitempty"`
+	In        string `json:"in"`
+	Path      string `json:"path"`
+	RegexOn   string `json:"regex_on,omitempty"`
+	Type      string `json:"type,omitempty"`
+	Sensitive bool   `json:"sensitive,omitempty"`
+	MinLen    int    `json:"min_len,omitempty"`
+	MaxLen    int    `json:"max_len,omitempty"`
+	Pattern   string `json:"pattern,omitempty"`
 }
 
 // OutputDoc 是一个输出变量。
 type OutputDoc struct {
-	Name     string `json:"name" yaml:"name"`
-	Template string `json:"template" yaml:"template"`
+	Name     string `json:"name"`
+	Template string `json:"template"`
 }
 
 var (
@@ -119,7 +119,7 @@ type Problem struct {
 	Message string `json:"message"`
 }
 
-// String 返回带位置的完整说明，如「key 仅允许小写字母…」，供只显示文字的场合（YAML 导入、日志）。
+// String 返回带位置的完整说明，如「key 仅允许小写字母…」，供只显示文字的场合（导入预览、日志）。
 func (p Problem) String() string {
 	if p.Path == "" {
 		return p.Message

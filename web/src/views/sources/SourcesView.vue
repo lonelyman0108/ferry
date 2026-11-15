@@ -15,40 +15,48 @@ import { toast } from 'vue-sonner'
 import { api, errorText } from '@/api'
 import DialogShell from '@/components/DialogShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import FormField from '@/components/FormField.vue'
-import FormDialog from '@/components/FormDialog.vue'
 import { type Badge, sourceAlerts } from '@/components/flow/nodes'
 import ListSkeleton from '@/components/ListSkeleton.vue'
 import SourceEditor from './SourceEditor.vue'
+import SourceImportDialog from './SourceImportDialog.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RowActions from '@/components/RowActions.vue'
 import SourceAvatar from '@/components/SourceAvatar.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { fmtAgo } from '@/format'
-import { useFormCheck } from '@/lib/form'
 import { icons } from '@/lib/icons'
 import { useOverview } from '@/stores/overview'
 import { useSourceIcons } from '@/stores/sourceIcons'
 import type { Example, SourceSummary, SourceView, Subscription } from '@/types'
 
-const props = defineProps<{ editing?: string }>()
+const props = defineProps<{ editing?: string; importing?: boolean }>()
 const router = useRouter()
 const route = useRoute()
 const list = ref<SourceSummary[] | null>(null)
 const examples = ref<Example[]>([])
 const showImport = ref(false)
 const showExamples = ref(false)
-const yaml = ref('')
 const busy = ref(false)
-const yamlCheck = useFormCheck(() => ({
-  yaml: !yaml.value.trim() && '请粘贴 YAML 内容或选择文件',
-}))
 
 function openImport() {
-  yamlCheck.reset()
   showImport.value = true
+}
+
+function closeImport() {
+  showImport.value = false
+  if (props.importing) {
+    void router.replace('/sources')
+  }
+}
+
+async function onImported(singleId?: number) {
+  await load()
+  if (singleId) {
+    await router.push({ path: `/sources/${singleId}`, query: { edit: 'basic' } })
+  } else if (props.importing) {
+    await router.replace('/sources')
+  }
 }
 
 // 卡片上的接入状态：读取它的订阅数来自订阅列表，推送规则数和最近回传来自总览。
@@ -128,33 +136,13 @@ async function importExample(key: string) {
     busy.value = false
   }
 }
-
-async function readFile(ev: Event) {
-  const f = (ev.target as HTMLInputElement).files?.[0]
-  if (f) yaml.value = await f.text()
-}
-
-async function importYAML() {
-  if (!yamlCheck.ok()) return
-  busy.value = true
-  try {
-    const s = (await api.post<SourceView>('/sources/import', { yaml: yaml.value })).data
-    toast.success(`已导入「${s.name}」`)
-    showImport.value = false
-    await router.push({ path: `/sources/${s.id}`, query: { edit: 'basic' } })
-  } catch (e) {
-    toast.error(errorText(e))
-  } finally {
-    busy.value = false
-  }
-}
 </script>
 
 <template>
   <PageHeader>
     <template #actions>
       <Button variant="outline" @click="openExamples"><SparklesIcon /> 从示例导入</Button>
-      <Button variant="outline" @click="openImport"><FileUpIcon /> 导入 YAML</Button>
+      <Button variant="outline" @click="openImport"><FileUpIcon /> 导入</Button>
       <Button @click="router.push('/sources/new')"><PlusIcon /> 新建来源</Button>
     </template>
   </PageHeader>
@@ -265,35 +253,12 @@ async function importYAML() {
     </template>
   </DialogShell>
 
-  <FormDialog
-    v-model:open="showImport"
-    title="导入 YAML"
-    description="粘贴或上传来源定义文件"
-    :icon="FileUpIcon"
-    submit-text="导入"
-    size="lg"
-    :busy="busy"
-    @submit="importYAML"
-  >
-    <FormField label="文件" for="yaml-file" optional>
-      <input
-        id="yaml-file"
-        type="file"
-        accept=".yaml,.yml,text/yaml"
-        class="text-sm file:mr-3 file:rounded-md file:border file:bg-transparent file:px-2 file:py-1"
-        @change="readFile"
-      />
-    </FormField>
-    <FormField label="YAML" for="yaml-text" :error="yamlCheck.errors.yaml">
-      <Textarea
-        id="yaml-text"
-        v-model="yaml"
-        rows="20"
-        class="font-mono"
-        placeholder="key: example&#10;name: 示例&#10;matchers: …"
-      />
-    </FormField>
-  </FormDialog>
+  <SourceImportDialog
+    :open="showImport || !!importing"
+    :initial-url="typeof route.query.url === 'string' ? route.query.url : undefined"
+    @close="closeImport"
+    @imported="onImported"
+  />
 
   <SourceEditor
     v-if="editing"

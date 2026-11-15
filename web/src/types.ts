@@ -80,6 +80,72 @@ export interface Example {
   description: string
 }
 
+export interface SourceMeta {
+  version: number
+  author?: string
+  homepage?: string
+  tags?: string[]
+}
+
+export interface SourceImportIssue {
+  code: string
+  path?: string
+  message: string
+}
+
+export interface SourceProblem {
+  path?: string
+  message: string
+}
+
+export interface SourceImportPreviewItem {
+  meta: SourceMeta
+  source: SourceDoc
+  valid: boolean
+  problems?: SourceProblem[]
+  details?: string[]
+  violations?: SourceImportIssue[]
+  warnings?: SourceImportIssue[]
+  hosts?: string[]
+  probe_host?: string
+  conflict: boolean
+  existing_id?: number
+  existing_name?: string
+  local_modified?: boolean
+}
+
+export interface SourceImportPreviewOutput {
+  url?: string
+  github_url?: boolean
+  items: SourceImportPreviewItem[]
+}
+
+export interface SourceImportApplyItem {
+  meta: SourceMeta
+  source: SourceDoc
+  conflict?: '' | 'overwrite' | 'rename'
+  new_key?: string
+  acknowledge?: boolean
+}
+
+export interface SourceImportApplyResult {
+  index: number
+  key: string
+  name: string
+  action?: 'created' | 'updated'
+  ok: boolean
+  source?: SourceView
+  error?: string
+  details?: string[]
+  problems?: SourceProblem[]
+}
+
+export interface SourceImportApplyOutput {
+  results: SourceImportApplyResult[]
+  succeeded: number
+  failed: number
+}
+
 export interface TryValue {
   ok: boolean
   value?: string

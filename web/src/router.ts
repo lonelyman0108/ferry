@@ -21,11 +21,16 @@ const router = createRouter({
         { path: 'subscriptions/:id(\\d+)', ...flow },
         { path: 'destinations/:id(\\d+)', ...flow },
         { path: 'sources', component: () => import('./views/sources/SourcesView.vue') },
-        // 编辑器是列表页上的弹窗，地址仍可直接打开
+        // 编辑器与导入预览是列表页上的弹窗，地址仍可直接打开
         {
           path: 'sources/new',
           component: () => import('./views/sources/SourcesView.vue'),
           props: { editing: 'new' },
+        },
+        {
+          path: 'sources/import',
+          component: () => import('./views/sources/SourcesView.vue'),
+          props: { importing: true },
         },
         // 登录态页并进了来源详情：旧地址跳到来源列表，身份详情跳到所属来源并打开那个身份
         { path: 'data', redirect: '/sources' },

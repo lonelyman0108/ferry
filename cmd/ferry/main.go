@@ -22,6 +22,7 @@ import (
 
 const usage = `用法：
   ferry serve [-config ferry.yaml] [-addr 地址]   启动服务
+  ferry source check [--hub] <文件或目录…>        检查来源定义与安全规则
   ferry healthcheck [-config ferry.yaml]          检查本机服务是否在线（容器健康检查用）
   ferry version               输出构建信息`
 
@@ -34,6 +35,11 @@ func main() {
 	case "serve":
 		if err := serve(os.Args[2:]); err != nil {
 			slog.Error("服务退出", "err", err)
+			os.Exit(1)
+		}
+	case "source":
+		if err := runSource(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 	case "version":

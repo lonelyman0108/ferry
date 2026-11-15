@@ -189,6 +189,7 @@ func (s *Server) Handler() http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(s.authenticate(false))
 				r.Post("/sources", s.handleCreateSource)
+				r.Post("/sources/import/preview", s.handleImportPreview)
 				r.Post("/sources/import", s.handleImportSource)
 				r.Put("/sources/{id}", s.handleUpdateSource)
 				r.Delete("/sources/{id}", s.handleDeleteSource)
