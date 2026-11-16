@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lonelyman0108/ferry/main/schema/source.v1.json",
+  "title": "Ferry Source Envelope (v1)",
+  "description": "Ferry 来源定义交换格式（v1）",
+  "type": "object",
+  "required": ["format", "meta", "source"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "format": {
+      "type": "integer",
+      "const": 1,
+      "description": "外壳格式版本，当前固定为 1"
+    },
+    "meta": {
+      "$ref": "#/$defs/meta"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    }
+  },
+  "$defs": {
+    "meta": {
+      "type": "object",
+      "required": ["version"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "来源规则版本号，从 1 开始递增"
+        },
+        "author": {
+          "type": "string",
+          "description": "维护者名称或 GitHub 账号"
+        },
+        "homepage": {
+          "type": "string",
+          "format": "uri",
+          "description": "说明或发布页面地址"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "分类标签"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["key", "name", "matchers", "fields"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "description": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "identity_field": {
+          "type": "string"
+        },
+        "merge_window": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "notify": {
+          "type": "string",
+          "enum": ["always", "first", "changed"]
+        },
+        "min_interval": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400
+        },
+        "debug": {
+          "type": "boolean"
+        },
+        "review": {
+          "type": "string",
+          "enum": ["auto", "manual"]
+        },
+        "probe": {
+          "$ref": "#/$defs/probe"
+        },
+        "matchers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/matcher"
+          }
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/field"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/output"
+          }
+        }
+      }
+    },
+    "matcher": {
+      "type": "object",
+      "required": ["name", "host"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "enum": ["", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": ["key", "in", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "matcher": {
+          "type": "string"
+        },
+        "in": {
+          "type": "string",
+          "enum": ["header", "cookie", "query", "body_json", "body_form", "regex"]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "regex_on": {
+          "type": "string",
+          "enum": ["", "url", "header", "body"]
+        },
+        "type": {
+          "type": "string",
+          "enum": ["text", "jwt", "cookie", "json", "number", "bool"]
+        },
+        "sensitive": {
+          "type": "boolean"
+        },
+        "min_len": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_len": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pattern": {
+          "type": "string"
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": ["name", "template"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+        },
+        "template": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "probe": {
+      "type": "object",
+      "required": ["url", "expect"],
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"]
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "type": "string"
+        },
+        "expect": {
+          "type": "string",
+          "minLength": 1
+        },
+        "identity": {
+          "type": "string"
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        }
+      }
+    }
+  }
+}

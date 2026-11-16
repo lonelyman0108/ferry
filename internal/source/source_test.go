@@ -3,14 +3,18 @@ package source
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/lonelyman0108/ferry/internal/config"
+	"github.com/lonelyman0108/ferry/internal/probe"
 	"github.com/lonelyman0108/ferry/internal/store"
 )
 
@@ -133,22 +137,99 @@ func TestMatcherNeedsBody(t *testing.T) {
 	}
 }
 
-func TestYAMLRoundTrip(t *testing.T) {
+func TestEnvelopeRoundTrip(t *testing.T) {
 	d := ninebot(t)
-	data, err := MarshalYAML(d)
+	data, err := MarshalEnvelope(d, Meta{Version: 2, Author: "tester", Homepage: "https://example.com/ninebot", Tags: []string{"出行"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := UnmarshalYAML(data)
+	env, err := UnmarshalEnvelope(data)
 	if err != nil {
-		t.Fatalf("导出的 YAML 无法再导入：%v\n%s", err, data)
+		t.Fatalf("导出的 JSON 无法再导入：%v\n%s", err, data)
+	}
+	got := env.Source
+	if env.Schema != SchemaURL || env.Format != EnvelopeFormat || env.Meta.Version != 2 {
+		t.Errorf("外壳字段不对：%+v", env)
 	}
 	if got.Key != d.Key || len(got.Fields) != len(d.Fields) || got.Outputs[1].Template != d.Outputs[1].Template {
 		t.Errorf("往返后不一致：%+v", got)
 	}
-	if _, err := UnmarshalYAML([]byte("key: a\nunknown: 1\n")); err == nil || !strings.Contains(err.Error(), "unknown") {
-		t.Errorf("未知字段应当报错：%v", err)
+
+	// 支持数组形式导入。
+	arrBytes, err := json.Marshal([]json.RawMessage{data})
+	if err != nil {
+		t.Fatal(err)
 	}
+	envs, err := UnmarshalEnvelopes(arrBytes)
+	if err != nil || len(envs) != 1 || envs[0].Source.Key != "ninebot" {
+		t.Fatalf("数组导入失败：%v %+v", err, envs)
+	}
+
+	// format 不为 1、version < 1、未知字段均应报错。
+	badCases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"format 错误", `{"format":2,"meta":{"version":1},"source":{"key":"a","name":"A","matchers":[],"fields":[]}}`, "format 须为 1"},
+		{"version 错误", `{"format":1,"meta":{"version":0},"source":{"key":"a","name":"A","matchers":[],"fields":[]}}`, "meta.version 须为正整数"},
+		{"顶层未知字段", `{"format":1,"unknown":1,"meta":{"version":1},"source":{"key":"a","name":"A","matchers":[],"fields":[]}}`, "unknown"},
+		{"内层未知字段", `{"format":1,"meta":{"version":1},"source":{"key":"a","name":"A","extra":true,"matchers":[],"fields":[]}}`, "extra"},
+	}
+	for _, c := range badCases {
+		if _, err := UnmarshalEnvelope([]byte(c.raw)); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s：err = %v，期望包含 %q", c.name, err, c.want)
+		}
+	}
+}
+
+func TestSchemaMatchesStructs(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "schema", "source.v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var root struct {
+		ID         string                     `json:"$id"`
+		Properties map[string]json.RawMessage `json:"properties"`
+		Defs       map[string]struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &root); err != nil {
+		t.Fatal(err)
+	}
+	if root.ID != SchemaURL {
+		t.Errorf("Schema $id = %q，期望 %q", root.ID, SchemaURL)
+	}
+
+	checkType := func(name string, rt reflect.Type, props map[string]json.RawMessage) {
+		t.Helper()
+		want := make([]string, 0, rt.NumField())
+		for i := 0; i < rt.NumField(); i++ {
+			tag := rt.Field(i).Tag.Get("json")
+			key, _, _ := strings.Cut(tag, ",")
+			if key != "" && key != "-" {
+				want = append(want, key)
+			}
+		}
+		got := make([]string, 0, len(props))
+		for k := range props {
+			got = append(got, k)
+		}
+		slices.Sort(want)
+		slices.Sort(got)
+		if !slices.Equal(want, got) {
+			t.Errorf("%s 字段与 Schema 不一致：\n结构体：%v\nSchema：%v", name, want, got)
+		}
+	}
+
+	checkType("Envelope", reflect.TypeOf(Envelope{}), root.Properties)
+	checkType("Meta", reflect.TypeOf(Meta{}), root.Defs["meta"].Properties)
+	checkType("Doc", reflect.TypeOf(Doc{}), root.Defs["source"].Properties)
+	checkType("MatcherDoc", reflect.TypeOf(MatcherDoc{}), root.Defs["matcher"].Properties)
+	checkType("FieldDoc", reflect.TypeOf(FieldDoc{}), root.Defs["field"].Properties)
+	checkType("OutputDoc", reflect.TypeOf(OutputDoc{}), root.Defs["output"].Properties)
+	checkType("probe.Spec", reflect.TypeOf(probe.Spec{}), root.Defs["probe"].Properties)
 }
 
 func TestScriptRules(t *testing.T) {

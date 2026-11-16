@@ -34,9 +34,10 @@ api.interceptors.response.use(
     const data = err.response?.data
     const msg = data?.error ?? (status ? `请求失败（HTTP ${status}）` : '连接服务失败')
     const path = router.currentRoute.value.path
+    const fullPath = router.currentRoute.value.fullPath
     // 登录过期就回登录页；尚未初始化就去向导。登录、向导页自己处理错误。
     if (status === 401 && path !== '/login' && !err.config?.url?.startsWith('/auth/login')) {
-      void router.push({ path: '/login', query: { next: path } })
+      void router.push({ path: '/login', query: { next: fullPath } })
     } else if (status === 503 && path !== '/setup') {
       void router.push('/setup')
     }

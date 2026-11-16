@@ -30,16 +30,16 @@ const (
 
 // Spec 是来源上的探测配置。
 type Spec struct {
-	Method  string            `json:"method,omitempty" yaml:"method,omitempty"`
-	URL     string            `json:"url" yaml:"url"`
-	Headers map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
-	Body    string            `json:"body,omitempty" yaml:"body,omitempty"`
+	Method  string            `json:"method,omitempty"`
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers,omitempty"`
+	Body    string            `json:"body,omitempty"`
 	// Expect 是判定表达式，结果必须是布尔值，例如 status == 200 && json.code == 0。
-	Expect string `json:"expect" yaml:"expect"`
+	Expect string `json:"expect"`
 	// Identity 是可选的取身份表达式，例如 json.data.userId；结果会转成字符串作为身份键。
-	Identity string `json:"identity,omitempty" yaml:"identity,omitempty"`
+	Identity string `json:"identity,omitempty"`
 	// Timeout 是超时秒数，默认 5，最多 30。
-	Timeout int `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+	Timeout int `json:"timeout,omitempty"`
 }
 
 // Result 是一次探测的结论。Err 不为 nil 表示没能完成探测（网络错误等），这时 OK 没有意义。

