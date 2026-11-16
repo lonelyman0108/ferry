@@ -235,3 +235,61 @@ func TestSourceIconFitsLargestImage(t *testing.T) {
 		})
 	}
 }
+
+func TestRepoAndSourceOrigin(t *testing.T) {
+	for driver, s := range testStores(t) {
+		t.Run(driver, func(t *testing.T) {
+			now := time.Now().Round(time.Second)
+			bigCache := strings.Repeat("x", 90000)
+			repo := Repo{
+				Name:          "官方仓库",
+				URL:           "https://github.com/lonelyman0108/ferry-hub",
+				IndexURL:      "https://raw.githubusercontent.com/lonelyman0108/ferry-hub/main/index.json",
+				Enabled:       true,
+				Official:      true,
+				ETag:          "\"etag-1\"",
+				CachedIndex:   bigCache,
+				LastFetchedAt: &now,
+			}
+			if err := s.DB.Create(&repo).Error; err != nil {
+				t.Fatalf("创建仓库：%v", err)
+			}
+			dup := Repo{Name: "官方仓库", URL: "https://example.com/index.json", IndexURL: "https://example.com/index.json", Enabled: true}
+			if err := s.DB.Create(&dup).Error; !errors.Is(err, gorm.ErrDuplicatedKey) {
+				t.Errorf("重复仓库名称 err = %v，期望 ErrDuplicatedKey", err)
+			}
+
+			src := Source{
+				Key:           "ninebot",
+				Name:          "九号出行",
+				Enabled:       true,
+				NotifyMode:    "always",
+				ReviewMode:    "auto",
+				OriginRepoID:  &repo.ID,
+				OriginRepoURL: repo.URL,
+				OriginPath:    "sources/ninebot/source.json",
+				OriginVersion: 2,
+				OriginHash:    strings.Repeat("a", 64),
+			}
+			if err := s.DB.Create(&src).Error; err != nil {
+				t.Fatalf("创建带出处的来源：%v", err)
+			}
+
+			var gotRepo Repo
+			if err := s.DB.First(&gotRepo, repo.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if len(gotRepo.CachedIndex) != len(bigCache) || !gotRepo.Official {
+				t.Errorf("读回仓库 = len(%d) official=%v", len(gotRepo.CachedIndex), gotRepo.Official)
+			}
+
+			var gotSrc Source
+			if err := s.DB.First(&gotSrc, src.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if gotSrc.OriginRepoID == nil || *gotSrc.OriginRepoID != repo.ID || gotSrc.OriginVersion != 2 || gotSrc.OriginPath != "sources/ninebot/source.json" {
+				t.Errorf("读回来处 = %+v", gotSrc)
+			}
+		})
+	}
+}

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import {
   ChevronRightIcon,
+  ExternalLinkIcon,
   FileUpIcon,
   KeyRoundIcon,
+  PackageSearchIcon,
   PlusIcon,
   RouteIcon,
-  SparklesIcon,
   VariableIcon,
 } from '@lucide/vue'
 import { onMounted, ref } from 'vue'
@@ -13,7 +14,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 
 import { api, errorText } from '@/api'
-import DialogShell from '@/components/DialogShell.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { type Badge, sourceAlerts } from '@/components/flow/nodes'
 import ListSkeleton from '@/components/ListSkeleton.vue'
@@ -28,16 +28,13 @@ import { fmtAgo } from '@/format'
 import { icons } from '@/lib/icons'
 import { useOverview } from '@/stores/overview'
 import { useSourceIcons } from '@/stores/sourceIcons'
-import type { Example, SourceSummary, SourceView, Subscription } from '@/types'
+import type { SourceSummary, SourceView, Subscription } from '@/types'
 
 const props = defineProps<{ editing?: string; importing?: boolean }>()
 const router = useRouter()
 const route = useRoute()
 const list = ref<SourceSummary[] | null>(null)
-const examples = ref<Example[]>([])
 const showImport = ref(false)
-const showExamples = ref(false)
-const busy = ref(false)
 
 function openImport() {
   showImport.value = true
@@ -114,34 +111,14 @@ async function toggle(s: SourceSummary, enabled: boolean) {
     toggling.value = 0
   }
 }
-
-async function openExamples() {
-  showExamples.value = true
-  try {
-    examples.value = (await api.get<Example[]>('/examples')).data
-  } catch (e) {
-    toast.error(errorText(e))
-  }
-}
-
-async function importExample(key: string) {
-  busy.value = true
-  try {
-    const s = (await api.post<SourceView>(`/examples/${key}/import`, {})).data
-    toast.success(`已导入「${s.name}」`)
-    await router.push({ path: `/sources/${s.id}`, query: { edit: 'basic' } })
-  } catch (e) {
-    toast.error(errorText(e))
-  } finally {
-    busy.value = false
-  }
-}
 </script>
 
 <template>
   <PageHeader>
     <template #actions>
-      <Button variant="outline" @click="openExamples"><SparklesIcon /> 从示例导入</Button>
+      <Button variant="outline" @click="router.push('/sources/hub')"
+        ><PackageSearchIcon /> 浏览仓库</Button
+      >
       <Button variant="outline" @click="openImport"><FileUpIcon /> 导入</Button>
       <Button @click="router.push('/sources/new')"><PlusIcon /> 新建来源</Button>
     </template>
@@ -152,9 +129,9 @@ async function importExample(key: string) {
     v-else-if="!list.length"
     :icon="icons.source"
     title="暂无来源"
-    description="来源定义目标 App 的请求匹配、字段读取规则与输出变量。可从内置示例导入。"
+    description="来源定义目标 App 的请求匹配、字段读取规则与输出变量。可从来源仓库浏览并导入。"
   >
-    <Button @click="openExamples"><SparklesIcon /> 从示例导入</Button>
+    <Button @click="router.push('/sources/hub')"><PackageSearchIcon /> 浏览仓库</Button>
     <Button variant="outline" @click="router.push('/sources/new')"><PlusIcon /> 新建来源</Button>
   </EmptyState>
 
@@ -169,7 +146,7 @@ async function importExample(key: string) {
       <div class="flex items-start gap-3">
         <SourceAvatar :name="s.name" :skey="s.key" :icon="s.icon ?? ''" :disabled="!s.enabled" />
         <div class="min-w-0 flex-1">
-          <div class="flex min-w-0 items-center gap-2">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
             <router-link
               :to="`/sources/${s.id}`"
               data-card-link
@@ -177,8 +154,25 @@ async function importExample(key: string) {
               >{{ s.name }}</router-link
             >
             <StatusBadge v-if="!s.enabled" dot>已停用</StatusBadge>
+            <StatusBadge v-if="s.origin?.latest_version" tone="warning" dot
+              >有更新 v{{ s.origin.latest_version }}</StatusBadge
+            >
           </div>
-          <div class="text-muted-foreground truncate font-mono text-xs">{{ s.key }}</div>
+          <div class="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
+            <span class="truncate font-mono">{{ s.key }}</span>
+            <span v-if="s.origin?.version" class="font-mono">v{{ s.origin.version }}</span>
+            <span v-if="s.origin?.repo_name">· {{ s.origin.repo_name }}</span>
+            <span v-if="s.origin?.local_modified" class="text-warning">· 已修改</span>
+            <a
+              v-if="s.origin?.readme_url"
+              :href="s.origin.readme_url"
+              target="_blank"
+              rel="noopener"
+              class="text-primary relative z-10 inline-flex items-center gap-0.5 hover:underline"
+              @click.stop
+              ><ExternalLinkIcon class="size-3" />说明</a
+            >
+          </div>
           <div v-if="alertsOf(s).length" class="mt-2 flex flex-wrap gap-1.5">
             <StatusBadge v-for="b in alertsOf(s)" :key="b.label" :tone="b.tone" dot>{{
               b.label
@@ -226,32 +220,6 @@ async function importExample(key: string) {
       </div>
     </div>
   </div>
-
-  <DialogShell
-    :open="showExamples"
-    title="从示例导入"
-    description="同一来源标识仅可导入一次"
-    :icon="SparklesIcon"
-    @close="showExamples = false"
-  >
-    <div class="grid gap-2">
-      <div v-for="e in examples" :key="e.key" class="flex items-start gap-3 rounded-lg border p-3">
-        <SourceAvatar :name="e.name" :skey="e.key" icon="" size="sm" />
-        <div class="min-w-0 flex-1">
-          <div class="font-medium">
-            {{ e.name }} <span class="text-muted-foreground font-mono text-xs">{{ e.key }}</span>
-          </div>
-          <p class="text-muted-foreground mt-1 text-sm whitespace-pre-line">
-            {{ e.description }}
-          </p>
-        </div>
-        <Button size="sm" :disabled="busy" @click="importExample(e.key)">导入</Button>
-      </div>
-    </div>
-    <template #footer>
-      <Button variant="outline" @click="showExamples = false">关闭</Button>
-    </template>
-  </DialogShell>
 
   <SourceImportDialog
     :open="showImport || !!importing"

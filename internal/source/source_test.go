@@ -20,20 +20,18 @@ import (
 
 func ninebot(t *testing.T) Doc {
 	t.Helper()
-	for _, e := range Examples() {
-		if e.Key == "ninebot" {
-			return e.Doc
-		}
+	data, err := os.ReadFile(filepath.Join("testdata", "ninebot.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Fatal("没有九号示例")
-	return Doc{}
+	env, err := UnmarshalEnvelope(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return env.Source
 }
 
-func TestExamplesAreValid(t *testing.T) {
-	ex := Examples()
-	if len(ex) == 0 {
-		t.Fatal("没有内置示例")
-	}
+func TestNinebotFixtureIsValid(t *testing.T) {
 	d := ninebot(t)
 	if *d.MergeWindow != DefaultMergeWindow || d.Notify != NotifyAlways || !*d.Enabled {
 		t.Errorf("默认值没有填上：%+v", d)

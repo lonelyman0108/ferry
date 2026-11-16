@@ -141,6 +141,26 @@ func Delete(ctx context.Context, db *gorm.DB, id uint) error {
 	})
 }
 
+// Origin 记录来源导入或更新时的出处与版本摘要。
+type Origin struct {
+	RepoID  *uint  `json:"repo_id,omitempty"`
+	RepoURL string `json:"repo_url,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Version int    `json:"version,omitempty"`
+	Hash    string `json:"hash,omitempty"`
+}
+
+// SaveOrigin 更新来源的出处、版本与导入时内容摘要。
+func SaveOrigin(ctx context.Context, db *gorm.DB, id uint, orig Origin) error {
+	return db.WithContext(ctx).Model(&store.Source{}).Where("id = ?", id).Updates(map[string]any{
+		"origin_repo_id":  orig.RepoID,
+		"origin_repo_url": orig.RepoURL,
+		"origin_path":     orig.Path,
+		"origin_version":  orig.Version,
+		"origin_hash":     orig.Hash,
+	}).Error
+}
+
 func applyScalars(s *store.Source, d Doc) {
 	s.Name, s.Description, s.Icon, s.Enabled = d.Name, d.Description, d.Icon, *d.Enabled
 	s.IdentityField, s.MergeWindowSec, s.NotifyMode = d.IdentityField, *d.MergeWindow, d.Notify

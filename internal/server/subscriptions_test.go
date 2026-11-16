@@ -3,6 +3,8 @@ package server
 import (
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,7 +37,7 @@ func TestSubscriptionFlow(t *testing.T) {
 		t.Errorf("重名地址 = %d", code)
 	}
 
-	h.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, nil)
+	h.do("POST", "/api/v1/sources", ninebotDoc(t), nil)
 	other := ninebotDoc(t)
 	other.Key, other.Name = "other", "另一个"
 	other.Matchers[0].Host, other.Matchers[1].Host = "api.other.com", "api.other.com"
@@ -122,20 +124,22 @@ func TestSubscriptionFlow(t *testing.T) {
 
 func ninebotDoc(t *testing.T) source.Doc {
 	t.Helper()
-	for _, e := range source.Examples() {
-		if e.Key == "ninebot" {
-			return e.Doc
-		}
+	data, err := os.ReadFile(filepath.Join("..", "source", "testdata", "ninebot.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Fatal("没有九号示例")
-	return source.Doc{}
+	env, err := source.UnmarshalEnvelope(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return env.Source
 }
 
 func TestSubscriptionFile(t *testing.T) {
 	h := ready(t)
 	var lan endpointView
 	h.do("POST", "/api/v1/endpoints", map[string]string{"name": "lan", "base_url": h.ts.URL}, &lan)
-	h.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, nil)
+	h.do("POST", "/api/v1/sources", ninebotDoc(t), nil)
 	var sv subscriptionView
 	h.do("POST", "/api/v1/subscriptions", map[string]any{"name": "iPhone", "client": "stash", "endpoint_id": lan.ID, "all_sources": true}, &sv)
 

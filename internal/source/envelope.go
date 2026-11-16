@@ -3,14 +3,11 @@ package source
 import (
 	"bytes"
 	"crypto/sha256"
-	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/url"
-	"sort"
 	"strings"
 )
 
@@ -223,50 +220,10 @@ func formatJSONDecodeError(err error) error {
 func HashDoc(d Doc) string {
 	d.Normalize()
 	d.Enabled = nil
+	if len(d.Outputs) == 0 {
+		d.Outputs = nil
+	}
 	data, _ := json.Marshal(d)
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
-}
-
-//go:embed examples/*.json
-var exampleFS embed.FS
-
-// Example 是内置的来源示例。
-type Example struct {
-	Key         string `json:"key"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Meta        Meta   `json:"meta"`
-	Doc         Doc    `json:"-"`
-}
-
-// Examples 返回全部内置示例，按 key 排序。示例文件不合法时直接 panic，由测试保证。
-func Examples() []Example {
-	entries, err := fs.ReadDir(exampleFS, "examples")
-	if err != nil {
-		panic(err)
-	}
-	var out []Example
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
-			continue
-		}
-		data, err := exampleFS.ReadFile("examples/" + e.Name())
-		if err != nil {
-			panic(err)
-		}
-		env, err := UnmarshalEnvelope(data)
-		if err != nil {
-			panic(fmt.Sprintf("内置示例 %s 不合法：%v", e.Name(), err))
-		}
-		out = append(out, Example{
-			Key:         env.Source.Key,
-			Name:        env.Source.Name,
-			Description: strings.TrimSpace(env.Source.Description),
-			Meta:        env.Meta,
-			Doc:         env.Source,
-		})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
-	return out
 }

@@ -67,6 +67,9 @@ var auditKinds = map[string]auditKind{
 	"token.create":                      {"新建 API 令牌", auditConfig},
 	"token.revoke":                      {"吊销 API 令牌", auditConfig},
 	"settings.network_update":           {"修改网络设置", auditConfig},
+	"repo.create":                       {"添加来源仓库", auditConfig},
+	"repo.update":                       {"修改来源仓库", auditConfig},
+	"repo.delete":                       {"删除来源仓库", auditConfig},
 
 	"sync.accepted":            {"回传新值", auditSync},
 	"sync.rejected":            {"回传被驳回", auditSync},

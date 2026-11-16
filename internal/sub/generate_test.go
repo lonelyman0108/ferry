@@ -2,6 +2,8 @@ package sub
 
 import (
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -47,13 +49,15 @@ func TestURLPattern(t *testing.T) {
 
 func ninebot(t *testing.T) source.Doc {
 	t.Helper()
-	for _, e := range source.Examples() {
-		if e.Key == "ninebot" {
-			return e.Doc
-		}
+	data, err := os.ReadFile(filepath.Join("..", "source", "testdata", "ninebot.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Fatal("没有九号示例")
-	return source.Doc{}
+	env, err := source.UnmarshalEnvelope(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return env.Source
 }
 
 func params(t *testing.T, client string) Params {

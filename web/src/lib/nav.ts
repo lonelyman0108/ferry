@@ -42,6 +42,19 @@ export const navItems: NavItem[] = [
     short: '来源',
     icon: icons.source,
     description: '读取规则、身份与登录态',
+    pages: [
+      {
+        path: '/sources',
+        label: '来源列表',
+        description: '读取规则、身份与登录态',
+      },
+      {
+        path: '/sources/hub',
+        label: '浏览仓库',
+        description: '浏览官方与第三方仓库，批量导入或更新来源规则',
+        keywords: '仓库 hub 商店 导入 更新',
+      },
+    ],
   },
   {
     path: '/subscriptions',

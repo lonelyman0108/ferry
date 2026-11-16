@@ -112,13 +112,14 @@ sequenceDiagram
 
 | 包 | 职责 |
 |---|---|
-| `cmd/ferry` | 程序入口，子命令 `serve`、`source check`、`healthcheck`、`version` |
+| `cmd/ferry` | 程序入口，子命令 `serve`、`source check`、`hub index`、`healthcheck`、`version` |
 | `internal/config` | 读 `ferry.yaml` 并叠加 `FERRY_*` 环境变量 |
+| `internal/ghnet` | 面向 GitHub 域名的出站客户端（直连 / 镜像前缀 / HTTP 或 SOCKS5 代理） |
 | `internal/store` | GORM 模型、连接与迁移，三种数据库共用 |
 | `internal/secret` | 主密钥：AES-256-GCM 加密（带 AAD，密文挪到别的行会解密失败）、HMAC 去重 |
 | `internal/auth` | 密码哈希（bcrypt）、令牌生成与哈希 |
-| `internal/source` | 来源文档：校验、存取、JSON 外壳导入导出、内置示例（`examples/`）、给脚本的规则 |
-| `internal/sourcecheck` | 来源安全规则检查与仓库样例校验（供导入预览、`ferry source check` 与 hub CI 共用） |
+| `internal/source` | 来源文档：校验、存取、JSON 外壳导入导出、给脚本的规则 |
+| `internal/sourcecheck` | 来源安全规则检查、仓库样例校验与 `index.json` 生成校验（供导入预览、`ferry source check`、`ferry hub index` 与 hub CI 共用） |
 | `internal/rules` | 请求匹配与取值引擎（Go 版，服务端复核用） |
 | `internal/validate` | 字段静态校验：长度、正则、按类型检查，JWT 取过期时间 |
 | `internal/probe` | 有效性检测：模板渲染请求，用 expr 表达式判定 |

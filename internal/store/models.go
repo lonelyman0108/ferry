@@ -76,12 +76,39 @@ type Source struct {
 	// ReviewMode 为 manual 时新值要人工审核才生效，默认 auto。
 	ReviewMode string `gorm:"size:16;not null;default:auto"`
 	// Probe 是主动探测配置（JSON），为空表示不探测。
-	Probe     string    `gorm:"type:text"`
-	Matchers  []Matcher `gorm:"constraint:OnDelete:CASCADE"`
-	Fields    []Field   `gorm:"constraint:OnDelete:CASCADE"`
-	Outputs   []Output  `gorm:"constraint:OnDelete:CASCADE"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Probe string `gorm:"type:text"`
+	// OriginRepoID 是导入该来源时所属的仓库 ID；手动新建或单链接导入时为空。
+	OriginRepoID *uint `gorm:"index"`
+	// OriginRepoURL 是导入该来源时的仓库地址或在线链接。
+	OriginRepoURL string `gorm:"size:512;not null;default:''"`
+	// OriginPath 是该来源在仓库内的相对路径（如 sources/ninebot/source.json）。
+	OriginPath string `gorm:"size:255;not null;default:''"`
+	// OriginVersion 是导入或更新时记录的 meta.version，为 0 表示无版本记录。
+	OriginVersion int `gorm:"not null;default:0"`
+	// OriginHash 是导入或更新时的来源定义摘要（source.HashDoc），用于判断本地是否修改过。
+	OriginHash string    `gorm:"size:64;not null;default:''"`
+	Matchers   []Matcher `gorm:"constraint:OnDelete:CASCADE"`
+	Fields     []Field   `gorm:"constraint:OnDelete:CASCADE"`
+	Outputs    []Output  `gorm:"constraint:OnDelete:CASCADE"`
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+// Repo 是来源规则仓库（官方仓库或第三方仓库）。
+type Repo struct {
+	ID       uint   `gorm:"primaryKey"`
+	Name     string `gorm:"size:64;uniqueIndex;not null"`
+	URL      string `gorm:"size:512;not null"`
+	IndexURL string `gorm:"size:512;not null"`
+	Enabled  bool   `gorm:"not null"`
+	Official bool   `gorm:"not null"`
+	ETag     string `gorm:"size:128"`
+	// CachedIndex 保存最近一次拉取并解析后的仓库条目与图标缓存（JSON）；不指定 type:text 以便 MySQL 使用 longtext。
+	CachedIndex   string
+	LastFetchedAt *time.Time
+	LastError     string `gorm:"size:512"`
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // Matcher 是来源下的一条请求匹配规则，Name 在来源内唯一，字段用它来引用。

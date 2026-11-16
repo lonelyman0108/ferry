@@ -57,8 +57,20 @@ export interface SourceDoc {
   outputs?: OutputDoc[]
 }
 
+export interface SourceOrigin {
+  repo_id?: number
+  repo_name?: string
+  repo_url?: string
+  path?: string
+  version?: number
+  readme_url?: string
+  local_modified?: boolean
+  latest_version?: number
+}
+
 export interface SourceView extends SourceDoc {
   id: number
+  origin?: SourceOrigin
   updated_at: string
 }
 
@@ -71,13 +83,49 @@ export interface SourceSummary {
   matchers: number
   fields: number
   outputs: number
+  origin?: SourceOrigin
   updated_at: string
 }
 
-export interface Example {
+export type RepoItemStatus = 'not_imported' | 'imported' | 'update_available' | 'local_modified'
+
+export interface RepoItem {
   key: string
   name: string
-  description: string
+  description?: string
+  icon?: string
+  version: number
+  author?: string
+  homepage?: string
+  tags?: string[]
+  path: string
+  sha256: string
+  readme_url?: string
+  raw_url?: string
+  source?: SourceDoc
+  violations?: SourceImportIssue[]
+  warnings?: SourceImportIssue[]
+  hosts?: string[]
+  probe_host?: string
+  fetch_error?: string
+  status: RepoItemStatus
+  existing_id?: number
+  local_version?: number
+  local_modified: boolean
+  local_source?: SourceDoc
+}
+
+export interface Repo {
+  id: number
+  name: string
+  url: string
+  index_url: string
+  enabled: boolean
+  official: boolean
+  github_url: boolean
+  last_fetched_at?: string | null
+  last_error?: string
+  items: RepoItem[]
 }
 
 export interface SourceMeta {
@@ -126,6 +174,12 @@ export interface SourceImportApplyItem {
   conflict?: '' | 'overwrite' | 'rename'
   new_key?: string
   acknowledge?: boolean
+  origin?: {
+    repo_id?: number
+    repo_url?: string
+    path?: string
+    version?: number
+  }
 }
 
 export interface SourceImportApplyResult {
@@ -615,6 +669,7 @@ export interface LaneBinding extends FlowBinding {
 
 export interface Lane {
   source: OverviewSource
+  origin?: SourceOrigin
   review: string
   probe: boolean
   identity_field: string

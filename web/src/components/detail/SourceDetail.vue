@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { HistoryIcon, LoaderCircleIcon, PencilIcon, PlayIcon, RefreshCwIcon } from '@lucide/vue'
+import {
+  ExternalLinkIcon,
+  HistoryIcon,
+  LoaderCircleIcon,
+  PencilIcon,
+  PlayIcon,
+  RefreshCwIcon,
+} from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -203,8 +210,34 @@ const identityLabel = (key: string) => (key === 'default' ? '默认身份' : key
           <StatusBadge v-if="!src.enabled" tone="neutral" dot>已停用</StatusBadge>
           <StatusBadge v-if="lane.review === 'manual'" tone="warning" dot>人工审核</StatusBadge>
           <StatusBadge v-if="lane.probe" tone="info" dot>有效性检测</StatusBadge>
+          <StatusBadge v-if="lane.origin?.latest_version" tone="warning" dot>
+            有更新 v{{ lane.origin.latest_version }}
+          </StatusBadge>
         </h1>
-        <p class="text-muted-foreground font-mono text-sm">{{ src.key }}</p>
+        <div class="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 text-sm">
+          <span class="font-mono">{{ src.key }}</span>
+          <span v-if="lane.origin?.version" class="font-mono text-xs"
+            >v{{ lane.origin.version }}</span
+          >
+          <span v-if="lane.origin?.repo_name" class="text-xs"
+            >· 出自 {{ lane.origin.repo_name }}</span
+          >
+          <span v-if="lane.origin?.local_modified" class="text-warning text-xs">· 本地已修改</span>
+          <a
+            v-if="lane.origin?.readme_url"
+            :href="lane.origin.readme_url"
+            target="_blank"
+            rel="noopener"
+            class="text-primary inline-flex items-center gap-0.5 text-xs underline-offset-2 hover:underline"
+            ><ExternalLinkIcon class="size-3" /> 查看仓库说明</a
+          >
+          <router-link
+            v-if="lane.origin?.latest_version"
+            to="/sources/hub"
+            class="text-primary text-xs underline-offset-2 hover:underline"
+            >前往更新</router-link
+          >
+        </div>
       </div>
       <div class="flex w-full flex-wrap gap-2 sm:w-auto">
         <Button variant="outline" size="sm" @click="setQuery({ edit: 'setup' })"

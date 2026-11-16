@@ -61,10 +61,11 @@ type Server struct {
 	listen    string
 	startedAt time.Time
 	// releaseURL 是查最新版本的地址，测试里替换成本地服务；update 缓存最近一次结果。
-	releaseURL     string
-	networkTestURL string
-	updateMu       sync.Mutex
-	update         *updateView
+	releaseURL           string
+	networkTestURL       string
+	officialRepoIndexURL string
+	updateMu             sync.Mutex
+	update               *updateView
 }
 
 // New 创建 Server。需要初始化时会生成一次性的向导令牌，调用方应把它打印到日志。
@@ -199,7 +200,10 @@ func (s *Server) Handler() http.Handler {
 				r.Put("/sources/{id}", s.handleUpdateSource)
 				r.Delete("/sources/{id}", s.handleDeleteSource)
 				r.Post("/sources/try", s.handleTrySource)
-				r.Post("/examples/{key}/import", s.handleImportExample)
+				r.Post("/repos", s.handleCreateRepo)
+				r.Put("/repos/{id}", s.handleUpdateRepo)
+				r.Delete("/repos/{id}", s.handleDeleteRepo)
+				r.Post("/repos/{id}/refresh", s.handleRefreshRepo)
 				r.Post("/endpoints", s.handleCreateEndpoint)
 				r.Put("/endpoints/{id}", s.handleUpdateEndpoint)
 				r.Delete("/endpoints/{id}", s.handleDeleteEndpoint)
@@ -250,7 +254,7 @@ func (s *Server) Handler() http.Handler {
 				r.Get("/sources", s.handleListSources)
 				r.Get("/sources/{id}", s.handleGetSource)
 				r.Get("/sources/{id}/export", s.handleExportSource)
-				r.Get("/examples", s.handleListExamples)
+				r.Get("/repos", s.handleListRepos)
 				r.Get("/endpoints", s.handleListEndpoints)
 				r.Get("/identities", s.handleListIdentities)
 				r.Get("/identities/{id}", s.handleGetIdentity)

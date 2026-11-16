@@ -21,6 +21,7 @@ const router = createRouter({
         { path: 'subscriptions/:id(\\d+)', ...flow },
         { path: 'destinations/:id(\\d+)', ...flow },
         { path: 'sources', component: () => import('./views/sources/SourcesView.vue') },
+        { path: 'sources/hub', component: () => import('./views/sources/SourceHubView.vue') },
         // 编辑器与导入预览是列表页上的弹窗，地址仍可直接打开
         {
           path: 'sources/new',
