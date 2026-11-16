@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/lonelyman0108/ferry/internal/ghnet"
 	"github.com/lonelyman0108/ferry/internal/probe"
 	"github.com/lonelyman0108/ferry/internal/rules"
 	"github.com/lonelyman0108/ferry/internal/source"
@@ -153,21 +154,12 @@ type importPreviewOutput struct {
 	Items     []importPreviewItem `json:"items"`
 }
 
-func isGitHubHost(host string) bool {
-	h := strings.ToLower(strings.TrimSpace(host))
-	switch h {
-	case "github.com", "raw.githubusercontent.com", "objects.githubusercontent.com", "codeload.github.com", "gist.githubusercontent.com":
-		return true
-	}
-	return false
-}
-
 func (s *Server) fetchImportURL(ctx context.Context, rawURL string) ([]byte, bool, error) {
 	u, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return nil, false, errors.New("链接须为 http 或 https 地址")
 	}
-	ghURL := isGitHubHost(u.Hostname())
+	ghURL := ghnet.IsGitHubHost(u.Hostname())
 
 	ctx, cancel := context.WithTimeout(ctx, importFetchTimeout)
 	defer cancel()
@@ -176,17 +168,9 @@ func (s *Server) fetchImportURL(ctx context.Context, rawURL string) ([]byte, boo
 		return nil, ghURL, fmt.Errorf("构造请求失败：%v", err)
 	}
 	req.Header.Set("Accept", "application/json, text/plain;q=0.9, */*;q=0.8")
-	client := &http.Client{
-		Timeout: importFetchTimeout,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 5 {
-				return errors.New("重定向次数过多")
-			}
-			if (req.URL.Scheme != "http" && req.URL.Scheme != "https") || req.URL.Host == "" {
-				return errors.New("不允许跳转到非 http/https 地址")
-			}
-			return nil
-		},
+	client, err := s.githubClient(ctx, importFetchTimeout)
+	if err != nil {
+		return nil, ghURL, fmt.Errorf("初始化网络客户端失败：%v", err)
 	}
 	resp, err := client.Do(req)
 	if err != nil {

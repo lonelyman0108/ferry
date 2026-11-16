@@ -36,11 +36,14 @@ func TestSystemInfo(t *testing.T) {
 
 func TestSystemUpdate(t *testing.T) {
 	var hits atomic.Int32
-	status := http.StatusOK
+	status := http.StatusFound
+	location := "https://github.com/lonelyman0108/ferry/releases/tag/v0.2.0"
 	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
+		if location != "" && status == http.StatusFound {
+			w.Header().Set("Location", location)
+		}
 		w.WriteHeader(status)
-		_, _ = w.Write([]byte(`{"tag_name":"v0.2.0","html_url":"https://example.com/r/v0.2.0"}`))
 	}))
 	defer gh.Close()
 	old := buildinfo.Version
@@ -48,19 +51,69 @@ func TestSystemUpdate(t *testing.T) {
 	defer func() { buildinfo.Version = old }()
 
 	h := ready(t)
-	h.srv.releaseURL = gh.URL
+	h.srv.releaseURL = gh.URL + "/releases/latest"
 	var u updateView
-	if code := h.do("GET", "/api/v1/system/update", nil, &u); code != 200 || !u.Newer || u.Latest != "v0.2.0" || u.URL == "" {
+	if code := h.do("GET", "/api/v1/system/update", nil, &u); code != 200 || !u.Newer || u.Latest != "v0.2.0" || u.URL != "https://github.com/lonelyman0108/ferry/releases/tag/v0.2.0" {
 		t.Fatalf("检查更新 = %d %+v", code, u)
 	}
 	h.do("GET", "/api/v1/system/update", nil, &u)
 	if hits.Load() != 1 {
 		t.Errorf("一小时内应直接用缓存，实际请求了 %d 次", hits.Load())
 	}
+	// 镜像形式跳转（/https://github.com/.../releases/tag/v0.2.1）同样可解析。
+	location = "/https://github.com/lonelyman0108/ferry/releases/tag/v0.2.1"
+	h.do("GET", "/api/v1/system/update?force=1", nil, &u)
+	if !u.Newer || u.Latest != "v0.2.1" {
+		t.Errorf("镜像跳转解析失败 = %+v", u)
+	}
 	status = http.StatusNotFound
 	h.do("GET", "/api/v1/system/update?force=1", nil, &u)
-	if hits.Load() != 2 || u.Error == "" || u.Newer {
+	if hits.Load() != 3 || u.Error == "" || u.Newer {
 		t.Errorf("强制重查、没有发布过版本 = %+v", u)
+	}
+}
+
+func TestNetworkSettings(t *testing.T) {
+	h := ready(t)
+
+	var view networkSettingsView
+	if code := h.do("GET", "/api/v1/settings/network", nil, &view); code != 200 || view.Mode != "direct" || len(view.Presets) < 3 {
+		t.Fatalf("初始网络设置 = %d %+v", code, view)
+	}
+
+	// 非法镜像前缀（非 https）和非法代理协议应返回 400。
+	if code := h.do("PUT", "/api/v1/settings/network", map[string]string{"mode": "mirror", "mirror_prefix": "http://bad.example.com"}, nil); code != 400 {
+		t.Errorf("非 https 镜像前缀应返回 400，实际 = %d", code)
+	}
+	if code := h.do("PUT", "/api/v1/settings/network", map[string]string{"mode": "proxy", "proxy_url": "ftp://127.0.0.1:21"}, nil); code != 400 {
+		t.Errorf("非法代理协议应返回 400，实际 = %d", code)
+	}
+
+	// 保存带密码的代理地址，接口返回脱敏形式；原样回传脱敏值不覆盖原密码。
+	if code := h.do("PUT", "/api/v1/settings/network", map[string]string{
+		"mode":      "proxy",
+		"proxy_url": "socks5://user:mysecret@127.0.0.1:1080",
+	}, &view); code != 200 || view.ProxyURL != "socks5://user:••••@127.0.0.1:1080" {
+		t.Fatalf("保存代理设置 = %d %+v", code, view)
+	}
+	if code := h.do("PUT", "/api/v1/settings/network", map[string]string{
+		"mode":          "mirror",
+		"mirror_prefix": "https://ghfast.top/",
+		"proxy_url":     view.ProxyURL,
+	}, &view); code != 200 || view.Mode != "mirror" || view.MirrorPrefix != "https://ghfast.top" || view.ProxyURL != "socks5://user:••••@127.0.0.1:1080" {
+		t.Fatalf("切换为镜像并保留原代理密码 = %d %+v", code, view)
+	}
+
+	// 测试连接接口。
+	targetSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer targetSrv.Close()
+	h.srv.networkTestURL = targetSrv.URL + "/README.md"
+
+	var tr networkTestResult
+	if code := h.do("POST", "/api/v1/settings/network/test", map[string]string{"mode": "direct"}, &tr); code != 200 || !tr.OK {
+		t.Fatalf("测试连接 = %d %+v", code, tr)
 	}
 }
 

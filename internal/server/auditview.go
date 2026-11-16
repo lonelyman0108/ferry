@@ -66,6 +66,7 @@ var auditKinds = map[string]auditKind{
 	"notify_rule.delete":                {"删除通知规则", auditConfig},
 	"token.create":                      {"新建 API 令牌", auditConfig},
 	"token.revoke":                      {"吊销 API 令牌", auditConfig},
+	"settings.network_update":           {"修改网络设置", auditConfig},
 
 	"sync.accepted":            {"回传新值", auditSync},
 	"sync.rejected":            {"回传被驳回", auditSync},
