@@ -233,6 +233,33 @@ func TestCheckTargetHubMode(t *testing.T) {
 	if !hasCode(res[0].Report.Warnings, CodeHighEntropySample) {
 		t.Errorf("高熵样例应给出警告：%v", res[0].Report.Warnings)
 	}
+
+	// 写入合法的 icon.svg 并通过 BuildHubIndex 生成 index.json。
+	validSVG := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#4f46e5"/></svg>`
+	if err := os.WriteFile(filepath.Join(dir, "icon.svg"), []byte(validSVG), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hubRoot := filepath.Join(tmp, "hub")
+	hubSourceDir := filepath.Join(hubRoot, "sources", "demo")
+	if err := os.MkdirAll(hubSourceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"source.json", "README.md", "cases.json", "icon.svg"} {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(hubSourceDir, name), b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	idx, rawIdx, err := BuildHubIndex(hubRoot)
+	if err != nil {
+		t.Fatalf("BuildHubIndex = %v", err)
+	}
+	if len(idx.Sources) != 1 || idx.Sources[0].Key != "demo" || idx.Sources[0].Icon != "sources/demo/icon.svg" || idx.Sources[0].SHA256 == "" || len(rawIdx) == 0 {
+		t.Fatalf("生成的索引异常 = %+v", idx)
+	}
 }
 
 func hasCode(issues []Issue, code string) bool {

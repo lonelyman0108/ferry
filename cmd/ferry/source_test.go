@@ -50,3 +50,66 @@ func TestRunSourceCheck(t *testing.T) {
 		t.Errorf("stderr = %q", stderr.String())
 	}
 }
+
+func TestRunHubIndex(t *testing.T) {
+	root := t.TempDir()
+	srcDir := filepath.Join(root, "sources", "demo")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	srcJSON := `{
+  "format": 1,
+  "meta": { "version": 1, "author": "lonelyman0108", "tags": ["测试"] },
+  "source": {
+    "key": "demo",
+    "name": "示例来源",
+    "matchers": [
+      { "name": "api", "host": "api.example.com" }
+    ],
+    "fields": [
+      { "key": "token", "in": "header", "path": "Authorization" }
+    ]
+  }
+}
+`
+	casesJSON := `{
+  "cases": [
+    {
+      "name": "示例请求",
+      "request": {
+        "method": "GET",
+        "url": "https://api.example.com/v1/user",
+        "headers": { "Authorization": "Bearer sample_token" }
+      },
+      "expected": { "token": "Bearer sample_token" }
+    }
+  ]
+}
+`
+	if err := os.WriteFile(filepath.Join(srcDir, "source.json"), []byte(srcJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "README.md"), []byte("# 示例\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "cases.json"), []byte(casesJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := runHubIndex(&stdout, &stderr, []string{"--check", root}); err == nil {
+		t.Fatalf("尚未生成 index.json 时 --check 应当失败")
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := runHubIndex(&stdout, &stderr, []string{root}); err != nil {
+		t.Fatalf("生成 index.json 失败：%v (stderr=%s)", err, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := runHubIndex(&stdout, &stderr, []string{"--check", root}); err != nil {
+		t.Fatalf("生成后 --check 应当通过：%v (stderr=%s)", err, stderr.String())
+	}
+}
