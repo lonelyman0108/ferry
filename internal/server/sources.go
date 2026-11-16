@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -22,26 +23,92 @@ import (
 	"github.com/lonelyman0108/ferry/internal/validate"
 )
 
+type sourceOriginView struct {
+	RepoID        *uint  `json:"repo_id,omitempty"`
+	RepoName      string `json:"repo_name,omitempty"`
+	RepoURL       string `json:"repo_url,omitempty"`
+	Path          string `json:"path,omitempty"`
+	Version       int    `json:"version,omitempty"`
+	ReadmeURL     string `json:"readme_url,omitempty"`
+	LocalModified bool   `json:"local_modified"`
+	LatestVersion int    `json:"latest_version,omitempty"`
+}
+
 type sourceSummary struct {
-	ID        uint      `json:"id"`
-	Key       string    `json:"key"`
-	Name      string    `json:"name"`
-	Icon      string    `json:"icon,omitempty"`
-	Enabled   bool      `json:"enabled"`
-	Matchers  int       `json:"matchers"`
-	Fields    int       `json:"fields"`
-	Outputs   int       `json:"outputs"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        uint              `json:"id"`
+	Key       string            `json:"key"`
+	Name      string            `json:"name"`
+	Icon      string            `json:"icon,omitempty"`
+	Enabled   bool              `json:"enabled"`
+	Matchers  int               `json:"matchers"`
+	Fields    int               `json:"fields"`
+	Outputs   int               `json:"outputs"`
+	Origin    *sourceOriginView `json:"origin,omitempty"`
+	UpdatedAt time.Time         `json:"updated_at"`
 }
 
 type sourceView struct {
 	ID uint `json:"id"`
 	source.Doc
-	UpdatedAt time.Time `json:"updated_at"`
+	Origin    *sourceOriginView `json:"origin,omitempty"`
+	UpdatedAt time.Time         `json:"updated_at"`
 }
 
-func viewSource(s store.Source) sourceView {
-	return sourceView{ID: s.ID, Doc: source.FromModel(s), UpdatedAt: s.UpdatedAt}
+func buildOriginView(src store.Source, repoMap map[uint]store.Repo) *sourceOriginView {
+	if src.OriginVersion == 0 && src.OriginRepoURL == "" && src.OriginRepoID == nil {
+		return nil
+	}
+	doc := source.FromModel(src)
+	docHash := source.HashDoc(doc)
+	ov := &sourceOriginView{
+		RepoID:        src.OriginRepoID,
+		RepoURL:       src.OriginRepoURL,
+		Path:          src.OriginPath,
+		Version:       src.OriginVersion,
+		LocalModified: src.OriginHash != "" && docHash != src.OriginHash,
+	}
+	if src.OriginRepoID != nil {
+		if repo, ok := repoMap[*src.OriginRepoID]; ok {
+			ov.RepoName = repo.Name
+			if ov.RepoURL == "" {
+				ov.RepoURL = repo.URL
+			}
+			ov.ReadmeURL = buildSourceReadmeURL(repo.URL, repo.IndexURL, src.OriginPath)
+			if repo.CachedIndex != "" {
+				var cached repoCachedData
+				if json.Unmarshal([]byte(repo.CachedIndex), &cached) == nil {
+					for _, ci := range cached.Items {
+						if ci.Key == src.Key && ci.Version > src.OriginVersion {
+							ov.LatestVersion = ci.Version
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+	if ov.ReadmeURL == "" && ov.RepoURL != "" && ov.Path != "" {
+		ov.ReadmeURL = buildSourceReadmeURL(ov.RepoURL, ov.RepoURL, ov.Path)
+	}
+	return ov
+}
+
+func (s *Server) loadRepoMap(ctx context.Context) map[uint]store.Repo {
+	var repos []store.Repo
+	_ = s.store().DB.WithContext(ctx).Find(&repos).Error
+	m := make(map[uint]store.Repo, len(repos))
+	for _, r := range repos {
+		m[r.ID] = r
+	}
+	return m
+}
+
+func viewSource(s store.Source, repoMap ...map[uint]store.Repo) sourceView {
+	var rm map[uint]store.Repo
+	if len(repoMap) > 0 {
+		rm = repoMap[0]
+	}
+	return sourceView{ID: s.ID, Doc: source.FromModel(s), Origin: buildOriginView(s, rm), UpdatedAt: s.UpdatedAt}
 }
 
 // writeSourceError 把 source 包的错误映射成 HTTP 状态；其他错误按内部错误处理。
@@ -71,11 +138,13 @@ func (s *Server) handleListSources(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
+	repoMap := s.loadRepoMap(r.Context())
 	out := make([]sourceSummary, 0, len(all))
 	for _, x := range all {
 		out = append(out, sourceSummary{
 			ID: x.ID, Key: x.Key, Name: x.Name, Icon: x.Icon, Enabled: x.Enabled,
-			Matchers: len(x.Matchers), Fields: len(x.Fields), Outputs: len(x.Outputs), UpdatedAt: x.UpdatedAt,
+			Matchers: len(x.Matchers), Fields: len(x.Fields), Outputs: len(x.Outputs),
+			Origin: buildOriginView(x, repoMap), UpdatedAt: x.UpdatedAt,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -92,7 +161,7 @@ func (s *Server) handleGetSource(w http.ResponseWriter, r *http.Request) {
 		s.writeSourceError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, viewSource(x))
+	writeJSON(w, http.StatusOK, viewSource(x, s.loadRepoMap(r.Context())))
 }
 
 // createSource 校验并保存新来源，成功后写审计并返回 201。
@@ -364,11 +433,12 @@ func (s *Server) handleImportPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 type importApplyItem struct {
-	Meta        source.Meta `json:"meta"`
-	Source      source.Doc  `json:"source"`
-	Conflict    string      `json:"conflict,omitempty"`
-	NewKey      string      `json:"new_key,omitempty"`
-	Acknowledge bool        `json:"acknowledge,omitempty"`
+	Meta        source.Meta    `json:"meta"`
+	Source      source.Doc     `json:"source"`
+	Conflict    string         `json:"conflict,omitempty"`
+	NewKey      string         `json:"new_key,omitempty"`
+	Acknowledge bool           `json:"acknowledge,omitempty"`
+	Origin      *source.Origin `json:"origin,omitempty"`
 }
 
 type importApplyInput struct {
@@ -466,6 +536,20 @@ func (s *Server) handleImportSource(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		orig := source.Origin{
+			Version: meta.Version,
+			Hash:    source.HashDoc(d),
+		}
+		if item.Origin != nil {
+			orig.RepoID = item.Origin.RepoID
+			orig.RepoURL = strings.TrimSpace(item.Origin.RepoURL)
+			orig.Path = strings.TrimSpace(item.Origin.Path)
+			if item.Origin.Version > 0 {
+				orig.Version = item.Origin.Version
+			}
+		}
+		repoMap := s.loadRepoMap(r.Context())
+
 		switch item.Conflict {
 		case "", conflictRename:
 			created, err := source.Create(r.Context(), s.store().DB, d)
@@ -480,8 +564,10 @@ func (s *Server) handleImportSource(w http.ResponseWriter, r *http.Request) {
 				out.Results = append(out.Results, res)
 				continue
 			}
+			_ = source.SaveOrigin(r.Context(), s.store().DB, created.ID, orig)
+			created, _ = source.Load(r.Context(), s.store().DB, created.ID)
 			s.audit(r, actor, "source.import", "source:"+created.Key, "")
-			sv := viewSource(created)
+			sv := viewSource(created, repoMap)
 			res.OK = true
 			res.Action = "created"
 			res.Source = &sv
@@ -499,14 +585,21 @@ func (s *Server) handleImportSource(w http.ResponseWriter, r *http.Request) {
 					out.Results = append(out.Results, res)
 					continue
 				}
+				_ = source.SaveOrigin(r.Context(), s.store().DB, created.ID, orig)
+				created, _ = source.Load(r.Context(), s.store().DB, created.ID)
 				s.audit(r, actor, "source.import", "source:"+created.Key, "")
-				sv := viewSource(created)
+				sv := viewSource(created, repoMap)
 				res.OK = true
 				res.Action = "created"
 				res.Source = &sv
 				out.Succeeded++
 				out.Results = append(out.Results, res)
 				continue
+			}
+			if orig.RepoID == nil && existing.OriginRepoID != nil {
+				orig.RepoID = existing.OriginRepoID
+				orig.RepoURL = existing.OriginRepoURL
+				orig.Path = existing.OriginPath
 			}
 			updated, uerr := source.Update(r.Context(), s.store().DB, existing.ID, d)
 			if uerr != nil {
@@ -515,8 +608,10 @@ func (s *Server) handleImportSource(w http.ResponseWriter, r *http.Request) {
 				out.Results = append(out.Results, res)
 				continue
 			}
+			_ = source.SaveOrigin(r.Context(), s.store().DB, updated.ID, orig)
+			updated, _ = source.Load(r.Context(), s.store().DB, updated.ID)
 			s.audit(r, actor, "source.import", "source:"+updated.Key, "覆盖更新")
-			sv := viewSource(updated)
+			sv := viewSource(updated, repoMap)
 			res.OK = true
 			res.Action = "updated"
 			res.Source = &sv
@@ -591,7 +686,11 @@ func (s *Server) handleExportSource(w http.ResponseWriter, r *http.Request) {
 		s.writeSourceError(w, r, err)
 		return
 	}
-	data, err := source.MarshalEnvelope(source.FromModel(x), source.Meta{Version: 1})
+	ver := x.OriginVersion
+	if ver < 1 {
+		ver = 1
+	}
+	data, err := source.MarshalEnvelope(source.FromModel(x), source.Meta{Version: ver})
 	if err != nil {
 		s.internalError(w, r, err)
 		return
@@ -599,31 +698,6 @@ func (s *Server) handleExportSource(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="ferry-%s.json"`, x.Key))
 	_, _ = w.Write(data)
-}
-
-type exampleView struct {
-	Key         string `json:"key"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-}
-
-func (s *Server) handleListExamples(w http.ResponseWriter, _ *http.Request) {
-	out := []exampleView{}
-	for _, e := range source.Examples() {
-		out = append(out, exampleView{Key: e.Key, Name: e.Name, Description: e.Description})
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func (s *Server) handleImportExample(w http.ResponseWriter, r *http.Request) {
-	key := chi.URLParam(r, "key")
-	for _, e := range source.Examples() {
-		if e.Key == key {
-			s.createSource(w, r, e.Doc, "source.import_example")
-			return
-		}
-	}
-	writeError(w, http.StatusNotFound, "示例不存在")
 }
 
 // tryInput 是一次试跑：来源定义（可以是还没保存的草稿）加一条样例请求。

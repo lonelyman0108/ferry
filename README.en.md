@@ -75,9 +75,10 @@ Images are published for amd64 and arm64; on Docker Hub it is `lonelyman0108/fer
 Then four steps to your first working chain:
 
 1. **Initialise** — open `http://localhost:8080`, enter the setup token from the log, and let the wizard pick a database, generate the master key and create the admin.
-2. **Add a source** — import the built-in example or configure your own; paste a sample request and see matching and extraction results instantly.
+2. **Add a source** — browse and import from the official [ferry-hub](https://github.com/lonelyman0108/ferry-hub) repository (**Sources → Browse Repositories**), import a source JSON (file, URL, or one-click `/sources/import?url=…`), or configure your own; paste a sample request to test matching and extraction instantly.
 3. **Install a subscription** — generate one for the proxy client on your phone and install it in one tap; from then on, simply opening the app sends the login state back.
 4. **Set up delivery** — add a Qinglong or webhook destination and a push rule; new values arrive automatically once they take effect.
+5. **GitHub network (optional)** — configure direct connection, mirror prefix, or HTTP/SOCKS5 proxy under **Settings → Network** for GitHub-hosted repositories, update checks, and import links.
 
 ## How it works
 

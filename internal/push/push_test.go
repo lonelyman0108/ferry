@@ -3,6 +3,7 @@ package push
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -109,16 +110,19 @@ func (e *env) run() int {
 }
 
 func ninebot(t *testing.T) source.Doc {
-	for _, ex := range source.Examples() {
-		if ex.Key == "ninebot" {
-			d := ex.Doc
-			d.Probe = nil
-			d.Fields[0].Type, d.Fields[0].MinLen = "text", 0
-			return d
-		}
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "source", "testdata", "ninebot.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Fatal("没有九号示例")
-	return source.Doc{}
+	env, err := source.UnmarshalEnvelope(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := env.Source
+	d.Probe = nil
+	d.Fields[0].Type, d.Fields[0].MinLen = "text", 0
+	return d
 }
 
 func TestPerIdentityWithRename(t *testing.T) {

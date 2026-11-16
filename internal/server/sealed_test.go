@@ -332,7 +332,7 @@ func TestSealedSubscriptionValidation(t *testing.T) {
 	h := ready(t)
 	var ep endpointView
 	h.do("POST", "/api/v1/endpoints", map[string]string{"name": "lan", "base_url": h.ts.URL}, &ep)
-	h.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, nil)
+	h.do("POST", "/api/v1/sources", ninebotDoc(t), nil)
 	if code := h.do("POST", "/api/v1/subscriptions", map[string]any{"name": "qx", "client": "qx", "endpoint_id": ep.ID, "all_sources": true, "transport_mode": "sealed"}, nil); code != 400 {
 		t.Errorf("QX 开加密 = %d，期望 400", code)
 	}
@@ -374,7 +374,7 @@ func TestCustomScriptURL(t *testing.T) {
 	h := ready(t)
 	var ep endpointView
 	h.do("POST", "/api/v1/endpoints", map[string]string{"name": "lan", "base_url": h.ts.URL}, &ep)
-	h.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, nil)
+	h.do("POST", "/api/v1/sources", ninebotDoc(t), nil)
 	in := map[string]any{"name": "s", "client": "surge", "endpoint_id": ep.ID, "all_sources": true, "script_url": "http://cdn.example.com/ferry.js"}
 	if code := h.do("POST", "/api/v1/subscriptions", in, nil); code != 400 {
 		t.Errorf("http 脚本地址 = %d，期望 400", code)

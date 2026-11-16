@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -106,15 +107,18 @@ func jwtToken(exp time.Time) string {
 
 // ninebot 返回去掉了主动探测的九号示例：单元测试不访问外网，探测另有专门的用例。
 func ninebot(t *testing.T) source.Doc {
-	for _, ex := range source.Examples() {
-		if ex.Key == "ninebot" {
-			d := ex.Doc
-			d.Probe = nil
-			return d
-		}
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "source", "testdata", "ninebot.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Fatal("没有九号示例")
-	return source.Doc{}
+	env, err := source.UnmarshalEnvelope(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := env.Source
+	d.Probe = nil
+	return d
 }
 
 func TestMergeWindowAndDedupe(t *testing.T) {

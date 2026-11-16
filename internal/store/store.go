@@ -29,6 +29,7 @@ var models = []any{
 	&APIToken{},
 	&AuditLog{},
 	&Setting{},
+	&Repo{},
 	&Source{},
 	&Matcher{},
 	&Field{},

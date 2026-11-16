@@ -1,6 +1,9 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,25 +12,21 @@ import (
 
 	"github.com/lonelyman0108/ferry/internal/probe"
 	"github.com/lonelyman0108/ferry/internal/source"
+	"github.com/lonelyman0108/ferry/internal/sourcecheck"
 	"github.com/lonelyman0108/ferry/internal/store"
 )
 
 func TestSourceLifecycle(t *testing.T) {
 	h := ready(t)
 
-	var examples []exampleView
-	h.do("GET", "/api/v1/examples", nil, &examples)
-	if len(examples) == 0 || examples[0].Key != "ninebot" {
-		t.Fatalf("示例列表 = %+v", examples)
-	}
 	var created sourceView
-	if code := h.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, &created); code != 201 {
-		t.Fatalf("导入示例 = %d", code)
+	if code := h.do("POST", "/api/v1/sources", ninebotDoc(t), &created); code != 201 {
+		t.Fatalf("创建九号来源 = %d", code)
 	}
 	var dup errorBody
-	if code := h.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, &dup); code != 409 ||
+	if code := h.do("POST", "/api/v1/sources", ninebotDoc(t), &dup); code != 409 ||
 		len(dup.Problems) != 1 || dup.Problems[0].Path != "key" {
-		t.Errorf("重复导入 = %d %+v，期望 409 且指向 key", code, dup)
+		t.Errorf("重复创建 = %d %+v，期望 409 且指向 key", code, dup)
 	}
 	id := itoa(created.ID)
 
@@ -134,7 +133,7 @@ func TestSourceLifecycle(t *testing.T) {
 	if code := bearer.do("GET", "/api/v1/sources", nil, nil, "Authorization", "Bearer "+tok.Token); code != 200 {
 		t.Errorf("令牌读来源 = %d", code)
 	}
-	if code := bearer.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, nil, "Authorization", "Bearer "+tok.Token); code != 403 {
+	if code := bearer.do("POST", "/api/v1/sources", ninebotDoc(t), nil, "Authorization", "Bearer "+tok.Token); code != 403 {
 		t.Errorf("令牌写来源 = %d，期望 403", code)
 	}
 }
@@ -142,10 +141,10 @@ func TestSourceLifecycle(t *testing.T) {
 func TestSourcesImportPreviewAndApply(t *testing.T) {
 	h := ready(t)
 
-	// 先导入九号示例，并写入一条身份与版本记录，用来验证覆盖更新时身份与版本保留。
+	// 先创建九号来源，并写入一条身份与版本记录，用来验证覆盖更新时身份与版本保留。
 	var created sourceView
-	if code := h.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, &created); code != 201 {
-		t.Fatalf("导入示例 = %d", code)
+	if code := h.do("POST", "/api/v1/sources", ninebotDoc(t), &created); code != 201 {
+		t.Fatalf("创建九号来源 = %d", code)
 	}
 	db := h.srv.store().DB
 	ident := store.Identity{SourceID: created.ID, Key: "DEV-100"}
@@ -267,5 +266,196 @@ func TestSourcesImportPreviewAndApply(t *testing.T) {
 	applyOut = importApplyOutput{}
 	if code := h.do("POST", "/api/v1/sources/import", applyReq2, &applyOut); code != 200 || applyOut.Succeeded != 2 || applyOut.Failed != 0 {
 		t.Fatalf("改名与确认风险后导入 = %d %+v", code, applyOut)
+	}
+}
+
+func TestReposAndSourceOrigin(t *testing.T) {
+	h := ready(t)
+
+	doc := ninebotDoc(t)
+	curVersion := 1
+	svgIcon := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#111827"/></svg>`
+
+	hubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		curDoc := doc
+		if curVersion > 1 {
+			curDoc.Description = "仓库第二版更新后的说明"
+		}
+		envBytes, _ := source.MarshalEnvelope(curDoc, source.Meta{Version: curVersion, Author: "lonelyman0108", Tags: []string{"出行"}})
+		sum := sha256.Sum256(envBytes)
+		shaHex := hex.EncodeToString(sum[:])
+
+		switch r.URL.Path {
+		case "/index.json":
+			idx := sourcecheck.HubIndex{
+				Format: 1,
+				Sources: []sourcecheck.HubIndexItem{
+					{
+						Key:         curDoc.Key,
+						Name:        curDoc.Name,
+						Description: curDoc.Description,
+						Icon:        "sources/ninebot/icon.svg",
+						Version:     curVersion,
+						Author:      "lonelyman0108",
+						Tags:        []string{"出行"},
+						Path:        "sources/ninebot/source.json",
+						SHA256:      shaHex,
+					},
+				},
+			}
+			_ = json.NewEncoder(w).Encode(idx)
+		case "/sources/ninebot/source.json":
+			_, _ = w.Write(envBytes)
+		case "/sources/ninebot/icon.svg":
+			_, _ = w.Write([]byte(svgIcon))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer hubSrv.Close()
+
+	h.srv.officialRepoIndexURL = hubSrv.URL + "/index.json"
+
+	var repos []repoView
+	if code := h.do("GET", "/api/v1/repos", nil, &repos); code != 200 || len(repos) != 1 || !repos[0].Official || len(repos[0].Items) != 1 {
+		t.Fatalf("首次加载仓库列表 = %d %+v", code, repos)
+	}
+	if repos[0].Items[0].Status != "not_imported" || !strings.HasPrefix(repos[0].Items[0].Icon, "data:image/svg+xml;base64,") {
+		t.Fatalf("未导入状态或图标未解析 = %+v", repos[0].Items[0])
+	}
+
+	// 官方仓库不可删除，但可停用与启用。
+	if code := h.do("DELETE", "/api/v1/repos/"+itoa(repos[0].ID), nil, nil); code != 400 {
+		t.Errorf("删除官方仓库应返回 400，实际 = %d", code)
+	}
+
+	// 导入官方仓库中的 ninebot 来源并记录出处。
+	repoID := repos[0].ID
+	item := repos[0].Items[0]
+	var applyOut importApplyOutput
+	if code := h.do("POST", "/api/v1/sources/import", importApplyInput{
+		Items: []importApplyItem{
+			{
+				Meta:   source.Meta{Version: item.Version, Author: item.Author, Tags: item.Tags},
+				Source: *item.Source,
+				Origin: &source.Origin{
+					RepoID:  &repoID,
+					RepoURL: repos[0].URL,
+					Path:    item.Path,
+					Version: item.Version,
+				},
+			},
+		},
+	}, &applyOut); code != 200 || applyOut.Succeeded != 1 {
+		t.Fatalf("从仓库导入 = %d %+v", code, applyOut)
+	}
+
+	// 再次查询仓库列表，状态应为 imported；来源详情中 local_modified 应为 false。
+	h.do("GET", "/api/v1/repos", nil, &repos)
+	if repos[0].Items[0].Status != "imported" || repos[0].Items[0].LocalVersion != 1 {
+		t.Errorf("导入后状态应为 imported，实际 = %+v", repos[0].Items[0])
+	}
+	srcID := applyOut.Results[0].Source.ID
+	var cleanLane laneView
+	if code := h.do("GET", "/api/v1/sources/"+itoa(srcID)+"/lane", nil, &cleanLane); code != 200 || cleanLane.Origin == nil || cleanLane.Origin.LocalModified {
+		t.Errorf("未修改时 lane.Origin.LocalModified 应为 false，实际 = %+v", cleanLane.Origin)
+	}
+
+	// 修改本地来源后，状态应变为 local_modified。
+	modDoc := *item.Source
+	modDoc.Description = "本地手工改过的说明"
+	if code := h.do("PUT", "/api/v1/sources/"+itoa(srcID), modDoc, nil); code != 200 {
+		t.Fatalf("修改本地来源 = %d", code)
+	}
+	h.do("GET", "/api/v1/repos", nil, &repos)
+	if repos[0].Items[0].Status != "local_modified" || !repos[0].Items[0].LocalModified {
+		t.Errorf("修改本地后状态应为 local_modified，实际 = %+v", repos[0].Items[0])
+	}
+
+	// 仓库升到版本 2 并刷新后，状态应变为 update_available（且 LocalModified 仍为 true）。
+	curVersion = 2
+	var refreshed repoView
+	if code := h.do("POST", "/api/v1/repos/"+itoa(repoID)+"/refresh", map[string]any{}, &refreshed); code != 200 {
+		t.Fatalf("刷新仓库 = %d", code)
+	}
+	if refreshed.Items[0].Status != "update_available" || !refreshed.Items[0].LocalModified || refreshed.Items[0].Version != 2 {
+		t.Errorf("仓库升级后状态应为 update_available，实际 = %+v", refreshed.Items[0])
+	}
+
+	// 导出时应带上已记录的 meta.version。
+	resp, err := h.client.Get(h.ts.URL + "/api/v1/sources/" + itoa(srcID) + "/export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exportedBytes, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(exportedBytes), `"version": 1`) {
+		t.Errorf("导出应保留版本 1：%s", exportedBytes)
+	}
+
+	// 来源详情（lane）应携带 origin 与最新版本信息。
+	var lane laneView
+	if code := h.do("GET", "/api/v1/sources/"+itoa(srcID)+"/lane", nil, &lane); code != 200 || lane.Origin == nil || lane.Origin.LatestVersion != 2 || !strings.Contains(lane.Origin.ReadmeURL, "/sources/ninebot/README.md") {
+		t.Errorf("lane.Origin = %+v", lane.Origin)
+	}
+
+	// 停用并重新启用官方仓库。
+	disabled := false
+	var updatedRepo repoView
+	if code := h.do("PUT", "/api/v1/repos/"+itoa(repoID), map[string]any{"enabled": disabled}, &updatedRepo); code != 200 || updatedRepo.Enabled {
+		t.Errorf("停用官方仓库 = %d %+v", code, updatedRepo)
+	}
+
+	// 第三方仓库：校验摘要不匹配与违规标记，以及 github_url=false，可创建并删除。
+	thirdSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/index.json":
+			idx := sourcecheck.HubIndex{
+				Format: 1,
+				Sources: []sourcecheck.HubIndexItem{
+					{Key: "bad_hash", Name: "摘要错误", Version: 1, Path: "sources/bad_hash/source.json", SHA256: strings.Repeat("0", 64)},
+				},
+			}
+			_ = json.NewEncoder(w).Encode(idx)
+		case "/sources/bad_hash/source.json":
+			envBytes, _ := source.MarshalEnvelope(doc, source.Meta{Version: 1})
+			_, _ = w.Write(envBytes)
+		}
+	}))
+	defer thirdSrv.Close()
+
+	var customRepo repoView
+	if code := h.do("POST", "/api/v1/repos", map[string]any{
+		"name": "第三方测试仓库",
+		"url":  thirdSrv.URL + "/index.json",
+	}, &customRepo); code != 201 || customRepo.GitHubURL || len(customRepo.Items) != 1 || customRepo.Items[0].FetchError == "" {
+		t.Fatalf("添加第三方仓库 = %d %+v", code, customRepo)
+	}
+	if code := h.do("DELETE", "/api/v1/repos/"+itoa(customRepo.ID), nil, nil); code != 204 {
+		t.Errorf("删除第三方仓库应返回 204，实际 = %d", code)
+	}
+}
+
+func TestResolveRepoIndexURL(t *testing.T) {
+	cases := []struct {
+		in      string
+		wantIdx string
+		wantErr bool
+	}{
+		{"https://github.com/lonelyman0108/ferry-hub", "https://raw.githubusercontent.com/lonelyman0108/ferry-hub/main/index.json", false},
+		{"https://github.com/lonelyman0108/ferry-hub/tree/dev", "https://raw.githubusercontent.com/lonelyman0108/ferry-hub/dev/index.json", false},
+		{"https://example.com/hub/index.json", "https://example.com/hub/index.json", false},
+		{"https://example.com/hub", "", true},
+		{"ftp://example.com/index.json", "", true},
+	}
+	for _, tc := range cases {
+		_, gotIdx, err := ResolveRepoIndexURL(tc.in)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("ResolveRepoIndexURL(%q) err = %v, wantErr = %v", tc.in, err, tc.wantErr)
+			continue
+		}
+		if !tc.wantErr && gotIdx != tc.wantIdx {
+			t.Errorf("ResolveRepoIndexURL(%q) = %q, want %q", tc.in, gotIdx, tc.wantIdx)
+		}
 	}
 }

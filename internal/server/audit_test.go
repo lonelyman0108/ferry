@@ -45,7 +45,7 @@ func TestAuditView(t *testing.T) {
 	}
 	for _, c := range []struct{ action, label, category, outcome, actorKind, actorName, target string }{
 		{"auth.login", "登录", auditLogin, outcomeSuccess, "user", "admin", ""},
-		{"source.import_example", "导入示例来源", auditConfig, "", "user", "admin", "九号出行"},
+		{"source.create", "新建来源", auditConfig, "", "user", "admin", "九号出行"},
 		{"sync.accepted", "回传新值", auditSync, outcomeSuccess, "subscription", "iPhone", "九号出行"},
 		{"version.reveal", "查看原值", auditReveal, "", "user", "admin", "九号出行 · 设备 ID"},
 		// 发送成功就是成功，不看事件名里的 rejected。

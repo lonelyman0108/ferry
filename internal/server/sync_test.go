@@ -21,7 +21,7 @@ func testJWT(exp time.Time) string {
 func phoneSetup(t *testing.T, h *harness) string {
 	t.Helper()
 	var src sourceView
-	h.do("POST", "/api/v1/examples/ninebot/import", map[string]any{}, &src)
+	h.do("POST", "/api/v1/sources", ninebotDoc(t), &src)
 	zero := 0
 	src.Doc.MergeWindow = &zero
 	// 测试不访问外网，去掉示例里的主动探测。

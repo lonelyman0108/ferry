@@ -10,7 +10,7 @@ import (
 
 func TestRunSourceCheck(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	err := runSourceCheck(&stdout, &stderr, []string{filepath.Join("..", "..", "internal", "source", "examples", "ninebot.json")})
+	err := runSourceCheck(&stdout, &stderr, []string{filepath.Join("..", "..", "internal", "source", "testdata", "ninebot.json")})
 	if err != nil {
 		t.Fatalf("合法文件检查失败：%v (stderr=%s)", err, stderr.String())
 	}

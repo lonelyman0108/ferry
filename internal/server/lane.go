@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/lonelyman0108/ferry/internal/source"
 	"github.com/lonelyman0108/ferry/internal/store"
 )
 
@@ -22,15 +23,16 @@ type laneBinding struct {
 
 // laneView 是来源详情一次取回的全部内容：来源状态、身份与当前值、推送规则、覆盖它的设备、和它有关的待处理、最近记录。
 type laneView struct {
-	Source        overviewSource  `json:"source"`
-	Review        string          `json:"review"`
-	Probe         bool            `json:"probe"`
-	IdentityField string          `json:"identity_field"`
-	Identities    []laneIdentity  `json:"identities"`
-	Bindings      []laneBinding   `json:"bindings"`
-	Devices       []flowDevice    `json:"devices"`
-	Items         []attentionItem `json:"items"`
-	Recent        []activityItem  `json:"recent"`
+	Source        overviewSource    `json:"source"`
+	Origin        *sourceOriginView `json:"origin,omitempty"`
+	Review        string            `json:"review"`
+	Probe         bool              `json:"probe"`
+	IdentityField string            `json:"identity_field"`
+	Identities    []laneIdentity    `json:"identities"`
+	Bindings      []laneBinding     `json:"bindings"`
+	Devices       []flowDevice      `json:"devices"`
+	Items         []attentionItem   `json:"items"`
+	Recent        []activityItem    `json:"recent"`
 }
 
 const laneRecent = 10
@@ -44,9 +46,13 @@ func (s *Server) handleSourceLane(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	db := s.store().DB.WithContext(ctx)
-	var src store.Source
-	if err := db.First(&src, id).Error; err != nil {
-		s.writeFindError(w, r, err, "来源不存在")
+	src, err := source.Load(ctx, s.store().DB, id)
+	if err != nil {
+		if err == source.ErrNotFound {
+			writeError(w, http.StatusNotFound, "来源不存在")
+			return
+		}
+		s.internalError(w, r, err)
 		return
 	}
 	ov, err := s.overview(ctx)
@@ -54,7 +60,7 @@ func (s *Server) handleSourceLane(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
-	out := laneView{Review: src.ReviewMode, Probe: src.Probe != "", IdentityField: src.IdentityField,
+	out := laneView{Origin: buildOriginView(src, s.loadRepoMap(ctx)), Review: src.ReviewMode, Probe: src.Probe != "", IdentityField: src.IdentityField,
 		Identities: []laneIdentity{}, Bindings: []laneBinding{}, Devices: []flowDevice{}, Items: []attentionItem{}}
 	for _, x := range ov.Sources {
 		if x.ID == src.ID {

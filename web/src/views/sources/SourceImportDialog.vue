@@ -23,15 +23,24 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import type {
+  SourceDoc,
   SourceImportApplyItem,
   SourceImportApplyOutput,
   SourceImportPreviewItem,
   SourceImportPreviewOutput,
+  SourceMeta,
 } from '@/types'
+
+export interface ImportBatchEntry {
+  meta: SourceMeta
+  source: SourceDoc
+  origin?: SourceImportApplyItem['origin']
+}
 
 const props = defineProps<{
   open: boolean
   initialUrl?: string
+  initialBatch?: ImportBatchEntry[]
 }>()
 
 const emit = defineEmits<{
@@ -84,10 +93,18 @@ function resetState() {
 }
 
 watch(
-  () => [props.open, props.initialUrl] as const,
-  ([isOpen, initUrl]) => {
+  () => [props.open, props.initialUrl, props.initialBatch] as const,
+  ([isOpen, initUrl, initBatch]) => {
     if (!isOpen) return
     resetState()
+    if (initBatch?.length) {
+      pickedFiles.value = initBatch.map((b, i) => ({
+        name: `${b.source.key || i}.json`,
+        content: JSON.stringify({ format: 1, meta: b.meta, source: b.source }),
+      }))
+      void runPreview()
+      return
+    }
     if (initUrl?.trim()) {
       void runPreview()
     }
@@ -145,6 +162,8 @@ async function runPreview() {
     payload.url = u
   } else if (pickedFiles.value.length > 1) {
     payload.texts = pickedFiles.value.map((f) => f.content)
+  } else if (pickedFiles.value.length === 1 && !jsonText.value.trim()) {
+    payload.text = pickedFiles.value[0]!.content
   } else {
     const t = jsonText.value.trim()
     if (!t) {
@@ -188,12 +207,13 @@ const canApply = computed(() => {
 async function applyImport() {
   if (!previewData.value || !canApply.value) return
   const active = pendingItems.value
-  const reqItems: SourceImportApplyItem[] = active.map(({ item, state }) => ({
+  const reqItems: SourceImportApplyItem[] = active.map(({ item, state, idx }) => ({
     meta: item.meta,
     source: item.source,
     conflict: item.conflict ? state.conflict : '',
     new_key: item.conflict && state.conflict === 'rename' ? state.newKey.trim() : undefined,
     acknowledge: state.acknowledge,
+    origin: props.initialBatch?.[idx]?.origin,
   }))
 
   for (const { state } of active) {
