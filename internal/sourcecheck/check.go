@@ -33,6 +33,8 @@ const (
 	CodeNotifyNotAlways   = "notify_not_always"
 	CodeDebugEnabled      = "debug_enabled"
 	CodeHighEntropySample = "high_entropy_sample"
+	CodeHubInlineIcon     = "hub_inline_icon"
+	CodeInvalidIconFile   = "invalid_icon_file"
 )
 
 // Issue 是规则检查发现的一项违规或警告。
@@ -643,6 +645,16 @@ func CheckTarget(target string, hubMode bool) ([]TargetResult, error) {
 			v, w := CheckCases(env.Source, casesBytes)
 			tr.Report.Violations = append(tr.Report.Violations, v...)
 			tr.Report.Warnings = append(tr.Report.Warnings, w...)
+		}
+		if strings.TrimSpace(env.Source.Icon) != "" {
+			tr.Report.Violations = append(tr.Report.Violations, Issue{
+				Code:    CodeHubInlineIcon,
+				Path:    "icon",
+				Message: "仓库中的 source.json 不允许内嵌 base64 图标，请将图标文件直接存放在来源目录内（如 icon.svg、icon.png）",
+			})
+		}
+		if _, _, iconIssues := FindHubIconFile(dir); len(iconIssues) > 0 {
+			tr.Report.Violations = append(tr.Report.Violations, iconIssues...)
 		}
 		return []TargetResult{tr}, nil
 	}

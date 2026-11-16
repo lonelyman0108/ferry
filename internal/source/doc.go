@@ -331,23 +331,26 @@ func (d *Doc) Validate() error {
 // 图标允许的图片类型。只收内嵌的 data URI，不收 http(s) 地址，管理界面不去加载第三方资源。
 var iconTypes = map[string]bool{"image/png": true, "image/jpeg": true, "image/webp": true, "image/svg+xml": true}
 
-// validateIcon 检查图标是 data:image/<类型>;base64,<数据>，类型在 iconTypes 里，解码后不超过 MaxIconBytes，
-// 且内容和声明的类型一致（位图看文件头，SVG 要有 <svg 标签）。SVG 另见 checkSVG。
-func validateIcon(icon string) error {
-	rest, ok := strings.CutPrefix(icon, "data:")
-	if !ok {
-		return fmt.Errorf("仅支持 data:image/…;base64, 形式的图片，不支持网络地址")
+// IconMIMEByExt 根据文件扩展名（如 .svg、.png）返回允许的图标 MIME 类型。
+func IconMIMEByExt(ext string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(ext)) {
+	case ".svg":
+		return "image/svg+xml", true
+	case ".png":
+		return "image/png", true
+	case ".webp":
+		return "image/webp", true
+	case ".jpg", ".jpeg":
+		return "image/jpeg", true
+	default:
+		return "", false
 	}
-	mime, data, ok := strings.Cut(rest, ";base64,")
-	if !ok || !iconTypes[mime] {
-		return fmt.Errorf("仅支持 PNG、JPEG、WebP、SVG 图片，且须为 base64 编码")
-	}
-	if base64.StdEncoding.DecodedLen(len(data)) > MaxIconBytes+2 {
-		return fmt.Errorf("图片超过 %d KB", MaxIconBytes>>10)
-	}
-	raw, err := base64.StdEncoding.DecodeString(data)
-	if err != nil {
-		return fmt.Errorf("base64 数据无效")
+}
+
+// ValidateIconBytes 校验图片原始字节与声明的 MIME 类型是否合法且安全。
+func ValidateIconBytes(mime string, raw []byte) error {
+	if !iconTypes[mime] {
+		return fmt.Errorf("仅支持 PNG、JPEG、WebP、SVG 图片")
 	}
 	if len(raw) == 0 {
 		return fmt.Errorf("图片内容为空")
@@ -366,6 +369,35 @@ func validateIcon(icon string) error {
 		return fmt.Errorf("内容与声明的类型 %s 不符", mime)
 	}
 	return nil
+}
+
+// EncodeIconBytes 校验图片原始字节并编码为 data:image/<类型>;base64,<数据> 形式。
+func EncodeIconBytes(mime string, raw []byte) (string, error) {
+	if err := ValidateIconBytes(mime, raw); err != nil {
+		return "", err
+	}
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(raw), nil
+}
+
+// validateIcon 检查图标是 data:image/<类型>;base64,<数据>，类型在 iconTypes 里，解码后不超过 MaxIconBytes，
+// 且内容和声明的类型一致（位图看文件头，SVG 要有 <svg 标签）。SVG 另见 checkSVG。
+func validateIcon(icon string) error {
+	rest, ok := strings.CutPrefix(icon, "data:")
+	if !ok {
+		return fmt.Errorf("仅支持 data:image/…;base64, 形式的图片，不支持网络地址")
+	}
+	mime, data, ok := strings.Cut(rest, ";base64,")
+	if !ok || !iconTypes[mime] {
+		return fmt.Errorf("仅支持 PNG、JPEG、WebP、SVG 图片，且须为 base64 编码")
+	}
+	if base64.StdEncoding.DecodedLen(len(data)) > MaxIconBytes+2 {
+		return fmt.Errorf("图片超过 %d KB", MaxIconBytes>>10)
+	}
+	raw, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return fmt.Errorf("base64 数据无效")
+	}
+	return ValidateIconBytes(mime, raw)
 }
 
 // SVG 图标的拒绝规则，都不区分大小写，属性名与等号之间允许空白。

@@ -190,6 +190,57 @@ func (s *Server) fetchImportURL(ctx context.Context, rawURL string) ([]byte, boo
 	return data, ghURL, nil
 }
 
+// tryFetchSiblingIcon 在导入链接形如 .../source.json 且未内嵌图标时，尝试拉取同目录的 icon.* 文件并编码为 data URI。
+func (s *Server) tryFetchSiblingIcon(ctx context.Context, sourceURL string) string {
+	u, err := url.Parse(strings.TrimSpace(sourceURL))
+	if err != nil || !strings.HasSuffix(u.Path, "/source.json") {
+		return ""
+	}
+	basePath := strings.TrimSuffix(u.Path, "source.json")
+	client, err := s.githubClient(ctx, 4*time.Second)
+	if err != nil {
+		return ""
+	}
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return errors.New("重定向次数过多")
+		}
+		if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+			return errors.New("不允许跳转到非 HTTP(S) 协议")
+		}
+		return nil
+	}
+	for _, ext := range []string{".svg", ".png", ".webp", ".jpg", ".jpeg"} {
+		mime, ok := source.IconMIMEByExt(ext)
+		if !ok {
+			continue
+		}
+		iconURL := *u
+		iconURL.Path = basePath + "icon" + ext
+		reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, iconURL.String(), nil)
+		if err != nil {
+			cancel()
+			continue
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			cancel()
+			continue
+		}
+		raw, rerr := io.ReadAll(io.LimitReader(resp.Body, source.MaxIconBytes+1))
+		resp.Body.Close()
+		cancel()
+		if rerr != nil || resp.StatusCode != http.StatusOK {
+			continue
+		}
+		if dataURI, err := source.EncodeIconBytes(mime, raw); err == nil {
+			return dataURI
+		}
+	}
+	return ""
+}
+
 func (s *Server) handleImportPreview(w http.ResponseWriter, r *http.Request) {
 	var in importPreviewInput
 	if !decodeJSON(w, r, &in) {
@@ -217,6 +268,11 @@ func (s *Server) handleImportPreview(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
+		}
+		if len(parsed) == 1 && parsed[0].Source.Icon == "" {
+			if iconData := s.tryFetchSiblingIcon(r.Context(), rawURL); iconData != "" {
+				parsed[0].Source.Icon = iconData
+			}
 		}
 		envs = parsed
 	case len(in.Texts) > 0:
