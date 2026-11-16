@@ -61,9 +61,10 @@ type Server struct {
 	listen    string
 	startedAt time.Time
 	// releaseURL 是查最新版本的地址，测试里替换成本地服务；update 缓存最近一次结果。
-	releaseURL string
-	updateMu   sync.Mutex
-	update     *updateView
+	releaseURL     string
+	networkTestURL string
+	updateMu       sync.Mutex
+	update         *updateView
 }
 
 // New 创建 Server。需要初始化时会生成一次性的向导令牌，调用方应把它打印到日志。
@@ -83,7 +84,8 @@ func New(o Options) (*Server, error) {
 		now:               time.Now,
 		listen:            o.Listen,
 		startedAt:         time.Now(),
-		releaseURL:        "https://api.github.com/repos/" + buildinfo.Repo + "/releases/latest",
+		releaseURL:        "https://github.com/" + buildinfo.Repo + "/releases/latest",
+		networkTestURL:    "https://raw.githubusercontent.com/" + buildinfo.Repo + "/main/README.md",
 	}
 	if s.listen == "" {
 		s.listen = cfg.Listen
@@ -185,6 +187,9 @@ func (s *Server) Handler() http.Handler {
 				r.Delete("/tokens/{id}", s.handleRevokeToken)
 				r.Get("/system", s.handleSystem)
 				r.Get("/system/update", s.handleSystemUpdate)
+				r.Get("/settings/network", s.handleGetNetworkSettings)
+				r.Put("/settings/network", s.handleUpdateNetworkSettings)
+				r.Post("/settings/network/test", s.handleTestNetworkSettings)
 			})
 			r.Group(func(r chi.Router) {
 				r.Use(s.authenticate(false))

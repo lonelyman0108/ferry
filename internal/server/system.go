@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/lonelyman0108/ferry/internal/buildinfo"
 	"github.com/lonelyman0108/ferry/internal/config"
+	"github.com/lonelyman0108/ferry/internal/ghnet"
 	"github.com/lonelyman0108/ferry/internal/store"
 )
 
@@ -179,32 +179,39 @@ func (s *Server) latestRelease(ctx context.Context) (tag, url string, err error)
 	if err != nil {
 		return "", "", err
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "ferry/"+buildinfo.Version)
-	client := s.HTTP
-	if client == nil {
-		client = http.DefaultClient
+
+	client, err := s.githubClient(ctx, 5*time.Second)
+	if err != nil {
+		return "", "", errors.New("初始化网络客户端失败")
 	}
+	// 收到第一个跳转响应即停下，从 Location 头提取版本号，避免继续下载整个 Release 页面。
+	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", errors.New("连接 GitHub 失败")
 	}
 	defer resp.Body.Close()
+
 	switch resp.StatusCode {
-	case http.StatusOK:
+	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+		loc := resp.Header.Get("Location")
+		t, u, ok := ghnet.ExtractReleaseTag(loc, buildinfo.Repo)
+		if !ok {
+			return "", "", errors.New("暂无已发布版本")
+		}
+		return t, u, nil
 	case http.StatusNotFound:
 		return "", "", errors.New("暂无已发布版本")
+	case http.StatusOK:
+		// 部分镜像不支持 releases/latest 跳转，直接返回 200 落地页。
+		return "", "", errors.New("未获取到版本跳转地址（当前镜像不支持 releases/latest 跳转）")
 	default:
 		return "", "", errors.New("GitHub 返回 " + resp.Status)
 	}
-	var body struct {
-		TagName string `json:"tag_name"`
-		HTMLURL string `json:"html_url"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return "", "", errors.New("无法解析 GitHub 的响应")
-	}
-	return body.TagName, body.HTMLURL, nil
 }
 
 // newerVersion 比较 vX.Y.Z：latest 比 current 高时为 true。current 不是正式版本号（如 dev）时不比较。

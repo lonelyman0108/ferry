@@ -79,12 +79,18 @@ export const navItems: NavItem[] = [
     label: '设置',
     short: '设置',
     icon: SettingsIcon,
-    description: '访问地址与账户',
+    description: '访问地址、网络与账户',
     pages: [
       {
         path: '/settings',
         label: '访问地址',
         description: '设备拉取读取规则、回传登录态所用的地址',
+      },
+      {
+        path: '/settings/network',
+        label: '网络',
+        description: '访问 GitHub 所用的连接模式、镜像前缀与网络代理',
+        keywords: 'GitHub 镜像 代理 SOCKS5',
       },
       {
         path: '/account',

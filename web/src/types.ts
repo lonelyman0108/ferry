@@ -687,3 +687,25 @@ export interface UpdateInfo {
   checked_at: string
   error?: string
 }
+
+export type NetworkMode = 'direct' | 'mirror' | 'proxy'
+
+export interface NetworkMirrorPreset {
+  prefix: string
+  label: string
+  note: string
+}
+
+export interface NetworkSettings {
+  mode: NetworkMode
+  mirror_prefix?: string
+  proxy_url?: string
+  presets: NetworkMirrorPreset[]
+}
+
+export interface NetworkTestResult {
+  ok: boolean
+  latency_ms: number
+  target: string
+  error?: string
+}
