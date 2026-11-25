@@ -19,7 +19,7 @@
 | 传参 | `argument=…` → `$argument`（字符串） | 旧语法 `argument="…"`；新语法 `script("…", "…")` → `$argument`（字符串） | 没有 `$argument`：写在脚本 URL 的 `#` 后面，用 `$environment.sourcePath` 自己解析 | `argument: '…'` → `$argument`（字符串） | 原生用 `env` → `ctx.env`；兼容写法 `arguments: {_compat.$argument: "…"}`（社区） |
 | 脚本超时默认 | 5 秒 | 旧语法 10 秒；新语法 20 秒 | 未写明 | 由 `timeout`（秒）指定 | 10 秒 |
 | body 上限默认 | iOS 1 MB；超出时拒绝连接 | 未写明 | 1024 KB（解压后） | `max-size`，超出时不触发脚本 | 1 MB，超出时不传给脚本 |
-| 模块参数（填传输密钥） | `#!arguments=key:` 声明，正文用 `{{{key}}}` 引用；用户填的值随模块实例保存 | `[Argument]` 下 `key = input,"",tag=…`，脚本写 `argument=[{key},…]`，`$argument` 是对象（3.2.1 起） | 没有 | 顶层 `arguments-version: 1` 和 `arguments`，正文用 `${args.key}` 引用；远程更新时保留用户的值（iOS 3.7 起） | 模块 `compat_arguments` 声明默认值，正文用 `{{{key}}}`；用户在主配置的模块引用处用 `compat_arguments` 覆盖 |
+| 模块参数（填传输密钥） | `#!arguments=key:未填写` 声明（Surge 拒绝冒号后为空的 `key:`，无默认值时未填值会阻止模块加载），正文用 `{{{key}}}` 引用；用户填的值随模块实例保存 | `[Argument]` 下 `key = input,"",tag=…`，脚本写 `argument=[{key},…]`，`$argument` 是对象（3.2.1 起） | 没有 | 顶层 `arguments-version: 1` 和 `arguments`，正文用 `${args.key}` 引用；远程更新时保留用户的值（iOS 3.7 起） | 模块 `compat_arguments` 声明默认值，正文用 `{{{key}}}`；用户在主配置的模块引用处用 `compat_arguments` 覆盖 |
 | 规则可用策略 | 模块里只能用 DIRECT、REJECT、REJECT-TINYGIF | DIRECT、REJECT 系列、PROXY | 不适用 | 不限 | 不限 |
 
 ## 2. 脚本 API

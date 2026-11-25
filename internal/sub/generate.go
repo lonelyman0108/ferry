@@ -55,7 +55,7 @@ func Generate(p Params) ([]byte, error) {
 	if sealed && !SupportsSealed(p.Client) {
 		return nil, fmt.Errorf("客户端 %q 不支持加密传输", p.Client)
 	}
-	// 加密订阅的传输密钥不写进文件：只声明一个空参数，由用户在客户端里填，脚本参数里引用它的占位符。
+	// 加密订阅的传输密钥不写进文件：只声明 key 参数（留空或填占位默认值），由用户在客户端里填，脚本参数里引用它的占位符。
 	switch p.Client {
 	case Surge, Shadowrocket:
 		if sealed {
@@ -149,12 +149,17 @@ func URLPattern(host, path string) string {
 // keyHelp 是模块参数里传输密钥的说明。
 const keyHelp = "传输密钥：从 Ferry 后台的订阅详情中复制后粘贴至此处。未填写时不回传登录态。"
 
+// surgeKeyPlaceholder 是 Surge 与 Shadowrocket 模块参数 key 的默认占位值。
+// Surge 会拒绝冒号后为空的「key:」声明，无默认值的「key」在未填写前又会阻止模块加载；
+// 占位值不是合法的 32 字节 base64url 密钥，脚本会将其按未填写处理。
+const surgeKeyPlaceholder = "未填写"
+
 // surge 生成模块。max-size 设为 -1：Surge 的请求正文超过上限时会直接拒绝连接，会弄坏 App 本身的请求。
 func surge(title, desc, script, arg string, ts []trigger, hosts []string, sealed bool) []byte {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "#!name=%s\n#!desc=%s\n", title, desc)
 	if sealed {
-		fmt.Fprintf(&b, "#!arguments=key:\n#!arguments-desc=%s\n", keyHelp)
+		fmt.Fprintf(&b, "#!arguments=key:%s\n#!arguments-desc=%s\n", surgeKeyPlaceholder, keyHelp)
 	}
 	b.WriteString("\n[Script]\n")
 	for _, t := range ts {

@@ -381,14 +381,15 @@ test('加密通道：密钥填错时提示一次，不重复提示回传失败',
   assert.equal(c2.notes.length, 0, '一小时内不重复提示');
 });
 
-test('加密通道：没填密钥（含未替换的占位符）时不联网，只提示一次', async () => {
-  for (const key of ['', '{{{key}}}', '${args.key}', '{key}']) {
+test('加密通道：没填密钥（含未替换的占位符和默认占位值）时不联网，只提示一次且不写降级标记', async () => {
+  for (const key of ['', '未填写', '{{{key}}}', '${args.key}', '{key}']) {
     const server = sealedServer();
     const store = new Map();
     const c = makeClient('surge', server, store, { ...SIGN }, sealedArgs(key));
     assertDoneOnce(await runScript(c));
     assert.equal(server.calls.length, 0, key);
     assert.deepEqual(c.notes.map((n) => n[1]), ['尚未填写传输密钥'], key);
+    assert.equal(store.get('ferry.sealed'), undefined, key);
   }
 });
 
