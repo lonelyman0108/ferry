@@ -20,7 +20,7 @@ import ListSkeleton from '@/components/ListSkeleton.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { copyText, fmtAgo, fmtTime } from '@/format'
-import type { ConfigSource, SystemInfo, UpdateInfo } from '@/types'
+import type { ConfigSource, ReleaseChannel, SystemInfo, UpdateInfo } from '@/types'
 
 // 系统信息：版本、运行环境、数据库、配置从哪里来、数据量。打开时顺带查一次有没有新版本（服务端缓存一小时）。
 // 页面上不出现任何密钥：连接串里的密码由后端打码，主密钥只说从哪里来。
@@ -56,7 +56,14 @@ onMounted(() => {
   void checkUpdate()
 })
 
-const isRelease = computed(() => /^v?\d+\.\d+\.\d+/.test(info.value?.build.version ?? ''))
+const channel = computed<ReleaseChannel>(() => {
+  if (update.value?.channel) return update.value.channel
+  const v = info.value?.build.version ?? ''
+  if (v === 'edge') return 'edge'
+  if (/^v?\d+\.\d+\.\d+$/.test(v)) return 'release'
+  return 'dev'
+})
+const edgeReleaseURL = `${repo}/releases/tag/edge`
 const commitURL = computed(() =>
   info.value && /^[0-9a-f]{7,40}$/.test(info.value.build.commit)
     ? `${repo}/commit/${info.value.build.commit}`
@@ -211,14 +218,43 @@ async function copyDiagnostics() {
           >查看更新说明</a
         >
       </template>
-      <template v-else-if="update && !update.error && isRelease">
+      <template v-else-if="update && !update.error && channel === 'release'">
         <CheckCircle2Icon class="text-success size-5" />
         <span class="text-sm">已是最新版本 {{ update.current }}</span>
+      </template>
+      <template v-else-if="update && !update.error && channel === 'edge'">
+        <InfoIcon class="text-primary size-5 shrink-0" />
+        <span class="text-muted-foreground min-w-0 flex-1 text-sm"
+          >当前为 edge 预览构建，最新正式版本为 {{ update.latest }}</span
+        >
+        <a
+          :href="edgeReleaseURL"
+          target="_blank"
+          rel="noopener"
+          class="text-primary text-sm underline-offset-2 hover:underline"
+          >查看 edge 发布</a
+        >
+        <a
+          v-if="update.url"
+          :href="update.url"
+          target="_blank"
+          rel="noopener"
+          class="text-muted-foreground hover:text-foreground text-sm underline-offset-2 hover:underline"
+          >查看正式版</a
+        >
       </template>
       <template v-else-if="update?.error">
         <CloudOffIcon class="text-warning size-5 shrink-0" />
         <span class="text-muted-foreground min-w-0 flex-1 text-sm"
           >检查更新：{{ update.error }}</span
+        >
+        <a
+          v-if="channel === 'edge'"
+          :href="edgeReleaseURL"
+          target="_blank"
+          rel="noopener"
+          class="text-primary text-sm underline-offset-2 hover:underline"
+          >查看 edge 发布</a
         >
       </template>
       <template v-else-if="update">

@@ -53,7 +53,7 @@ func TestSystemUpdate(t *testing.T) {
 	h := ready(t)
 	h.srv.releaseURL = gh.URL + "/releases/latest"
 	var u updateView
-	if code := h.do("GET", "/api/v1/system/update", nil, &u); code != 200 || !u.Newer || u.Latest != "v0.2.0" || u.URL != "https://github.com/lonelyman0108/ferry/releases/tag/v0.2.0" {
+	if code := h.do("GET", "/api/v1/system/update", nil, &u); code != 200 || !u.Newer || u.Channel != "release" || u.Latest != "v0.2.0" || u.URL != "https://github.com/lonelyman0108/ferry/releases/tag/v0.2.0" {
 		t.Fatalf("检查更新 = %d %+v", code, u)
 	}
 	h.do("GET", "/api/v1/system/update", nil, &u)
@@ -66,9 +66,15 @@ func TestSystemUpdate(t *testing.T) {
 	if !u.Newer || u.Latest != "v0.2.1" {
 		t.Errorf("镜像跳转解析失败 = %+v", u)
 	}
+	// edge 预览构建不参与正式版本号大小比较，渠道标记为 edge。
+	buildinfo.Version = "edge"
+	h.do("GET", "/api/v1/system/update?force=1", nil, &u)
+	if u.Channel != "edge" || u.Current != "edge" || u.Newer || u.Latest != "v0.2.1" {
+		t.Errorf("edge 渠道检查更新 = %+v", u)
+	}
 	status = http.StatusNotFound
 	h.do("GET", "/api/v1/system/update?force=1", nil, &u)
-	if hits.Load() != 3 || u.Error == "" || u.Newer {
+	if hits.Load() != 4 || u.Error == "" || u.Newer {
 		t.Errorf("强制重查、没有发布过版本 = %+v", u)
 	}
 }
@@ -128,11 +134,31 @@ func TestNewerVersion(t *testing.T) {
 		{"v0.1.0", "0.1.0", false},
 		{"v0.1.0", "0.2.0", false},
 		{"v0.2.0", "dev", false},
+		{"v0.2.0", "edge", false},
+		{"edge", "0.2.0", false},
 		{"nightly", "0.1.0", false},
 	}
 	for _, c := range cases {
 		if got := newerVersion(c.latest, c.current); got != c.want {
 			t.Errorf("newerVersion(%q, %q) = %v，期望 %v", c.latest, c.current, got, c.want)
+		}
+	}
+}
+
+func TestBuildChannel(t *testing.T) {
+	cases := []struct {
+		version string
+		want    string
+	}{
+		{"0.2.0", "release"},
+		{"v0.2.0", "release"},
+		{"edge", "edge"},
+		{"dev", "dev"},
+		{"0.2.0-rc.1", "dev"},
+	}
+	for _, c := range cases {
+		if got := buildChannel(c.version); got != c.want {
+			t.Errorf("buildChannel(%q) = %q，期望 %q", c.version, got, c.want)
 		}
 	}
 }

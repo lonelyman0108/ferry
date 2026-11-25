@@ -734,8 +734,11 @@ export interface SystemInfo {
   }
 }
 
+export type ReleaseChannel = 'release' | 'edge' | 'dev'
+
 export interface UpdateInfo {
   current: string
+  channel?: ReleaseChannel
   latest: string
   url: string
   newer: boolean
