@@ -142,6 +142,7 @@ func utcOffset(sec int) string {
 // updateView 是检查更新的结果。Newer 只在当前是正式版本号、且最新版本更高时为 true。
 type updateView struct {
 	Current   string    `json:"current"`
+	Channel   string    `json:"channel"`
 	Latest    string    `json:"latest"`
 	URL       string    `json:"url"`
 	Newer     bool      `json:"newer"`
@@ -160,7 +161,11 @@ func (s *Server) handleSystemUpdate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, s.update)
 		return
 	}
-	v := &updateView{Current: buildinfo.Version, CheckedAt: s.now()}
+	v := &updateView{
+		Current:   buildinfo.Version,
+		Channel:   buildChannel(buildinfo.Version),
+		CheckedAt: s.now(),
+	}
 	latest, url, err := s.latestRelease(r.Context())
 	if err != nil {
 		v.Error = err.Error()
@@ -214,7 +219,20 @@ func (s *Server) latestRelease(ctx context.Context) (tag, url string, err error)
 	}
 }
 
-// newerVersion 比较 vX.Y.Z：latest 比 current 高时为 true。current 不是正式版本号（如 dev）时不比较。
+// buildChannel 按构建版本号区分发布渠道：正式版（vX.Y.Z / X.Y.Z）、预览版（edge）与其他开发构建。
+func buildChannel(version string) string {
+	if version == "edge" {
+		return "edge"
+	}
+	if !strings.Contains(version, "-") {
+		if _, ok := parseSemver(version); ok {
+			return "release"
+		}
+	}
+	return "dev"
+}
+
+// newerVersion 比较 vX.Y.Z：latest 比 current 高时为 true。current 不是正式版本号（如 dev、edge）时不比较。
 func newerVersion(latest, current string) bool {
 	l, ok1 := parseSemver(latest)
 	c, ok2 := parseSemver(current)

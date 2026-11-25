@@ -1,0 +1,81 @@
+# Edge 发布：main 上 CI 通过后（或手动在 main 上触发），构建 amd64、arm64 多架构镜像推到 GHCR 与 Docker Hub
+# （标签为 edge 与不可变的 sha-<7位>，不动 latest 与 X.Y），同时更新固定预发布 tag edge 的 GitHub Release 页与四个二进制。
+# 连着合并多次时排队发布，不取消正在推的那次，避免双镜像仓库与 Release 页指向不同提交。
+name: Edge
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: edge-main
+  cancel-in-progress: false
+permissions:
+  contents: write
+  packages: write
+defaults:
+  run:
+    shell: bash
+jobs:
+  edge:
+    if: >-
+      github.repository == 'lonelyman0108/ferry' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PLATFORMS: linux/amd64,linux/arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+      - name: 检查是否需要发布
+        id: guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: scripts/edge-release.sh guard >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.skip != 'true' && hashFiles('.node-version') != ''
+        with:
+          node-version-file: .node-version
+      - name: 准备工具
+        if: steps.guard.outputs.skip != 'true'
+        run: scripts/ci/setup-tools.sh >> "$GITHUB_PATH"
+      - name: 记下提交号与构建时间
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          SHORT12: ${{ steps.guard.outputs.short12 }}
+          BUILD_DATE: ${{ steps.guard.outputs.build_date }}
+        run: |
+          printf '%s\n' "$SHORT12" > .build-commit
+          printf '%s\n' "$BUILD_DATE" > .build-date
+      - uses: docker/setup-qemu-action@v3
+        if: steps.guard.outputs.skip != 'true'
+      - uses: docker/setup-buildx-action@v3
+        if: steps.guard.outputs.skip != 'true'
+      - name: 镜像：GHCR 与 Docker Hub
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
+          HUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          HUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          FULL_SHA: ${{ steps.guard.outputs.full_sha }}
+          BUILD_DATE: ${{ steps.guard.outputs.build_date }}
+        run: scripts/edge-release.sh push-images --notes .notes-edge-images.md
+      - name: 前端与二进制
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          (cd web && npm ci && npm run build)
+          scripts/build-binaries.sh edge dist
+      - name: Edge Release 页
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FULL_SHA: ${{ steps.guard.outputs.full_sha }}
+          BUILD_DATE: ${{ steps.guard.outputs.build_date }}
+        run: scripts/edge-release.sh publish-release --notes .notes-edge-images.md dist

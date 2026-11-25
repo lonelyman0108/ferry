@@ -83,5 +83,5 @@ FERRY_API=http://127.0.0.1:8098 npm run dev      # 后端不在 8080 时指定�
 
 ## 发布
 
-推送 `vX.Y.Z` tag 后，`release.yml` 跑完整门禁、构建镜像推到 GHCR 与 Docker Hub，并建 GitHub Release。
-版本号由维护者决定；维护者发起发版后可由其本人或授权 agent 打 tag 并推送；CHANGELOG 定稿放在发布 PR（`🔖 release: vX.Y.Z`）里。
+- **正式版**：推送 `vX.Y.Z` tag 后，`release.yml` 跑完整门禁、构建镜像推到 GHCR 与 Docker Hub，并建 GitHub Release。版本号由维护者决定；维护者发起发版后可由其本人或授权 agent 打 tag 并推送；CHANGELOG 定稿放在发布 PR（`🔖 release: vX.Y.Z`）里。
+- **Edge 预览版**：`main` 分支通过 `CI` 后（或维护者在 `main` 上手动触发），`edge.yml` 自动构建多架构镜像推到 GHCR 与 Docker Hub（标签为 `edge` 与 `sha-<7位>`，不影响 `latest` 与正式版标签），并滚动更新 `edge` 预发布 Release 页及四个平台二进制。

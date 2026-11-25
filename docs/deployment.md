@@ -4,7 +4,10 @@
 
 ## 用 Docker 运行
 
-镜像同时提供 `linux/amd64` 与 `linux/arm64`，两处都能拉：`ghcr.io/lonelyman0108/ferry`、`lonelyman0108/ferry`（Docker Hub）。标签有 `0.1.0`、`0.1` 和 `latest`，部署时建议写死具体版本。
+镜像同时提供 `linux/amd64` 与 `linux/arm64`，两处都能拉：`ghcr.io/lonelyman0108/ferry`、`lonelyman0108/ferry`（Docker Hub）。
+
+- **正式版标签**：`0.2.0`、`0.2` 和 `latest`，生产部署建议写死具体版本。
+- **Edge 预览版标签**：`edge` 与不可变的 `sha-<7位提交>`，在 `main` 分支通过 CI 后自动构建并推送（不动 `latest` 与正式版标签）。适合尝鲜或配合容器自动更新跟进主干。
 
 最简单的一行：
 
@@ -29,7 +32,7 @@ docker logs ferry          # 找 setup_token=… 这一行，向导要用
 
 ## 用二进制运行
 
-每个 [Release](https://github.com/lonelyman0108/ferry/releases) 都附有 linux、darwin 各 amd64、arm64 的压缩包与 `SHA256SUMS`，解开即用：
+每个 [Release](https://github.com/lonelyman0108/ferry/releases) 都附有 linux、darwin 各 amd64、arm64 的压缩包与 `SHA256SUMS`，解开即用（`edge` 预发布页随 `main` 自动滚动更新，文件名固定为 `ferry_edge_<os>_<arch>.tar.gz`）：
 
 ```bash
 ./ferry serve -config ferry.yaml        # 也可以用 -addr 覆盖监听地址

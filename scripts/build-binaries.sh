@@ -6,8 +6,8 @@ set -euo pipefail
 version=${1:?用法：scripts/build-binaries.sh <版本号> [输出目录]}
 out=${2:-dist}
 [ -f web/dist/index.html ] || { echo "缺少 web/dist：先在 web/ 下 npm run build" >&2; exit 2; }
-commit=$(git rev-parse --short=12 HEAD)
-date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+commit=$(cat .build-commit 2>/dev/null || git rev-parse --short=12 HEAD)
+date=$(cat .build-date 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
 pkg=github.com/lonelyman0108/ferry/internal/buildinfo
 mkdir -p "$out"
 for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
