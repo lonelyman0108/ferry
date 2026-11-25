@@ -185,8 +185,11 @@ func TestGenerateSealed(t *testing.T) {
 			}
 			switch client {
 			case Surge, Shadowrocket:
-				if !strings.Contains(text, "#!arguments=key:\n") {
-					t.Errorf("缺少参数声明：\n%s", text)
+				if !strings.Contains(text, "#!arguments=key:"+surgeKeyPlaceholder+"\n") {
+					t.Errorf("缺少参数声明或默认占位值：\n%s", text)
+				}
+				if strings.Contains(text, "#!arguments=key:\n") {
+					t.Errorf("不能生成冒号后为空的参数声明：\n%s", text)
 				}
 			case Stash:
 				if !strings.Contains(text, "arguments-version: 1") || !strings.Contains(text, "required: true") {

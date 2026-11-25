@@ -1041,17 +1041,18 @@ function readJSON(env, key) {
 // openChannel 按参数和本地记录选通道。本地记过“走过加密”后只走加密，不看参数怎么写，
 // 这样即使订阅文件被改、key 参数被去掉，也不会退回明文。拿不到能用的通道时返回 null，由调用方直接放行。
 function openChannel(g, env, args) {
-  // 客户端没替换占位符时（{{{key}}}、${args.key}、[{key}]），按没填处理。
-  var key = /\{\{|\}\}|\$\{|\{key\}/.test(args.key || '') ? '' : String(args.key || '').trim();
+  // 客户端未替换占位符（{{{key}}}、${args.key}、[{key}]）或仍为默认占位值时，按未填写处理。
+  var rawKey = String(args.key || '').trim();
+  var key = rawKey === '未填写' || /\{\{|\}\}|\$\{|\{key\}/.test(rawKey) ? '' : rawKey;
   var sealed = !!key || args.mode === 'sealed' || env.read(SEALED_KEY) === '1';
   if (!sealed) return args.token ? plainChannel(g, env, args) : null;
   if (!args.kid) return null;
-  if (key) env.write('1', SEALED_KEY);
   var keys = key ? transportKeys(key) : null;
   if (!keys) {
     warnOnce(env, 'nokey', '尚未填写传输密钥', '请在代理客户端的模块参数中填写 Ferry 后台显示的传输密钥，填写前不回传登录态。');
     return null;
   }
+  env.write('1', SEALED_KEY);
   return sealedChannel(g, env, args, keys, fnv1a(args.kid + ':' + key));
 }
 
